@@ -410,7 +410,7 @@ export function buildRetellGeneralPrompt(
   );
 }
 
-/** Full Multi-Prompt conversation payload pieces for Retell LLM sync. */
+/** Receptionist prompt + state definitions; retell-flow.ts turns these into a Retell conversation flow. */
 export function buildRetellLlmConversation(
   settings: VoiceAssistantSettings,
   context: VoiceAssistantContext,

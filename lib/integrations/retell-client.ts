@@ -81,10 +81,9 @@ export async function retellRequest<T>({
   return text ? (JSON.parse(text) as T) : ({} as T);
 }
 
-export type RetellLlmResponse = {
-  llm_id: string;
+export type RetellConversationFlowResponse = {
+  conversation_flow_id: string;
   version?: number;
-  is_published?: boolean;
 };
 
 export type RetellAgentResponse = {
@@ -95,6 +94,7 @@ export type RetellAgentResponse = {
   response_engine?: {
     type?: string;
     llm_id?: string;
+    conversation_flow_id?: string;
     version?: number;
   };
 };

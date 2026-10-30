@@ -5,6 +5,7 @@
  * - RETELL_API_KEY
  * - RETELL_DEFAULT_VOICE_ID (optional male override, default: 11labs-Adrian)
  * - RETELL_FEMALE_VOICE_ID (optional female override, default: 11labs-Lily)
+ * - RETELL_MODEL (optional conversation-flow LLM, default: gpt-5.6-terra)
  * - NEXT_PUBLIC_SITE_URL (for webhook URL)
  */
 
@@ -12,8 +13,13 @@ import { buildRetellLlmConversation } from "@/lib/integrations/retell-prompt";
 import {
   retellRequest,
   type RetellAgentResponse,
-  type RetellLlmResponse,
+  type RetellConversationFlowResponse,
 } from "@/lib/integrations/retell-client";
+import {
+  buildConversationFlowPayload,
+  isConversationFlowId,
+  type RetellTool,
+} from "@/lib/integrations/retell-flow";
 import {
   getChurchProfileForVoice,
   getVoiceAssistantContext,
@@ -24,8 +30,6 @@ import type {
   SpeakingPace,
   VoiceAssistantSettings,
 } from "@/types/voice-assistant";
-
-type RetellTool = Record<string, unknown> & { name: string };
 
 const DEFAULT_MALE_VOICE_ID = "11labs-Adrian";
 const DEFAULT_FEMALE_VOICE_ID = "11labs-Lily";
@@ -157,7 +161,7 @@ function getWebhookUrl(): string | null {
   return `${siteUrl}/api/webhooks/retell`;
 }
 
-function buildLlmPayload(
+function buildFlowPayload(
   settings: VoiceAssistantSettings,
   context: Awaited<ReturnType<typeof getVoiceAssistantContext>>,
   church: NonNullable<Awaited<ReturnType<typeof getChurchProfileForVoice>>>,
@@ -170,52 +174,26 @@ function buildLlmPayload(
     hasEmergencyTransfer,
   });
 
-  const assistantName = settings.assistant_name?.trim() || "Assistant";
-
-  const states = conversation.states.map((state) => {
-    const tools = (state.toolNames ?? [])
-      .map((name) => toolsByName.get(name))
-      .filter((tool): tool is RetellTool => Boolean(tool));
-
-    return {
-      name: state.name,
-      state_prompt: state.state_prompt,
-      ...(state.edges && state.edges.length > 0 ? { edges: state.edges } : {}),
-      ...(tools.length > 0 ? { tools } : {}),
-    };
-  });
-
-  const stateNames = new Set(states.map((s) => s.name));
-  const statesWithValidEdges = states.map((state) => {
-    if (!("edges" in state) || !state.edges) return state;
-    const edges = state.edges.filter((edge) =>
-      stateNames.has(edge.destination_state_name),
-    );
-    const { edges: _removed, ...rest } = state;
-    return {
-      ...rest,
-      ...(edges.length > 0 ? { edges } : {}),
-    };
-  });
-
-  return {
-    general_prompt: conversation.general_prompt,
-    begin_message: conversation.begin_message,
-    starting_state: conversation.starting_state,
-    states: statesWithValidEdges,
-    // Tools live on the states that own them so the main conversation path
-    // does not over-offer transfers or hangups.
-    general_tools: [] as RetellTool[],
-    default_dynamic_variables: {
+  // Tools live on the nodes that own them so the main conversation path
+  // does not over-offer transfers or hangups.
+  return buildConversationFlowPayload({
+    generalPrompt: conversation.general_prompt,
+    beginMessage: conversation.begin_message,
+    startingState: conversation.starting_state,
+    states: conversation.states,
+    toolsByName,
+    model: process.env.RETELL_MODEL,
+    dynamicVariables: {
       church_id: settings.church_id,
       church_name: church.name,
-      assistant_name: assistantName,
+      assistant_name: settings.assistant_name?.trim() || "Assistant",
     },
-  };
+  });
 }
 
 function buildAgentPayload(
-  llmId: string,
+  flowId: string,
+  flowVersion: number | null,
   settings: VoiceAssistantSettings,
   churchName: string,
 ) {
@@ -224,8 +202,9 @@ function buildAgentPayload(
 
   return {
     response_engine: {
-      type: "retell-llm",
-      llm_id: llmId,
+      type: "conversation-flow",
+      conversation_flow_id: flowId,
+      ...(typeof flowVersion === "number" ? { version: flowVersion } : {}),
     },
     agent_name: `${churchName} — ${settings.assistant_name?.trim() || "Voice Assistant"}`,
     voice_id: resolveVoiceId(settings.voice_gender),
@@ -289,13 +268,14 @@ export async function publishCurrentAgentDraft(
 }
 
 /**
- * Published Retell agents/LLMs are immutable. Creating an agent draft also
- * creates a matching unpublished LLM draft we can PATCH with ?version=.
+ * Published Retell agents and flows are immutable. Creating an agent draft
+ * also creates a matching unpublished conversation-flow draft we can PATCH
+ * with ?version=. Legacy retell-llm agents report no flow version.
  */
 async function ensureDraftAgent(
   agentId: string,
   churchId?: string | null,
-): Promise<{ agentVersion: number; llmVersion: number | null }> {
+): Promise<{ agentVersion: number; flowVersion: number | null }> {
   const agent = await retellRequest<RetellAgentResponse>({
     method: "GET",
     path: `/get-agent/${agentId}`,
@@ -318,52 +298,61 @@ async function ensureDraftAgent(
         });
 
   const agentVersion = typeof draft.version === "number" ? draft.version : currentVersion;
-  const llmVersion =
-    typeof draft.response_engine?.version === "number"
+  const flowVersion =
+    draft.response_engine?.type === "conversation-flow" &&
+    typeof draft.response_engine.version === "number"
       ? draft.response_engine.version
       : null;
 
-  return { agentVersion, llmVersion };
+  return { agentVersion, flowVersion };
 }
 
-async function syncLlm(
+async function syncConversationFlow(
   settings: VoiceAssistantSettings,
   context: Awaited<ReturnType<typeof getVoiceAssistantContext>>,
   church: NonNullable<Awaited<ReturnType<typeof getChurchProfileForVoice>>>,
-  llmVersion?: number | null,
-): Promise<string> {
-  const payload = buildLlmPayload(settings, context, church);
+  flowVersion: number | null,
+): Promise<{ flowId: string; flowVersion: number | null }> {
+  const payload = buildFlowPayload(settings, context, church);
   const churchId = settings.church_id;
+  // retell_llm_id historically held a multi-prompt llm_id; once migrated it
+  // holds the conversation_flow_id. A legacy llm_id gets a fresh flow.
+  const existingFlowId = isConversationFlowId(settings.retell_llm_id)
+    ? settings.retell_llm_id
+    : null;
 
-  if (settings.retell_llm_id) {
+  if (existingFlowId) {
     const versionQuery =
-      typeof llmVersion === "number" ? `?version=${llmVersion}` : "";
+      typeof flowVersion === "number" ? `?version=${flowVersion}` : "";
     await retellRequest({
       method: "PATCH",
-      path: `/update-retell-llm/${settings.retell_llm_id}${versionQuery}`,
+      path: `/update-conversation-flow/${existingFlowId}${versionQuery}`,
       body: payload,
       churchId,
     });
-    return settings.retell_llm_id;
+    return { flowId: existingFlowId, flowVersion };
   }
 
-  const created = await retellRequest<RetellLlmResponse>({
+  const created = await retellRequest<RetellConversationFlowResponse>({
     method: "POST",
-    path: "/create-retell-llm",
+    path: "/create-conversation-flow",
     body: payload,
     churchId,
   });
 
-  return created.llm_id;
+  return {
+    flowId: created.conversation_flow_id,
+    flowVersion: typeof created.version === "number" ? created.version : null,
+  };
 }
 
 async function syncAgent(
   settings: VoiceAssistantSettings,
-  llmId: string,
+  flow: { flowId: string; flowVersion: number | null },
   churchName: string,
   agentVersion?: number | null,
 ): Promise<string> {
-  const payload = buildAgentPayload(llmId, settings, churchName);
+  const payload = buildAgentPayload(flow.flowId, flow.flowVersion, settings, churchName);
   const churchId = settings.church_id;
 
   if (settings.retail_ai_agent_id) {
@@ -390,7 +379,7 @@ async function syncAgent(
 
 export type RetellSyncResult = {
   agentId: string;
-  llmId: string;
+  conversationFlowId: string;
 };
 
 /**
@@ -428,18 +417,19 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
     throw new Error("Church profile not found.");
   }
 
-  let llmVersion: number | null = null;
+  let flowVersion: number | null = null;
   let agentVersion: number | null = null;
 
   // Existing published agents cannot be patched in place — open a draft first.
-  if (settings.retail_ai_agent_id && settings.retell_llm_id) {
+  // Legacy multi-prompt agents get a draft whose engine is swapped to the new flow.
+  if (settings.retail_ai_agent_id) {
     const draft = await ensureDraftAgent(settings.retail_ai_agent_id, churchId);
     agentVersion = draft.agentVersion;
-    llmVersion = draft.llmVersion;
+    flowVersion = draft.flowVersion;
   }
 
-  const llmId = await syncLlm(settings, context, church, llmVersion);
-  const agentId = await syncAgent(settings, llmId, church.name, agentVersion);
+  const flow = await syncConversationFlow(settings, context, church, flowVersion);
+  const agentId = await syncAgent(settings, flow, church.name, agentVersion);
 
   await publishCurrentAgentDraft(agentId, agentVersion, churchId);
 
@@ -447,7 +437,8 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
   const { error } = await admin
     .from("voice_assistant_settings")
     .update({
-      retell_llm_id: llmId,
+      // Column predates conversation flows; it now stores the flow id.
+      retell_llm_id: flow.flowId,
       retail_ai_agent_id: agentId,
       agent_synced_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -456,7 +447,7 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
 
   if (error) throw error;
 
-  return { agentId, llmId };
+  return { agentId, conversationFlowId: flow.flowId };
 }
 
 /** @deprecated Use syncRetellAgent */
