@@ -47,7 +47,10 @@ function mockClient(overrides: Record<string, Record<string, unknown>> = {}) {
   return admin;
 }
 
-const input = { churchId: "church-qa", groupId: "group-qa", eventId: event.id };
+// A fixed clock inside the fixture's attendance window keeps these tests from
+// expiring once the real calendar passes checkin_closes_at_utc.
+const now = new Date("2026-09-27T18:30:00Z");
+const input = { churchId: "church-qa", groupId: "group-qa", eventId: event.id, now };
 
 test("a failed roster read cannot become an empty attendance form", async () => {
   const admin = mockClient({ group_memberships: { error: new Error("read failed") } });
