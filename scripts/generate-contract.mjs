@@ -34,10 +34,47 @@ const HEADER_LINES = [
 // JSON Schema
 // ---------------------------------------------------------------------------
 
+/**
+ * Zod >= 4.6 emits a schema that carries its own `.meta({ id })` as a root
+ * `$ref` into `$defs` instead of inlining it at the root. Unwrap that so each
+ * definition keeps the shape the native generators (and committed output)
+ * expect: the object at the root, only nested ids left in `$defs`.
+ */
+function inlineRootRef(json, name) {
+  const ref = `#/$defs/${name}`;
+  if (json.$ref !== ref || !json.$defs?.[name]) return json;
+  const { $defs, ...rest } = json;
+  delete rest.$ref;
+  const { [name]: root, ...nested } = $defs;
+  const out = { ...rest, ...root };
+  if (Object.keys(nested).length > 0) out.$defs = nested;
+  return out;
+}
+
+/**
+ * Zod >= 4.6 writes a nullable primitive as `type: ["string", "null"]`. Rewrite
+ * it to the `anyOf: [{ type }, { type: "null" }]` form the committed contract
+ * and nativeType() already use, so the published schema does not churn.
+ */
+function legacyNullable(node) {
+  if (Array.isArray(node)) return node.map(legacyNullable);
+  if (!node || typeof node !== "object") return node;
+  const out = {};
+  for (const [key, value] of Object.entries(node)) out[key] = legacyNullable(value);
+  if (Array.isArray(out.type) && out.type.length === 2 && out.type.includes("null")) {
+    const { type, ...rest } = out;
+    const other = type.find((t) => t !== "null");
+    return { anyOf: [{ type: other, ...rest }, { type: "null" }] };
+  }
+  return out;
+}
+
 function buildJsonSchema() {
   const definitions = {};
   for (const [name, schema] of Object.entries(CONTRACT_SCHEMAS)) {
-    definitions[name] = z.toJSONSchema(schema, { io: "output" });
+    definitions[name] = legacyNullable(
+      inlineRootRef(z.toJSONSchema(schema, { io: "output" }), name),
+    );
   }
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
