@@ -1,6 +1,6 @@
 /**
- * Retell Multi-Prompt state definitions for the church voice assistant.
- * System prompt per turn = general_prompt + state_prompt.
+ * Receptionist state definitions; each becomes a Retell conversation-flow node (see retell-flow.ts).
+ * System prompt per turn = global prompt + node instruction.
  */
 
 export type RetellStateEdge = {
