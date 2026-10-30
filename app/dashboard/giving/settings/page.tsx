@@ -9,6 +9,7 @@ import { FundsSettings } from "@/components/giving/funds-settings";
 import { GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { StatementSettings } from "@/components/giving/statement-settings";
 import { WebAddressSettings } from "@/components/giving/web-address-settings";
+import { ChurchBrandColorsCard } from "@/components/settings/church-brand-colors-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -114,6 +115,12 @@ export default async function GivingSettingsPage() {
 
       <WebAddressSettings slug={profile.slug} givePageUrl={profile.givePageUrl} />
 
+      {!appEnabled && (
+        <section id="giving-colors" className="scroll-mt-6" aria-label="Giving page colors">
+          <ChurchBrandColorsCard churchId={auth.churchId} appEnabled={false} />
+        </section>
+      )}
+
       <Card className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
           <span
@@ -130,9 +137,9 @@ export default async function GivingSettingsPage() {
             </p>
           </div>
         </div>
-        {/* The logo lives on Church info, the colors on Member App. */}
+        {/* Colors live with the app, or here when the app is switched off. */}
         <div className="flex flex-wrap gap-2">
-          <Link href="/dashboard/settings?tab=app" className={buttonVariants({ variant: "outline" })}>
+          <Link href={appEnabled ? "/dashboard/app#app-colors" : "#giving-colors"} className={buttonVariants({ variant: "outline" })}>
             Change colors
             <ArrowRight aria-hidden />
           </Link>

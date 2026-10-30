@@ -3,6 +3,7 @@ import test from "node:test";
 import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RecordingExtraFields, RecordingPrimaryFields } from "@/components/media/recording-details-fields";
+import { RecordingVisibilityChoice } from "@/components/media/recording-visibility-choice";
 
 Object.assign(globalThis, { React });
 const change = () => {};
@@ -34,4 +35,13 @@ test("the shared more-options editor retains every recording detail", () => {
   }));
   for (const field of ["speaker", "description", "chapters", "topics"]) assert.ok(html.includes(`name="${field}"`));
   for (const value of ["Pastor John", "Grace and hope", "John 3, Romans 8", "Grace, Prayer"]) assert.ok(html.includes(value));
+});
+
+test("upcoming and recording publication controls visibly retain the saved checked choice", () => {
+  const shown = renderToStaticMarkup(createElement(RecordingVisibilityChoice, { checked: true, onChange: change, label: "Show it on your church website", hint: "Anyone can watch." }));
+  assert.match(shown, /type="checkbox"[^>]*checked=""/);
+  assert.match(shown, /Show it on your church website/);
+  const hidden = renderToStaticMarkup(createElement(RecordingVisibilityChoice, { checked: false, onChange: change, label: "Show it in the FaithForm app", disabled: true }));
+  assert.doesNotMatch(hidden, /checked=""/);
+  assert.match(hidden, /disabled=""/);
 });

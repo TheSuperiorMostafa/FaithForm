@@ -10,7 +10,6 @@ import { CalendarDays, Loader2, Pencil, Plus, Repeat, X } from "lucide-react";
 import {
   cancelScheduledStream,
   createScheduledStream,
-  updateScheduledStream,
 } from "@/app/dashboard/live-streaming/actions";
 import { RECENT_SERVICES_LIMIT } from "@/components/live-streaming/live-tabs";
 import { AdvancedSection } from "@/components/ui/advanced-section";
@@ -67,7 +66,6 @@ export function ScheduleCard({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<StreamEvent | null>(null);
 
   const upcoming = events
     .filter((event) => event.status === "scheduled" || event.status === "live")
@@ -103,30 +101,10 @@ export function ScheduleCard({
         toast.success(`${title} is scheduled.`);
         form.reset();
         setFormOpen(false);
-        router.refresh();
+        if (result.eventId) router.push(`/dashboard/live-streaming/upcoming/${result.eventId}`);
+        else router.refresh();
       } catch {
         toast.error("We couldn't schedule that service. Your work is still here. Please try again.");
-      }
-    });
-  };
-
-  const handleUpdate = (form: HTMLFormElement) => {
-    const formData = new FormData(form);
-    const title = formData.get("title")?.toString().trim() || "The service";
-    startTransition(async () => {
-      try {
-        const imageError = await prepareServiceArtwork(formData);
-        if (imageError) { toast.error(imageError); return; }
-        const result = await updateScheduledStream(formData);
-        if (!result.ok) {
-          toast.error(result.error ?? "We couldn't update that service. Please try again.");
-          return;
-        }
-        toast.success(`Changes to “${title}” saved.`);
-        setEditing(null);
-        router.refresh();
-      } catch {
-        toast.error("We couldn't save those details. Your work is still here. Please try again.");
       }
     });
   };
@@ -155,10 +133,10 @@ export function ScheduleCard({
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Upcoming services"
-        description="Plan the title, artwork and series before your service. They carry over to its recording."
+        description="Edit each of your next 10 weekly services. Its details and artwork carry over to its recording."
         action={
-          isAdmin && !formOpen && !editing ? (
-            <Button size="lg" onClick={() => { setEditing(null); setFormOpen(true); }} className="gap-2">
+          isAdmin && !formOpen ? (
+            <Button size="lg" onClick={() => setFormOpen(true)} className="gap-2">
               <Plus className="size-5" aria-hidden />
               Schedule a service
             </Button>
@@ -190,7 +168,7 @@ export function ScheduleCard({
           </div>
 
           <div className="flex flex-col gap-1">
-            <CheckRow name="recurrence_weekly" defaultChecked label="Repeat every week" />
+            <CheckRow name="recurrence_weekly" defaultChecked label="Repeat every week" hint="Schedules the next 10 services. Edit each week separately." />
             <CheckRow
               name="syndicate_youtube"
               defaultChecked={youtubeConnected}
@@ -252,25 +230,6 @@ export function ScheduleCard({
         </form>
       ) : null}
 
-      {isAdmin && editing ? (
-        <form
-          key={editing.id}
-          encType="multipart/form-data"
-          onSubmit={(event) => { event.preventDefault(); handleUpdate(event.currentTarget); }}
-          className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none"
-          aria-label="Edit service"
-        >
-          <h3 className="font-heading text-xl font-bold">Edit service</h3>
-          <p className="text-[15px] text-muted-foreground">{formatServiceTime(editing.startsAt, timeZone)}. Changes apply to this service and its recording.</p>
-          <input type="hidden" name="event_id" value={editing.id} />
-          <ServiceDetailsFields series={series} event={editing} disabled={pending} />
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" size="lg" disabled={pending}>{pending ? "Saving…" : "Save service details"}</Button>
-            <Button type="button" variant="ghost" size="lg" disabled={pending} onClick={() => setEditing(null)}>Cancel</Button>
-          </div>
-        </form>
-      ) : null}
-
       {upcoming.length === 0 ? (
         <EmptyState
           icon={CalendarDays}
@@ -279,13 +238,13 @@ export function ScheduleCard({
           description="You don't need a schedule to go live. Schedule one if you'd like a countdown on your watch page."
         />
       ) : (
-        <ServiceList series={series} events={upcoming} timeZone={timeZone} isAdmin={isAdmin} pending={pending} onCancel={handleCancel} onEdit={(event) => { setFormOpen(false); setEditing(event); }} />
+        <ServiceList series={series} events={upcoming} timeZone={timeZone} isAdmin={isAdmin} pending={pending} onCancel={handleCancel} />
       )}
 
       {past.length > 0 ? (
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-lg font-bold">Recent</h3>
-          <ServiceList series={series} events={recent} timeZone={timeZone} isAdmin={false} pending={pending} onCancel={handleCancel} onEdit={(event) => { setFormOpen(false); setEditing(event); }} />
+          <ServiceList series={series} events={recent} timeZone={timeZone} isAdmin={false} pending={pending} onCancel={handleCancel} />
           {hasMoreRecent && showAllRecent ? (
             <Link
               href={UPCOMING_HREF}
@@ -316,7 +275,6 @@ function ServiceList({
   isAdmin,
   pending,
   onCancel,
-  onEdit,
 }: {
   events: StreamEvent[];
   series: { id: string; name: string }[];
@@ -324,7 +282,6 @@ function ServiceList({
   isAdmin: boolean;
   pending: boolean;
   onCancel: (event: StreamEvent) => void;
-  onEdit: (event: StreamEvent) => void;
 }) {
   return (
     <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
@@ -345,6 +302,7 @@ function ServiceList({
               <p className="flex flex-wrap items-center gap-x-2 text-[15px] text-muted-foreground">
                 {formatServiceTime(event.startsAt, timeZone)}
                 {event.seriesId && series.find(item => item.id === event.seriesId) ? <span>· {series.find(item => item.id === event.seriesId)?.name}</span> : null}
+                {event.speaker ? <span>· {event.speaker}</span> : null}
                 {event.recurrenceRule === "weekly" ? (
                   <span className="inline-flex items-center gap-1">
                     <Repeat className="size-3.5" aria-hidden /> Every week
@@ -357,10 +315,10 @@ function ServiceList({
             <StatusBadge tone={SERVICE_TONE[event.status] ?? "neutral"}>{serviceStatusLabel(event.status)}</StatusBadge>
             {isAdmin && event.status === "scheduled" ? (
               <>
-              <Button type="button" variant="outline" disabled={pending} onClick={() => onEdit(event)} className="gap-2">
+              <Link href={`/dashboard/live-streaming/upcoming/${event.id}`} className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
                 <Pencil className="size-4" aria-hidden />
                 Edit service
-              </Button>
+              </Link>
               <Button type="button" variant="outline" disabled={pending} onClick={() => onCancel(event)} className="gap-2">
                 <X className="size-4" aria-hidden />
                 Cancel service

@@ -8,6 +8,25 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { reconcileAttendanceTexts } from "@/lib/attendance/sms-delivery";
 import { isValidDateParam } from "@/lib/utils/dates";
 
+/** Read handset delivery status for this signed-in church without sending texts. */
+export async function refreshFollowUpDelivery(serviceDate: string) {
+  const supabase = createClient();
+  const denied = await featureActionError("attendance_follow_up", supabase);
+  if (denied) return { ok: false as const };
+  const auth = await getChurchAuth(supabase);
+  if (!auth || !isValidDateParam(serviceDate)) return { ok: false as const };
+
+  try {
+    await reconcileAttendanceTexts(createAdminClient(), auth.churchId, serviceDate);
+    revalidatePath(`/dashboard/attendance/follow-up/${serviceDate}`);
+    revalidatePath("/dashboard/attendance/follow-up/log");
+    revalidatePath("/dashboard");
+    return { ok: true as const };
+  } catch {
+    return { ok: false as const };
+  }
+}
+
 export async function confirmTextAppCheck(serviceDate: string, through: string) {
   const supabase = createClient();
   const denied = await featureActionError("attendance_follow_up", supabase);

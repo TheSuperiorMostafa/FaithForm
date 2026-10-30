@@ -143,35 +143,6 @@ function ChurchInfoSkeleton() {
   );
 }
 
-/** The Member App section: the app colors card. */
-function MemberAppSkeleton() {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>App colors</CardTitle>
-        <CardDescription className="text-[15px]">
-          Used across your church&apos;s app and giving page. Tap a pair to use it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-5">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Skeleton key={index} className="h-16 w-full rounded-2xl" />
-          ))}
-        </div>
-        <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
-          <span className="space-y-0.5">
-            <span className="block text-[15px] font-semibold">Custom color</span>
-            <span className="block text-sm text-muted-foreground">
-              Match your church&apos;s own colors exactly.
-            </span>
-          </span>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function TeamSkeleton() {
   return (
     <div className="flex flex-col gap-6">
@@ -391,7 +362,7 @@ export function SettingsTabSkeleton({
   const body = (() => {
     switch (tab) {
       case "notifications":
-        return <Card><CardHeader><CardTitle>Your notifications</CardTitle><CardDescription>Choose the emails and text messages you receive for this church. These choices affect your account.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><Skeleton className="h-6 w-64" /><InputSkeleton label="Your mobile number" />{STAFF_NOTIFICATION_EVENTS.filter(event => notificationFeatures.includes(event.feature)).map(event => <fieldset key={event.id} className="rounded-2xl border border-border p-5"><legend className="px-1 font-semibold">{event.label}</legend><p className="text-[15px] text-muted-foreground">{event.description}</p><div className="mt-3 flex min-h-11 items-center gap-6"><Skeleton className="size-5" /><span>Email</span><Skeleton className="size-5" /><span>Phone (text message)</span></div></fieldset>)}<p className="text-sm text-muted-foreground">Text messages use your church&apos;s connected texting phone. Guardian app alerts remain available to guardians.</p><span className="inline-flex min-h-11 items-center self-start rounded-[10px] bg-primary px-6 font-semibold text-primary-foreground">Save notification choices</span></CardContent></Card>;
+        return <Card><CardHeader><CardTitle>Your notifications</CardTitle><CardDescription>Choose the emails and text messages you receive for this church. These choices affect your account.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><Skeleton className="h-6 w-64" /><section className="flex flex-col gap-3"><p className="text-[15px] font-medium">Your mobile number</p><div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border p-4"><Skeleton className="h-6 w-40" /><Skeleton className="h-11 w-48 rounded-[10px]" /></div></section>{STAFF_NOTIFICATION_EVENTS.filter(event => notificationFeatures.includes(event.feature)).map(event => <fieldset key={event.id} className="rounded-2xl border border-border p-5"><legend className="px-1 font-semibold">{event.label}</legend><p className="text-[15px] text-muted-foreground">{event.description}</p><div className="mt-3 flex min-h-11 items-center gap-6"><Skeleton className="size-5" /><span>Email</span><Skeleton className="size-5" /><span>Phone (text message)</span></div></fieldset>)}<p className="text-sm text-muted-foreground">Text messages use your church&apos;s connected texting phone. Guardian app alerts remain available to guardians.</p><span className="inline-flex min-h-11 items-center self-start rounded-[10px] bg-primary px-6 font-semibold text-primary-foreground">Save notification choices</span></CardContent></Card>;
       case "documents":
         return <DocumentsSkeleton {...documentsAccess} />;
       case "church":
@@ -402,8 +373,6 @@ export function SettingsTabSkeleton({
         return <AccountsSkeleton />;
       case "messages":
         return <MessagesSkeleton />;
-      case "app":
-        return <MemberAppSkeleton />;
       case "giving":
         return <GivingSkeleton />;
     }

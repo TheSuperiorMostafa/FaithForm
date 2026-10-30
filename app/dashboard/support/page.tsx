@@ -63,6 +63,7 @@ export default async function SupportPage({ searchParams }: PageProps) {
           icon={MessageSquareText}
           title="Text us"
           description="(502) 650-8301"
+          tone="primary"
         />
         <ActionCard
           href={`mailto:${SUPPORT_EMAIL}`}

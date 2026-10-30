@@ -7,7 +7,7 @@ const read = (path: string) => readFileSync(path, "utf8");
 const IOS = "apps/faithform-ios";
 const ANDROID = "apps/faithform-android/app/src/main/kotlin/io/faithform/app";
 
-test("Go Live publishes the event to the FaithForm apps", () => {
+test("Go Live publishes with the service's chosen audience and respects an app opt-out", () => {
   const source = read("lib/stream/go-live.ts");
   const start = source.slice(
     source.indexOf("export async function startLiveBroadcast("),
@@ -16,7 +16,10 @@ test("Go Live publishes the event to the FaithForm apps", () => {
 
   assert.match(start, /publishToFaithForm\(/);
   assert.match(start, /kind:\s*"live"/);
-  assert.match(start, /visibility:\s*"public"/);
+  assert.match(start, /event\.recordingAppVisibility \?\? \(userId \? "public" : "none"\)/);
+  assert.match(start, /visibility:\s*appVisibility/);
+  assert.match(start, /if \(userId && appVisibility !== "none"\)/);
+  assert.match(start, /mobile_visibility: "none", mobile_unpublished_at:/);
   assert.match(start, /actorUserId:\s*userId/);
 });
 

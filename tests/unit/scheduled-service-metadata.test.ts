@@ -53,6 +53,20 @@ test("speaker, description and tag limits are enforced before uploading artwork 
   for (const values of invalid) assert.throws(() => readScheduledDetails(details({ title: "Sunday", ...values })), ScheduledDetailsError);
 });
 
+test("upcoming publication choices preserve explicit website and app opt-outs", () => {
+  const hidden = readScheduledDetails(details({ title: "Private preparation", app_visibility: "none" }));
+  assert.equal(hidden.recordingAppVisibility, "none");
+  assert.equal(hidden.recordingPublishToWebsite, false);
+  assert.equal(hidden.publicAccess, false);
+  assert.equal(hidden.recordingNotifyMembers, false);
+  const shown = readScheduledDetails(details({ title: "Sunday", app_visibility: "followers", publish_to_website: "on", notify_members: "on" }));
+  assert.equal(shown.recordingAppVisibility, "followers");
+  assert.equal(shown.recordingPublishToWebsite, true);
+  assert.equal(shown.recordingNotifyMembers, true);
+  assert.equal(readScheduledDetails(details({ title: "Legacy scheduling form" })).recordingAppVisibility, undefined);
+  assert.throws(() => readScheduledDetails(details({ title: "Sunday", app_visibility: "invented" })), ScheduledDetailsError);
+});
+
 test("recording and weekly recurrence inherit the new details while recording overrides survive", () => {
   const sql = readFileSync("supabase/migrations/0135_upcoming_service_recording_details.sql", "utf8");
   assert.match(sql, /WHERE id = NEW.stream_event_id AND church_id = NEW.church_id/);

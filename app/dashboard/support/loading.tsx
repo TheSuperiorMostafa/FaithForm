@@ -31,7 +31,7 @@ export default function SupportLoading() {
       href: "sms:+15026508301",
       title: "Text us",
       description: "(502) 650-8301",
-      primary: false,
+      primary: true,
     },
     { icon: Mail, href: `mailto:${SUPPORT_EMAIL}`, title: "Email us", description: SUPPORT_EMAIL, primary: false },
     {

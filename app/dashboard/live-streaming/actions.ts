@@ -40,6 +40,7 @@ export type StreamRelayActionState = {
 
 function revalidateLiveStreaming() {
   revalidatePath("/dashboard/live-streaming");
+  revalidatePath("/dashboard/live-streaming/upcoming");
   revalidatePath("/dashboard/settings");
 }
 
@@ -357,6 +358,10 @@ export async function createScheduledStream(
   }
 
   try {
+    if (formData.has("app_visibility") && formData.get("app_visibility") !== "none") {
+      const appError = await featureActionError("member_app");
+      if (appError) return { ok: false, error: appError };
+    }
     const metadata = await scheduledDetailsPatch(formData, auth.churchId, createAdminClient());
     const simulatedFile = formData.get("simulated_video");
     let simulatedSourcePath: string | null = null;
@@ -383,6 +388,7 @@ export async function createScheduledStream(
       ...metadata,
       startsAt: startsAt.toISOString(),
       recurrenceRule: formData.get("recurrence_weekly") ? "weekly" : null,
+      recurrenceTimeZone: auth.churchTimezone ?? "America/New_York",
       syndicateYoutube: formData.get("syndicate_youtube") === "on",
       syndicateFacebook: formData.get("syndicate_facebook") === "on",
       chatEnabled: formData.get("chat_enabled") === "on",
@@ -417,6 +423,10 @@ export async function updateScheduledStream(
     const event = await getStreamEvent(eventId, db);
     if (!event || event.churchId !== auth.churchId || event.status !== "scheduled") {
       return { ok: false, error: "This service is no longer upcoming. Refresh the page and try again." };
+    }
+    if (formData.has("app_visibility") && formData.get("app_visibility") !== "none") {
+      const appError = await featureActionError("member_app");
+      if (appError) return { ok: false, error: appError };
     }
     const metadata = await scheduledDetailsPatch(formData, auth.churchId, db);
     // Repeat the status condition in the write to avoid changing a service that just started.

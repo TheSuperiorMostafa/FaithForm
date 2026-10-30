@@ -78,6 +78,7 @@ export type StaffRecording = {
   hasCustomArtwork: boolean;
   app: { published: boolean; visibility: AppVisibility | null; publishedAt: string | null };
   website: { published: boolean; publishedAt: string | null; listed: boolean };
+  publicationDefaults?: { website: boolean | null; appVisibility: "none" | AppVisibility | null; notify: boolean | null };
   eventId: string | null;
   sessionId: string | null;
   segmentCount: number;
@@ -99,7 +100,7 @@ const STAFF_COLUMNS =
   "web_published_at, web_unpublished_at, series_id, speaker_tags, chapter_tags, topic_tags, deleted_at, " +
   "purged_at, created_at, " +
   "updated_at, visibility, artwork_wide_url, artwork_poster_url, " +
-  "media_series(name, artwork_wide_url), stream_events(artwork_url, mobile_poster_url)";
+  "media_series(name, artwork_wide_url), stream_events(artwork_url, mobile_poster_url, recording_app_visibility, recording_publish_to_website, recording_notify_members)";
 
 type StaffRow = Record<string, unknown>;
 
@@ -185,6 +186,7 @@ function toStaffRecording(row: StaffRow, slug: string | null): StaffRecording {
       publishedAt: webPublished ? state.webPublishedAt : null,
       listed: (row.visibility as string | null) !== "unlisted",
     },
+    publicationDefaults: event ? { website: event.recording_publish_to_website as boolean | null, appVisibility: event.recording_app_visibility as "none" | AppVisibility | null, notify: event.recording_notify_members as boolean | null } : undefined,
     eventId: (row.stream_event_id as string | null) ?? null,
     sessionId: (row.stream_session_id as string | null) ?? null,
     segmentCount: Number(row.segment_count ?? 0),
@@ -805,15 +807,26 @@ export async function autoPublishRecording(
       .is("series_id", null);
   }
 
+  let service: { recording_app_visibility?: "none" | AppVisibility | null; recording_publish_to_website?: boolean | null; recording_notify_members?: boolean | null } | null = null;
+  if (recording.streamEventId) {
+    const { data, error } = await db.from("stream_events")
+      .select("recording_app_visibility, recording_publish_to_website, recording_notify_members")
+      .eq("id", recording.streamEventId).eq("church_id", recording.churchId).maybeSingle();
+    if (error) throw new Error("Could not read this service's publication choices.");
+    service = data;
+  }
+  const appVisibility = appEnabled ? (service?.recording_app_visibility ?? settings.defaultVisibility) : "none";
+  const website = service?.recording_publish_to_website ?? (settings.publishToWebsite || !appEnabled);
+  if (appVisibility === "none" && !website) return null;
   const result = await publishRecording(
     {
       churchId: recording.churchId,
       recordingId: recording.id,
       actorUserId: null,
       via: "automatic",
-      appVisibility: appEnabled ? settings.defaultVisibility : null,
-      website: settings.publishToWebsite || !appEnabled,
-      notifyMembers: appEnabled && settings.notifyOnPublish,
+      appVisibility: appVisibility === "none" ? null : appVisibility,
+      website,
+      notifyMembers: appEnabled && appVisibility !== "none" && (service?.recording_notify_members ?? settings.notifyOnPublish),
     },
     db,
   );

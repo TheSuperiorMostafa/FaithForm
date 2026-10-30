@@ -117,15 +117,20 @@ export function FollowUpBoard({
       return;
     }
 
-    const ok = await confirmAction({
-      title: `Text ${people(count)} now?`,
-      description: textingConnected
-        ? `Each person gets the message shown. Names are added only where you include [Name]. A text can't be taken back once it's sent.`
-        : `Your church's texting phone isn't connected yet, so they'll be marked for follow-up but no texts will go out.`,
-      confirmLabel: `Send ${texts(count)}`,
-      destructive: true,
-    });
-    if (!ok) return;
+    const includesNames = customCheck?.ok
+      ? customCheck.message.includes(NAME_PLACEHOLDER)
+      : groups.some((group) => group.template.includes(NAME_PLACEHOLDER));
+    if (includesNames) {
+      const ok = await confirmAction({
+        title: `Text ${people(count)} now?`,
+        description: textingConnected
+          ? `Each person gets the message shown with their first name. A text can't be taken back once it's sent.`
+          : `Your church's texting phone isn't connected yet, so they'll be marked for follow-up but no texts will go out.`,
+        confirmLabel: `Send ${texts(count)}`,
+        destructive: true,
+      });
+      if (!ok) return;
+    }
 
     startSending(async () => {
       try {
@@ -143,6 +148,7 @@ export function FollowUpBoard({
         setSelected(new Set());
         if (result.requiresAppCheck) {
           router.push(`/dashboard/attendance/follow-up/${selectedDate}/check-texts`);
+          router.refresh();
           return;
         }
         if (result.notConnected) {

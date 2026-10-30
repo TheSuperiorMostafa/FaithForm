@@ -14,13 +14,13 @@ export default function UpcomingServicesLoading() {
           <div className="space-y-1">
             <h2 className="font-heading text-xl font-bold text-foreground">Upcoming services</h2>
             <p className="text-[15px] text-muted-foreground">
-              Plan the title, artwork, series and speaker before your service. These details carry over to its recording.
+              Edit each of your next 10 weekly services. Its details and artwork carry over to its recording.
             </p>
           </div>
           <Skeleton className="min-h-12 w-52 rounded-[10px]" />
         </div>
 
-        <ServiceRowsSkeleton rows={3} withAction />
+        <ServiceRowsSkeleton rows={10} withAction />
 
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-lg font-bold">Recent</h3>

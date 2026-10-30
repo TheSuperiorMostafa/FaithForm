@@ -68,9 +68,9 @@ export function TextAppCheck({ serviceDate, through }: { serviceDate: string; th
         onKeyUp={(event) => { if (event.key === " " || event.key === "Enter") { event.preventDefault(); stop(); } }}
         aria-describedby="text-app-check-help">
         <span aria-hidden className="absolute inset-y-0 left-0 bg-white/20 motion-reduce:transition-none" style={{ width: `${progress}%` }} />
-        <span className="relative">{pending ? "Saving your check…" : progress > 0 ? `Keep holding… ${Math.ceil(3 - progress * 0.03)} seconds` : "Hold for 3 seconds to confirm"}</span>
+        <span className="relative">{pending ? "Saving your check…" : progress > 0 ? `Keep holding… ${Math.ceil(3 - progress * 0.03)} seconds` : "Hold to confirm"}</span>
       </Button>
-      <p id="text-app-check-help" className="text-sm text-muted-foreground">Hold with your mouse or finger, or hold the Space or Enter key while the button is selected. Releasing early restarts the check.</p>
+      <p id="text-app-check-help" className="sr-only">Hold for 3 seconds with your mouse or finger, or hold the Space or Enter key while the button is selected. Releasing early restarts the check.</p>
       {error ? <p role="alert" className="text-base text-destructive">{error}</p> : null}
     </TextAppCheckContent>
   );

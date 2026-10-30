@@ -12,7 +12,6 @@ export const SETTINGS_TABS = [
   { id: "messages", label: "Messages & email" },
   { id: "notifications", label: "Notifications" },
   { id: "documents", label: "Documents" },
-  { id: "app", label: "Member App" },
 ] as const;
 
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
@@ -42,7 +41,7 @@ export const LEGACY_SETTINGS_TAB_ALIASES: Record<string, ResolvedSettingsTab> = 
  * Advanced section's light/dark choice now sits at the top of every section,
  * and Apple Mail drafts moved to Connected accounts.
  */
-export const REMOVED_SETTINGS_TABS: readonly string[] = ["advanced"];
+export const REMOVED_SETTINGS_TABS: readonly string[] = ["advanced", "app"];
 
 /** Params the OAuth callbacks append when they come back to Settings. */
 export const ACCOUNT_RESULT_PARAMS = [
@@ -74,8 +73,6 @@ export function visibleSettingsTabs(viewer: SettingsViewer): SettingsTabId[] {
     if (id === "messages") {
       return viewer.isAdmin && (allowed.has("announcements") || allowed.has("attendance"));
     }
-    // App colors are used by the church's app and its giving page.
-    if (id === "app") return viewer.isAdmin && (allowed.has("member_app") || allowed.has("giving"));
     return true;
   });
 }

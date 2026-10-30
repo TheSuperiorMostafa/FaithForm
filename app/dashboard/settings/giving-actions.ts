@@ -385,6 +385,7 @@ export async function updateGivingBranding(params: {
   if (error) return { error: toUserError(error, "We couldn't save your church's colors.") };
 
   await revalidateGivingPaths(auth.churchId);
+  revalidatePath("/dashboard/app");
   return {};
 }
 

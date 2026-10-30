@@ -9,6 +9,10 @@ export type StreamEvent = {
   title: string;
   startsAt: string;
   recurrenceRule: string | null;
+  recurrenceGroupId?: string | null;
+  recordingAppVisibility?: "none" | "public" | "followers" | "members" | null;
+  recordingPublishToWebsite?: boolean | null;
+  recordingNotifyMembers?: boolean | null;
   status: StreamEventStatus;
   syndicateYoutube: boolean;
   syndicateFacebook: boolean;
@@ -40,6 +44,10 @@ type EventRow = {
   title: string;
   starts_at: string;
   recurrence_rule: string | null;
+  recurrence_group_id?: string | null;
+  recording_app_visibility?: "none" | "public" | "followers" | "members" | null;
+  recording_publish_to_website?: boolean | null;
+  recording_notify_members?: boolean | null;
   status: StreamEventStatus;
   syndicate_youtube: boolean;
   syndicate_facebook: boolean;
@@ -72,6 +80,10 @@ function mapEvent(row: EventRow): StreamEvent {
     title: row.title,
     startsAt: row.starts_at,
     recurrenceRule: row.recurrence_rule,
+    recurrenceGroupId: row.recurrence_group_id ?? null,
+    recordingAppVisibility: row.recording_app_visibility ?? null,
+    recordingPublishToWebsite: row.recording_publish_to_website ?? null,
+    recordingNotifyMembers: row.recording_notify_members ?? null,
     status: row.status,
     syndicateYoutube: row.syndicate_youtube,
     syndicateFacebook: row.syndicate_facebook,
@@ -104,14 +116,13 @@ function getClient(supabase?: SupabaseClient) {
 
 export async function listStreamEvents(
   churchId: string,
-  options?: { limit?: number; supabase?: SupabaseClient },
+  options?: { limit?: number; supabase?: SupabaseClient; statuses?: StreamEventStatus[]; ascending?: boolean },
 ): Promise<StreamEvent[]> {
   const client = getClient(options?.supabase);
-  const { data, error } = await client
-    .from("stream_events")
-    .select("*")
-    .eq("church_id", churchId)
-    .order("starts_at", { ascending: false })
+  let query = client.from("stream_events").select("*").eq("church_id", churchId);
+  if (options?.statuses) query = query.in("status", options.statuses);
+  const { data, error } = await query
+    .order("starts_at", { ascending: options?.ascending ?? false })
     .limit(options?.limit ?? 20);
 
   if (error) throw new Error(error.message);
@@ -138,7 +149,6 @@ export async function getUpcomingStreamEvent(
   supabase?: SupabaseClient,
 ): Promise<StreamEvent | null> {
   const client = getClient(supabase);
-  const now = new Date().toISOString();
   const { data, error } = await client
     .from("stream_events")
     .select("*")
@@ -207,6 +217,10 @@ export async function createStreamEvent(
     artworkWideUrl?: string | null;
     artworkBannerUrl?: string | null;
     recurrenceRule?: string | null;
+    recurrenceTimeZone?: string;
+    recordingAppVisibility?: "none" | "public" | "followers" | "members" | null;
+    recordingPublishToWebsite?: boolean | null;
+    recordingNotifyMembers?: boolean | null;
     syndicateYoutube?: boolean;
     syndicateFacebook?: boolean;
     youtubePrivacy?: "public" | "unlisted" | "private";
@@ -236,6 +250,10 @@ export async function createStreamEvent(
       artwork_wide_url: input.artworkWideUrl ?? null,
       artwork_banner_url: input.artworkBannerUrl ?? null,
       recurrence_rule: input.recurrenceRule ?? null,
+      recurrence_time_zone: input.recurrenceTimeZone ?? null,
+      recording_app_visibility: input.recordingAppVisibility ?? null,
+      recording_publish_to_website: input.recordingPublishToWebsite ?? null,
+      recording_notify_members: input.recordingNotifyMembers ?? null,
       syndicate_youtube: input.syndicateYoutube ?? true,
       syndicate_facebook: input.syndicateFacebook ?? true,
       youtube_privacy: input.youtubePrivacy ?? "public",
@@ -265,6 +283,10 @@ export async function updateStreamEvent(
     syndicationRetryUntil: string | null;
     title: string;
     startsAt: string;
+    publicAccess: boolean;
+    recordingAppVisibility: "none" | "public" | "followers" | "members" | null;
+    recordingPublishToWebsite: boolean | null;
+    recordingNotifyMembers: boolean | null;
     speaker: string | null;
     description: string | null;
     chapters: string[];
@@ -288,6 +310,10 @@ export async function updateStreamEvent(
     updates.syndication_retry_until = patch.syndicationRetryUntil;
   }
   if (patch.title !== undefined) updates.title = patch.title;
+  if (patch.publicAccess !== undefined) updates.public_access = patch.publicAccess;
+  if (patch.recordingAppVisibility !== undefined) updates.recording_app_visibility = patch.recordingAppVisibility;
+  if (patch.recordingPublishToWebsite !== undefined) updates.recording_publish_to_website = patch.recordingPublishToWebsite;
+  if (patch.recordingNotifyMembers !== undefined) updates.recording_notify_members = patch.recordingNotifyMembers;
   if (patch.startsAt !== undefined) updates.starts_at = patch.startsAt;
 
   if (patch.speaker !== undefined) updates.speaker_tags = patch.speaker ? [patch.speaker] : [];
@@ -319,7 +345,7 @@ export async function cancelStreamEvent(
   churchId: string,
   supabase?: SupabaseClient,
 ): Promise<StreamEvent> {
-  return updateStreamEvent(eventId, churchId, { status: "cancelled" }, supabase);
+  return updateStreamEvent(eventId, churchId, { status: "cancelled" }, supabase, "scheduled");
 }
 
 export function nextWeeklyOccurrence(

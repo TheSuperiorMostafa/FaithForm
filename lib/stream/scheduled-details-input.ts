@@ -23,7 +23,17 @@ export function readScheduledDetails(form: FormData) {
     }
     return values;
   };
-  return { title, seriesId: seriesId || null, newSeriesName,
+  const appVisibility = form.get("app_visibility")?.toString();
+  if (appVisibility !== undefined && !["none", "public", "followers", "members"].includes(appVisibility)) {
+    throw new ScheduledDetailsError("Choose who can watch this service in the app.");
+  }
+  const publication = appVisibility === undefined ? {} : {
+    recordingAppVisibility: appVisibility as "none" | "public" | "followers" | "members",
+    recordingPublishToWebsite: form.get("publish_to_website") === "on",
+    publicAccess: form.get("publish_to_website") === "on",
+    recordingNotifyMembers: form.get("notify_members") === "on",
+  };
+  return { ...publication, title, seriesId: seriesId || null, newSeriesName,
     speaker: speaker || null, description: description || null,
     chapters: tags("chapters", "Scripture references"), topics: tags("topics", "topics"),
   };

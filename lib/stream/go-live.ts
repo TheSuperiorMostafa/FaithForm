@@ -188,13 +188,22 @@ export async function startLiveBroadcast(
   // kept the service hidden until somebody found a separate publishing screen.
   // Scheduled starts keep their explicit publication choice; an admin-started
   // broadcast is published to everyone as part of the same intent.
-  if (userId) {
+  const appVisibility = event.recordingAppVisibility ?? (userId ? "public" : "none");
+  if (event.recordingAppVisibility === "none") {
+    // A scheduled service might have been published before this week's choice
+    // was changed. Honour an explicit opt-out before it can become live.
+    const { error } = await client.from("stream_events")
+      .update({ mobile_visibility: "none", mobile_unpublished_at: new Date().toISOString() })
+      .eq("id", event.id).eq("church_id", churchId);
+    if (error) throw new Error("Could not save this service's app visibility.");
+  }
+  if (userId && appVisibility !== "none") {
     const publication = await publishToFaithForm(
       {
         churchId,
         kind: "live",
         id: event.id,
-        visibility: "public",
+        visibility: appVisibility,
         actorUserId: userId,
       },
       client,
@@ -303,7 +312,7 @@ export async function endLiveBroadcast(
   // lingered for the next service to close by mistake. Fall back to the newest
   // live event only for sessions predating stream_event_id.
   const eventColumns =
-    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, public_access, created_by, speaker_tags, description, chapter_tags, topic_tags, series_id, artwork_url, artwork_poster_url, artwork_wide_url, artwork_banner_url";
+    "id, recurrence_rule, recurrence_group_id, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, public_access, created_by, speaker_tags, description, chapter_tags, topic_tags, series_id, artwork_url, artwork_poster_url, artwork_wide_url, artwork_banner_url";
 
   const { data: events } = session.streamEventId
     ? await client
@@ -348,7 +357,7 @@ export async function endLiveBroadcast(
       liveEvent.starts_at,
       liveEvent.recurrence_rule,
     );
-    if (nextStarts && liveEvent.recurrence_rule === "weekly") {
+    if (nextStarts && liveEvent.recurrence_rule === "weekly" && !liveEvent.recurrence_group_id) {
       await createStreamEvent(
         {
           churchId,

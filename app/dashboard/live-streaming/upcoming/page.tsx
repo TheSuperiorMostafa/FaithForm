@@ -32,8 +32,9 @@ export default async function UpcomingServicesPage({
   // the full history.
   const showAllRecent = (Array.isArray(query.recent) ? query.recent[0] : query.recent) === "all";
 
-  const [events, status, access, series] = await Promise.all([
-    listStreamEvents(auth.churchId, { limit: showAllRecent ? 500 : 20, supabase }),
+  const [pastEvents, upcomingEvents, status, access, series] = await Promise.all([
+    listStreamEvents(auth.churchId, { limit: showAllRecent ? 500 : 20, statuses: ["ended", "cancelled"], supabase }),
+    listStreamEvents(auth.churchId, { limit: 100, statuses: ["scheduled", "live"], ascending: true, supabase }),
     getLiveBroadcastStatus(auth.churchId, supabase),
     getFeatureAccess(),
     listMediaSeries(auth.churchId),
@@ -47,7 +48,7 @@ export default async function UpcomingServicesPage({
     <div className="flex w-full flex-col gap-8">
       <ScheduleCard
         isAdmin={auth.isAdmin}
-        events={events}
+        events={[...upcomingEvents, ...pastEvents]}
         series={series.map(item => ({ id: item.id, name: item.name }))}
         youtubeConnected={status.platforms.youtube.connected}
         facebookConnected={status.platforms.facebook.connected}
@@ -61,7 +62,7 @@ export default async function UpcomingServicesPage({
           description="Link a sermon's slides so people can open them while they watch."
         >
           <ServicePresentationLinker
-            key={events.map((event) => `${event.id}:${event.status}`).join("|")}
+            key={[...upcomingEvents, ...pastEvents].map((event) => `${event.id}:${event.status}`).join("|")}
             bare
           />
         </AdvancedSection>

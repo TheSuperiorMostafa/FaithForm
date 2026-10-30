@@ -3,6 +3,8 @@ import { Clock, Image as ImageIcon, Link2, MapPin, Smartphone, Type, Users } fro
 import { Card } from "@/components/ui/card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { BrandColorsSkeleton } from "@/components/settings/brand-colors-skeleton";
+import { getChurchAuth } from "@/lib/auth/church";
 
 const JUMPS = [
   { label: "Look & name", icon: ImageIcon },
@@ -14,7 +16,8 @@ const JUMPS = [
 ];
 
 /** Mirrors the Church App page: header, church page editor beside the phone, then access cards. */
-export default function MemberAppLoading() {
+export default async function MemberAppLoading() {
+  const auth = await getChurchAuth();
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="church app">
       <PageHeader
@@ -95,6 +98,8 @@ export default function MemberAppLoading() {
           </aside>
         </div>
       </section>
+
+      {auth?.isAdmin && <BrandColorsSkeleton />}
 
       <section className="flex flex-col gap-4">
         <SectionHeader

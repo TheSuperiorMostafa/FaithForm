@@ -3,21 +3,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowLeft, CalendarDays, ImageIcon, Loader2 } from "lucide-react";
+import { ArrowLeft, CalendarDays, Globe, ImageIcon, Loader2, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { updateScheduledStream } from "@/app/dashboard/live-streaming/actions";
 import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
 import { RecordingExtraFields, RecordingPrimaryFields } from "@/components/media/recording-details-fields";
+import { RecordingVisibilityChoice } from "@/components/media/recording-visibility-choice";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { EMPTY_ARTWORK } from "@/lib/media/artwork";
 import type { StreamEvent } from "@/lib/stream/events";
 import { formatServiceTime } from "@/lib/stream/format";
 import type { MediaSeries } from "@/lib/stream/media-library";
+import type { RecordingSettings } from "@/lib/stream/recording-repo";
 
-export function UpcomingServiceEditor({ event, series, timeZone }: { event: StreamEvent; series: MediaSeries[]; timeZone: string }) {
+export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, settings }: { event: StreamEvent; series: MediaSeries[]; timeZone: string; appEnabled: boolean; settings: RecordingSettings }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState(event.title);
@@ -27,6 +31,10 @@ export function UpcomingServiceEditor({ event, series, timeZone }: { event: Stre
   const [description, setDescription] = useState(event.description ?? "");
   const [chapters, setChapters] = useState(event.chapters?.join(", ") ?? "");
   const [topics, setTopics] = useState(event.topics?.join(", ") ?? "");
+  const [toWebsite, setToWebsite] = useState(event.recordingPublishToWebsite ?? (event.publicAccess && (settings.publishToWebsite || !appEnabled)));
+  const [toApp, setToApp] = useState(appEnabled && event.recordingAppVisibility !== "none");
+  const [audience, setAudience] = useState(event.recordingAppVisibility && event.recordingAppVisibility !== "none" ? event.recordingAppVisibility : settings.defaultVisibility);
+  const [notify, setNotify] = useState(event.recordingNotifyMembers ?? settings.notifyOnPublish);
   const selectedSeries = series.find(item => item.id === seriesId);
   const artwork = { poster: event.artworkPosterUrl ?? null, wide: event.artworkWideUrl ?? event.artworkUrl, banner: event.artworkBannerUrl ?? null };
   const preview = artwork.wide ?? selectedSeries?.artwork.wide ?? artwork.poster ?? selectedSeries?.artwork.poster;
@@ -35,6 +43,9 @@ export function UpcomingServiceEditor({ event, series, timeZone }: { event: Stre
     const data = new FormData();
     // Keep folded More options in the save, exactly as recording review does.
     for (const [key, value] of Object.entries({ event_id: event.id, title, series_id: seriesId, new_series_name: newSeries, speaker, description, chapters, topics })) data.set(key, value);
+    data.set("app_visibility", appEnabled && toApp ? audience : "none");
+    if (toWebsite) data.set("publish_to_website", "on");
+    if (appEnabled && toApp && notify) data.set("notify_members", "on");
     startTransition(async () => {
       try {
         const result = await updateScheduledStream(data);
@@ -50,7 +61,7 @@ export function UpcomingServiceEditor({ event, series, timeZone }: { event: Stre
     <Link href="/dashboard/live-streaming/upcoming" className="inline-flex min-h-11 w-fit items-center gap-2 text-[15px] font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" aria-hidden />All upcoming services</Link>
     <div className="flex flex-col gap-3">
       <StatusBadge tone="working">Upcoming</StatusBadge>
-      <PageHeader title={title || "Upcoming service"} description={formatServiceTime(event.startsAt, timeZone)} />
+      <PageHeader title={title || "Upcoming service"} description={`${formatServiceTime(event.startsAt, timeZone)}. Changes apply to this service only.`} />
     </div>
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-6">
@@ -70,10 +81,16 @@ export function UpcomingServiceEditor({ event, series, timeZone }: { event: Stre
           </div>
           <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">Service details</legend>
             <RecordingPrimaryFields idPrefix="upcoming" title={title} onTitleChange={setTitle} seriesId={seriesId} onSeriesChange={setSeriesId} newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} titleMaxLength={120} />
+            <RecordingVisibilityChoice checked={toWebsite} onChange={setToWebsite} icon={<Globe className="size-5" aria-hidden />} label="Show it on your church website" hint="Anyone can watch this service on your church's watch page." />
+            {appEnabled ? <RecordingVisibilityChoice checked={toApp} onChange={setToApp} icon={<Smartphone className="size-5" aria-hidden />} label="Show it in the FaithForm app" hint="Your recording keeps this choice when you publish it." /> : null}
           </fieldset>
           <ItemArtworkPanel target={{ kind: "service", id: event.id }} artwork={artwork} seriesArtwork={selectedSeries?.artwork ?? EMPTY_ARTWORK} seriesName={selectedSeries?.name ?? null} seriesSlug={selectedSeries?.slug ?? null} />
-          <AdvancedSection title="More options" description="Speaker and scripture">
+          <AdvancedSection title="More options" description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}>
             <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">More options</legend>
+              {appEnabled && toApp ? <>
+                <div className="flex flex-col gap-2"><Label htmlFor="upcoming-audience">Who can watch it in the app</Label><Select id="upcoming-audience" value={audience === "members" ? "followers" : audience} onChange={e => setAudience(e.target.value as typeof audience)}><option value="public">Everyone</option><option value="followers">People who follow your church</option></Select></div>
+                <RecordingVisibilityChoice checked={notify} onChange={setNotify} label="Let members know it's available" hint="Used when the recording is published." />
+              </> : null}
               <RecordingExtraFields idPrefix="upcoming" speaker={speaker} onSpeakerChange={setSpeaker} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
             </fieldset>
           </AdvancedSection>

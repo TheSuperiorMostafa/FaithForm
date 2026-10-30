@@ -233,10 +233,25 @@ export function resolveTokens(
   settings: SiteSettingsRow | null,
   churchOverride: SiteOverrideRow | null,
 ): Record<string, string> {
-  return {
-    ...sanitizeTokens(theme.tokens),
+  const brand = {
     ...sanitizeTokens(settings?.brandTokens),
     ...sanitizeTokens(asRecord(churchOverride?.patch?.tokens)),
+  };
+  // The editor exposes the main colors, not every shade. Keep dependent
+  // surfaces in that palette unless a church explicitly overrides the shade.
+  const shades: Record<string, string> = {};
+  if (brand["--site-ink"]) {
+    shades["--site-ink-strong"] = `color-mix(in srgb, ${brand["--site-ink"]} 78%, #000)`;
+    shades["--site-ink-soft"] = `color-mix(in srgb, ${brand["--site-ink"]} 86%, #fff)`;
+    shades["--site-accent-ink"] = brand["--site-ink"];
+  }
+  if (brand["--site-canvas"]) {
+    shades["--site-canvas-alt"] = `color-mix(in srgb, ${brand["--site-canvas"]} 96%, ${brand["--site-ink"] ?? "var(--site-ink)"})`;
+  }
+  return {
+    ...sanitizeTokens(theme.tokens),
+    ...shades,
+    ...brand,
   };
 }
 

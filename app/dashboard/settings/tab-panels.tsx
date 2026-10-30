@@ -6,7 +6,6 @@ import { ArrowRight, Heart, Mail } from "lucide-react";
 
 import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
 import { AppleMailDraftsCard } from "@/components/settings/apple-calendar-connect";
-import { BrandColorsCard } from "@/components/settings/brand-colors-card";
 import { pickChurchBasics } from "@/components/settings/church-basics";
 import { ChurchDetailsForm, ChurchImagesCard } from "@/components/settings/church-info-card";
 import { CommunicationAttachmentsForm } from "@/components/settings/communication-attachments-form";
@@ -61,8 +60,6 @@ export async function SettingsTabPanel({
         return await AccountsPanel(context);
       case "messages":
         return await MessagesPanel(context);
-      case "app":
-        return await MemberAppPanel(context);
       case "giving":
         return await GivingPanel();
     }
@@ -109,24 +106,6 @@ async function ChurchInfoPanel({ auth, flags, allowedFeatures }: SettingsPanelCo
         appEnabled={flags.member_app}
       />
     </div>
-  );
-}
-
-/** The colors the church's app and giving page use. Admins only. */
-async function MemberAppPanel({ auth, flags }: SettingsPanelContext) {
-  const { data } = await createClient()
-    .from("churches")
-    .select("giving_primary_color, giving_accent_color")
-    .eq("id", auth.churchId)
-    .maybeSingle();
-  const colorRow = data as { giving_primary_color: string | null; giving_accent_color: string | null } | null;
-
-  return (
-    <BrandColorsCard
-      primaryColor={colorRow?.giving_primary_color ?? null}
-      accentColor={colorRow?.giving_accent_color ?? null}
-      appEnabled={flags.member_app}
-    />
   );
 }
 

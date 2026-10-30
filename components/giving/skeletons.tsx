@@ -13,6 +13,7 @@ import { RANGE_PRESETS } from "@/lib/giving/periods";
 import type { SetupStep } from "@/lib/giving/setup";
 import { defaultStatementYear } from "@/lib/giving/statement-year";
 import { cn } from "@/lib/utils";
+import { BrandColorsSkeleton } from "@/components/settings/brand-colors-skeleton";
 
 /**
  * Loading states for every Giving page. Each mirrors its page: the same root,
@@ -538,7 +539,7 @@ function SettingsCardSkeleton({
   );
 }
 
-export function GivingSettingsSkeleton() {
+export function GivingSettingsSkeleton({ appEnabled = true }: { appEnabled?: boolean } = {}) {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="giving settings">
       <GivingSubpageHeader page="settings" />
@@ -601,6 +602,8 @@ export function GivingSettingsSkeleton() {
         description="The web address people visit to give. Use your church's name, with dashes instead of spaces."
         rows={1}
       />
+      {!appEnabled && <BrandColorsSkeleton appEnabled={false} />}
+
       <Card className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-4">
           <span
@@ -612,14 +615,14 @@ export function GivingSettingsSkeleton() {
           <div className="space-y-1.5">
             <h2 className="font-heading text-xl font-bold text-foreground">Logo and colors</h2>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Your giving page and receipts use your church&apos;s logo and colors, the same ones
-              as the app.
+              Your giving page and receipts use your church&apos;s logo and colors{appEnabled ? ", the same ones as the app" : ""}.
             </p>
           </div>
         </div>
-        <Button variant="outline" disabled>
-          Change logo and colors
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled>Change colors</Button>
+          <Button variant="outline" disabled>Change logo</Button>
+        </div>
       </Card>
     </SkeletonContainer>
   );

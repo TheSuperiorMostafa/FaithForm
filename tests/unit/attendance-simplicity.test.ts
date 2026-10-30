@@ -285,11 +285,45 @@ test("the reworded message is validated on the server and sent as written", () =
   assert.match(sender, /options\.messageTemplate\s*\?\s*personalizeFollowUpMessage\(options\.messageTemplate, member\.firstName\)/);
 });
 
-test("sending texts asks first, naming how many", () => {
+test("texts without a name placeholder skip the extra send confirmation", () => {
   const board = read("app/dashboard/attendance/follow-up/[date]/follow-up-board.tsx");
+  assert.match(board, /customCheck\.message\.includes\(NAME_PLACEHOLDER\)/);
+  assert.match(board, /groups\.some\(\(group\) => group\.template\.includes\(NAME_PLACEHOLDER\)\)/);
+  assert.match(board, /if \(includesNames\) \{\s+const ok = await confirmAction/);
   assert.match(board, /title: `Text \$\{people\(count\)\} now\?`/);
   assert.match(board, /confirmLabel: `Send \$\{texts\(count\)\}`/);
   assert.match(board, /destructive: true/);
+
+  const welcome = read("app/dashboard/attendance/follow-up/[date]/first-time-guest-panel.tsx");
+  assert.match(welcome, /if \(welcomeCheck\.message\.includes\("\[Name\]"\)\) \{\s+const ok = await confirmAction/);
+});
+
+test("the phone check shows only the title and hold button with accessible hold guidance", () => {
+  const content = read("app/dashboard/attendance/follow-up/[date]/check-texts/text-app-check-content.tsx");
+  assert.match(content, /Open your SMS Mobile API app to make sure all texts send through properly/);
+  assert.doesNotMatch(content, /<p\b/);
+  const check = read("app/dashboard/attendance/follow-up/[date]/check-texts/text-app-check.tsx");
+  assert.match(check, /id="text-app-check-help" className="sr-only"/);
+  assert.match(check, /elapsed < 3_000/);
+  assert.match(check, /onKeyDown/);
+});
+
+test("queued delivery status refreshes while visible through the authenticated church action", () => {
+  const page = read("app/dashboard/attendance/follow-up/[date]/page.tsx");
+  assert.match(page, /textLogs\?\.some\(\(row\) => row\.status === "queued"\)/);
+  assert.match(page, /<FollowUpDeliveryRefresh serviceDate=\{selectedDate\}/);
+  const refresh = read("app/dashboard/attendance/follow-up/[date]/follow-up-delivery-refresh.tsx");
+  assert.match(refresh, /document\.visibilityState !== "visible"/);
+  assert.match(refresh, /!navigator\.onLine/);
+  assert.match(refresh, /if \(active && result\.ok\) router\.refresh\(\)/);
+  assert.match(refresh, /clearInterval/);
+  const actions = read("app/dashboard/attendance/follow-up/[date]/check-texts/actions.ts");
+  const action = actions.slice(actions.indexOf("export async function refreshFollowUpDelivery"), actions.indexOf("export async function confirmTextAppCheck"));
+  assert.match(action, /featureActionError\("attendance_follow_up", supabase\)/);
+  assert.match(action, /getChurchAuth\(supabase\)/);
+  assert.match(action, /!auth \|\| !isValidDateParam\(serviceDate\)/);
+  assert.match(action, /reconcileAttendanceTexts\(createAdminClient\(\), auth\.churchId, serviceDate\)/);
+  assert.doesNotMatch(action, /sendAttendanceFollowUpTexts|sendWelcomeTexts|input\.churchId/);
 });
 
 // ---------------------------------------------------------------------------

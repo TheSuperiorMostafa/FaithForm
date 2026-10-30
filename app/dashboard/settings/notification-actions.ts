@@ -23,5 +23,5 @@ export async function saveNotificationPreferences(input: StaffPreferences) {
   const { error } = await createAdminClient().from("staff_notification_preferences").upsert({ church_id: auth.churchId, user_id: auth.userId, phone: phone ?? "", events: preferences.events, updated_at: new Date().toISOString() });
   if (error) return { ok: false, error: toUserError(error, "We couldn't save your notification choices") };
   revalidatePath("/dashboard/settings");
-  return { ok: true };
+  return { ok: true as const, preferences: { ...preferences, phone: phone ?? "" } };
 }

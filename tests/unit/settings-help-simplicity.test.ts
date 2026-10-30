@@ -42,12 +42,12 @@ const ADMIN_TABS = visibleSettingsTabs({ isAdmin: true, allowedFeatures: ALL });
 // Settings sections and deep links
 // ---------------------------------------------------------------------------
 
-test("settings has seven plain sections, in the order a church thinks about them", () => {
+test("settings has six plain sections, with app colors on the app page", () => {
   assert.deepEqual(
     SETTINGS_TABS.map((tab) => tab.label),
-    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Notifications", "Documents", "Member App"],
+    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Notifications", "Documents"],
   );
-  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "notifications", "documents", "app"]);
+  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "notifications", "documents"]);
 });
 
 test("the Advanced section is gone and its old link goes to Settings home", () => {
@@ -78,17 +78,23 @@ test("light or dark is three labelled icon buttons at the top of every section",
   assert.match(toggle, /label: "Match my computer"/);
 });
 
-test("app colors live in the Member App section, spelled the American way", () => {
+test("app colors move to the admin app page, with giving-only access preserved", () => {
   const panels = read("app/dashboard/settings/tab-panels.tsx");
-  const church = panels.slice(panels.indexOf("async function ChurchInfoPanel"), panels.indexOf("async function MemberAppPanel"));
-  assert.doesNotMatch(church, /BrandColorsCard/);
-  assert.match(panels.slice(panels.indexOf("async function MemberAppPanel")), /<BrandColorsCard/);
+  assert.doesNotMatch(panels, /BrandColorsCard|MemberAppPanel/);
+  const app = read("app/dashboard/app/page.tsx");
+  assert.match(app, /auth\.isAdmin &&[\s\S]*?id="app-colors"[\s\S]*?<ChurchBrandColorsCard/);
+  assert.match(read("app/dashboard/app/loading.tsx"), /BrandColorsSkeleton/);
+  const giving = read("app/dashboard/giving/settings/page.tsx");
+  assert.match(giving, /!appEnabled &&[\s\S]*?id="giving-colors"[\s\S]*?<ChurchBrandColorsCard/);
+  assert.doesNotMatch(giving, /settings\?tab=app/);
+  const settings = read("app/dashboard/settings/page.tsx");
+  assert.match(settings, /redirect\("\/dashboard\/app#app-colors"\)/);
+  assert.match(settings, /redirect\("\/dashboard\/giving\/settings#giving-colors"\)/);
   const card = read("components/settings/brand-colors-card.tsx");
   // "App colors" while the church has the app; plain "Colors" when it is switched off.
   assert.match(card, /<CardTitle>\{appEnabled \? "App colors" : "Colors"\}<\/CardTitle>/);
   assert.doesNotMatch(card, /colour/i);
-  assert.ok(!visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL }).includes("app"));
-  assert.ok(!visibleSettingsTabs({ isAdmin: true, allowedFeatures: ["people"] }).includes("app"));
+  assert.ok(REMOVED_SETTINGS_TABS.includes("app"));
 });
 
 test("church info: service times come before the address, the small logo is last", () => {
@@ -99,7 +105,7 @@ test("church info: service times come before the address, the small logo is last
   const panels = read("app/dashboard/settings/tab-panels.tsx");
   assert.ok(panels.indexOf("<ChurchDetailsForm") < panels.indexOf("<ChurchImagesCard"), "images last");
   const skeleton = read("components/settings/settings-skeletons.tsx");
-  const church = skeleton.slice(skeleton.indexOf("function ChurchInfoSkeleton"), skeleton.indexOf("function MemberAppSkeleton"));
+  const church = skeleton.slice(skeleton.indexOf("function ChurchInfoSkeleton"), skeleton.indexOf("function TeamSkeleton"));
   assert.ok(church.indexOf("Service times") < church.indexOf("Street address"));
   assert.ok(church.indexOf("Street address") < church.indexOf("Logo and cover photo"));
 });
@@ -121,6 +127,7 @@ test("old ?tab= links keep landing on the section that now holds them", () => {
     ["tab=attendance", "messages"],
     ["tab=team", "team"],
     ["tab=accounts", "accounts"],
+    ["tab=app", "church"],
     ["", "church"],
     ["tab=nonsense", "church"],
   ];
@@ -373,7 +380,9 @@ test("the Help page promises the same response time as the public support page",
   assert.match(page, /href="tel:\+15026508301"/);
   assert.match(page, /description="\(502\) 650-8301"/);
   assert.match(page, /title="Call us"[\s\S]*?tone="primary"/);
+  assert.match(page, /title="Text us"[\s\S]*?tone="primary"/);
   assert.match(read("app/dashboard/support/loading.tsx"), /title: "Call us"[\s\S]*?primary: true/);
+  assert.match(read("app/dashboard/support/loading.tsx"), /title: "Text us"[\s\S]*?primary: true/);
   assert.match(SUPPORT_RESPONSE_TIME, /same day/);
   assert.doesNotMatch(read("app/support/page.tsx"), /business day/);
 });

@@ -39,6 +39,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SuccessState } from "@/components/ui/success-state";
 import { RecordingPrimaryFields, RecordingExtraFields } from "@/components/media/recording-details-fields";
+import { RecordingVisibilityChoice as Check } from "@/components/media/recording-visibility-choice";
 import { formatClock, parseClock } from "@/lib/stream/format";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import type { StaffRecording, ThumbnailChoice } from "@/lib/stream/recording-publication";
@@ -115,15 +116,15 @@ export function RecordingReview({
 
   // With the app switched off, a new publish goes to the website only.
   const [toApp, setToApp] = useState(
-    recording.app.published || (appEnabled && !recording.website.published),
+    recording.app.published || (appEnabled && !recording.website.published && recording.publicationDefaults?.appVisibility !== "none"),
   );
   const [toWebsite, setToWebsite] = useState(
-    recording.website.published || settings.publishToWebsite || !appEnabled,
+    recording.website.published || (recording.publicationDefaults?.website ?? (settings.publishToWebsite || !appEnabled)),
   );
   const [audience, setAudience] = useState<Audience>(
-    currentAudience(recording.app.visibility ?? settings.defaultVisibility),
+    currentAudience(recording.app.visibility ?? (recording.publicationDefaults?.appVisibility !== "none" ? recording.publicationDefaults?.appVisibility : undefined) ?? settings.defaultVisibility),
   );
-  const [notify, setNotify] = useState(settings.notifyOnPublish);
+  const [notify, setNotify] = useState(recording.publicationDefaults?.notify ?? settings.notifyOnPublish);
 
   const [trimOpen, setTrimOpen] = useState(false);
   const [trimStart, setTrimStart] = useState(formatClock(recording.trimStartSec));
@@ -738,54 +739,6 @@ function Field({
   );
 }
 
-function Check({
-  checked,
-  onChange,
-  label,
-  hint,
-  icon,
-  disabled,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label: string;
-  hint?: string;
-  icon?: React.ReactNode;
-  disabled?: boolean;
-}) {
-  return (
-    <label
-      className={cn(
-        "relative flex min-h-14 cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-70 motion-reduce:transition-none",
-        checked ? "border-accent/60 bg-accent/5" : "border-border bg-background hover:border-accent/40",
-      )}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="peer sr-only"
-      />
-      <span
-        aria-hidden
-        className={cn(
-          "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
-          checked ? "border-accent bg-accent text-accent-foreground" : "border-muted-foreground/40 bg-card",
-        )}
-      >
-        {checked ? <CheckCircle2 className="size-3.5" /> : null}
-      </span>
-      <span className="flex min-w-0 flex-col gap-1">
-        <span className="inline-flex items-center gap-2 text-[15px] font-medium">
-          {icon}
-          {label}
-        </span>
-        {hint ? <span className="text-sm leading-relaxed text-muted-foreground">{hint}</span> : null}
-      </span>
-    </label>
-  );
-}
 
 function TimeField({
   id,

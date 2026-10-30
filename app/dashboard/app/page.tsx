@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { Smartphone } from "lucide-react";
 
 import {
@@ -11,8 +12,11 @@ import { FaithFormVisibilityCard } from "@/components/member-app/app-visibility-
 import { ChurchInfoEditor } from "@/components/member-app/church-info-editor";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
+import { ChurchBrandColorsCard } from "@/components/settings/church-brand-colors-card";
+import { BrandColorsSkeleton } from "@/components/settings/brand-colors-skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
+import { SkeletonContainer } from "@/components/ui/skeleton";
 import { readChurchAutomaticReadiness } from "@/lib/attendance/v2/geofence-config";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
@@ -97,6 +101,14 @@ export default async function MemberAppPage() {
           />
         )}
       </section>
+
+      {auth.isAdmin && (
+        <section id="app-colors" className="scroll-mt-6" aria-label="App colors">
+          <Suspense fallback={<SkeletonContainer label="App colors"><BrandColorsSkeleton /></SkeletonContainer>}>
+            <ChurchBrandColorsCard churchId={auth.churchId} appEnabled />
+          </Suspense>
+        </section>
+      )}
 
       <section className="flex flex-col gap-4" aria-labelledby="church-access-heading">
         <SectionHeader

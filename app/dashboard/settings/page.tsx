@@ -7,6 +7,7 @@ import { SettingsTabPanel } from "@/app/dashboard/settings/tab-panels";
 import { SettingsPageHeader, SettingsTabSkeleton } from "@/components/settings/settings-skeletons";
 import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
 import {
+  ACCOUNT_RESULT_PARAMS,
   REMOVED_SETTINGS_TABS,
   resolveSettingsTab,
   visibleSettingsTabs,
@@ -34,7 +35,7 @@ function paramReader(query: Record<string, string | string[] | undefined>) {
 
 /**
  * Settings: the church's details, the team, connected accounts, the weekly
- * email and texts, and the app's colors. Light or dark sits at the top. One section at a time, each one
+ * email and texts. Light or dark sits at the top. One section at a time, each one
  * linkable with `?tab=`.
  */
 export default async function SettingsPage({ searchParams }: PageProps) {
@@ -73,6 +74,10 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   // change still arrive here, so pass them along.
   if (params.get("stripe_return")) redirect("/dashboard/giving?stripe_return=1");
   if (params.get("stripe_refresh")) redirect("/dashboard/giving?stripe_refresh=1");
+  if (params.get("tab")?.trim().toLowerCase() === "app" && !ACCOUNT_RESULT_PARAMS.some((key) => params.get(key))) {
+    if (allowedFeatures.includes("member_app")) redirect("/dashboard/app#app-colors");
+    if (allowedFeatures.includes("giving")) redirect("/dashboard/giving/settings#giving-colors");
+  }
   // A section that was removed sends old bookmarks to Settings home.
   if (REMOVED_SETTINGS_TABS.includes(params.get("tab")?.trim().toLowerCase() ?? "")) {
     redirect("/dashboard/settings");
@@ -81,8 +86,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   return (
     <div className="flex w-full flex-col gap-8">
       <SettingsPageHeader />
-      {/* Without the app, that section only holds the giving page's colors. */}
-      <SettingsTabNav tabs={tabs} active={tab} labels={flags.member_app ? undefined : { app: "Colors" }} />
+      <SettingsTabNav tabs={tabs} active={tab} />
 
       {!auth.isAdmin && (
         <p className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 px-5 py-4 text-[15px] leading-relaxed text-foreground/80">

@@ -90,14 +90,16 @@ export function FirstTimeGuestPanel({
       setError("Choose at least one guest who has a phone number.");
       return;
     }
-    const ok = await confirmAction({
-      title: `Send welcome to ${people(count)}?`,
-      description:
-        "Each guest gets the message shown. Names are optional. A text can't be taken back once it's sent.",
-      confirmLabel: `Send ${texts(count)}`,
-      destructive: true,
-    });
-    if (!ok) return;
+    if (welcomeCheck.message.includes("[Name]")) {
+      const ok = await confirmAction({
+        title: `Send welcome to ${people(count)}?`,
+        description:
+          "Each guest gets the message shown with their first name. A text can't be taken back once it's sent.",
+        confirmLabel: `Send ${texts(count)}`,
+        destructive: true,
+      });
+      if (!ok) return;
+    }
 
     startSending(async () => {
       try {
@@ -112,6 +114,7 @@ export function FirstTimeGuestPanel({
         }
         if (result.requiresAppCheck) {
           router.push(`/dashboard/attendance/follow-up/${serviceDate}/check-texts`);
+          router.refresh();
           return;
         }
         if (result.failed > 0) {
@@ -122,6 +125,7 @@ export function FirstTimeGuestPanel({
           toast.success(`Sent ${texts(result.sent)} welcoming first-time guests.`);
         }
         setMode("idle");
+        router.refresh();
       } catch {
         setError("We couldn't send the texts. Check your connection and try again.");
       }

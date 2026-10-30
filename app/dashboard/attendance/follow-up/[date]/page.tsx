@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
 import { FirstTimeGuestPanel } from "./first-time-guest-panel";
+import { FollowUpDeliveryRefresh } from "./follow-up-delivery-refresh";
 import { LogLink } from "../log-link";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
 import { hasUncheckedAttendanceTexts } from "@/lib/attendance/sms-delivery";
@@ -94,6 +95,9 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
 
   return (
     <div className="flex w-full flex-col gap-8">
+      {textLogs?.some((row) => row.status === "queued") ? (
+        <FollowUpDeliveryRefresh serviceDate={selectedDate} />
+      ) : null}
       <ServiceDayHeader
         title={formatServiceDate(selectedDate)}
         description="Welcome first-time guests or text people who missed. Nothing is sent until you choose."
