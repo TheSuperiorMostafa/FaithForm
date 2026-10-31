@@ -6,6 +6,7 @@ import {
   isAiImageConfigured,
 } from "@/lib/ai/image";
 import { formatEventGraphicDetails } from "@/lib/queries/announcements";
+import { eventSeason, resolveEventLocation } from "@/lib/social/event-details";
 import { pickBackgroundImage } from "@/lib/social/background-images";
 import { generateCinematicPlaceholderBackground } from "@/lib/social/cinematic-placeholder";
 import {
@@ -23,6 +24,11 @@ export type ChurchBranding = {
   accentColor: string;
   /** IANA timezone — flyers render on a UTC server, so dates need the church's zone. */
   timezone: string;
+  /** The church's saved street address, city, state and zip: the ground truth for "where". */
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 };
 
 export type SocialPreviewInput = {
@@ -57,7 +63,9 @@ export async function loadChurchBranding(
 ): Promise<ChurchBranding> {
   const { data } = await supabase
     .from("churches")
-    .select("name, logo_url, giving_primary_color, giving_accent_color, timezone")
+    .select(
+      "name, logo_url, giving_primary_color, giving_accent_color, timezone, address, city, state, zip",
+    )
     .eq("id", churchId)
     .maybeSingle();
 
@@ -67,6 +75,10 @@ export async function loadChurchBranding(
     primaryColor: (data?.giving_primary_color as string) || "#002D5F",
     accentColor: (data?.giving_accent_color as string) || "#C5A059",
     timezone: (data?.timezone as string) || "America/New_York",
+    address: (data?.address as string | null) ?? null,
+    city: (data?.city as string | null) ?? null,
+    state: (data?.state as string | null) ?? null,
+    zip: (data?.zip as string | null) ?? null,
   };
 }
 
@@ -100,7 +112,8 @@ async function normalizePng(bytes: ArrayBuffer): Promise<ArrayBuffer> {
 
 /**
  * Fully AI-generated flyer: the model renders the entire design (title, date,
- * time, location) baked into the image, with the real church logo composited in.
+ * time, one short location line) baked into the image. The location line comes
+ * from the church's saved address when the event is at the church.
  */
 async function generateAiFlyer(
   branding: ChurchBranding,
@@ -118,6 +131,8 @@ async function generateAiFlyer(
     : { dateLine: input.when, timeLine: "" };
 
   const logo = await fetchLogoForModel(branding.logoUrl);
+  // One short, verified line rather than the calendar's whole address string.
+  const place = resolveEventLocation(input.location, branding);
 
   try {
     const { imageBytes, modelUsed } = await generateEventBackgroundImage({
@@ -129,7 +144,8 @@ async function generateAiFlyer(
       churchName: branding.name,
       primaryColor: branding.primaryColor,
       accentColor: branding.accentColor,
-      location: input.location,
+      location: place.flyerLine,
+      season: eventSeason(input.startAt, input.timeZone || branding.timezone),
       mode: "flyer",
       dateLine,
       timeLine,

@@ -6,11 +6,11 @@ import type { SocialBackgroundTag, SocialTemplateKey } from "@/lib/social/consta
  * A church flyer used to come back as a stock photograph of strangers: a
  * model's idea of "youth" or "fellowship" is a smiling crowd, and no
  * congregation recognises a crowd it has never met. What a church posts is a
- * piece of graphic design, and the model is briefed as a designer, not as a
- * photographer.
+ * piece of design built around a place or a still life, so the model is
+ * told to show the setting and the things in it, never the people.
  */
 export const NO_PEOPLE_RULE =
-  "PEOPLE: none. Do not depict any people, faces, portraits, figures, silhouettes, crowds, hands, or body parts anywhere in the image, whether photographed, painted, or drawn. This is a designed graphic, not a photograph of a congregation.";
+  "PEOPLE: none. Do not depict any people, faces, portraits, figures, silhouettes, crowds, hands, or body parts anywhere in the image, whether photographed, painted, or drawn. Show the place and the things in it, never a congregation.";
 
 /**
  * Words that mean a scene is about people. A writer-supplied subject that
@@ -30,45 +30,46 @@ export const PEOPLE_WORDS =
  */
 export const TAG_SCENE_HINTS: Record<SocialBackgroundTag, string> = {
   youth:
-    "bold layered geometric shapes in saturated brand colours, halftone dot and grain textures, an energetic diagonal composition, oversized cropped shapes bleeding off the edges",
+    "an empty youth room at night lit by bold coloured stage light in the brand colours, a stack of worn Bibles and a guitar on a stool, haze catching the beams, energetic and modern",
   worship:
-    "soft radiating light beams over a deep gradient field, fine gold linework echoing arched windows and stained-glass geometry, restrained and reverent, calm negative space",
+    "a quiet sanctuary at dusk with warm light pouring through tall arched windows across empty wooden pews, soft haze and glowing candles at the front, reverent and cinematic",
   outreach:
-    "a warm two-tone gradient, abstract map-like line paths with small location-pin icons, friendly rounded shapes, an open and welcoming layout",
+    "a welcoming open church door at golden hour with a painted wooden welcome board with no lettering, potted flowers and warm string lights spilling onto the steps",
   community:
-    "overlapping translucent circles in warm tones suggesting gathering, a textured linen or paper background, gentle grain, a simple line-art table setting as an accent",
+    "a long harvest table set for a shared meal under warm string lights, mismatched plates, fresh bread and seasonal flowers, inviting and generous",
   prayer:
-    "a quiet deep-navy field with a single soft glow, fine linework of a candle and an open book, generous calm negative space",
+    "a single candle glowing beside an open Bible on a wooden kneeler in a dim chapel, a soft shaft of window light, calm and intimate",
   "bible-study":
-    "a cream paper texture, elegant serif ornaments and thin rule lines, a small line-art open book icon with a ribbon marker, scholarly and warm",
+    "an open, well-worn Bible with handwritten notes, a notebook, a pen and reading glasses on a warm wooden table by a window, soft lamplight and shallow depth of field",
   fellowship:
-    "playful cut-paper shapes, a checkered picnic-cloth pattern used as texture, line icons of plates and lanterns, a warm mustard and terracotta palette",
+    "a backyard picnic spread at golden hour: a checkered cloth, lanterns, bowls of food and lemonade jars on a wooden table, string lights overhead",
   "seasonal-christmas":
-    "an evergreen and gold palette, fine botanical line art of pine sprigs and berries, soft out-of-focus light circles, a subtle star motif",
+    "a softly lit sanctuary decorated with evergreen garlands, gold ornaments and glowing candles, a simple nativity star overhead, warm bokeh lights",
   "seasonal-easter":
-    "a sunrise gradient from deep violet to gold, a simple empty-cross shape on a hill rendered as flat vector, spring florals as delicate line art",
+    "an empty stone tomb opening onto a sunrise over a spring hillside, lilies in the foreground with dew, golden light breaking through",
   family:
-    "rounded overlapping shapes in a warm friendly palette, house and heart line icons, a soft paper texture, a homely and inclusive feel",
+    "a cozy living-room table with board games, popcorn bowls, warm blankets and soft lamp light, playful and homely",
   missions:
-    "a world-map dot pattern, compass and dotted route-line motifs, packed supply boxes as simple line icons, an earthy purposeful palette",
+    "packed supply boxes, a weathered world map and a passport-style journal on a wooden table, a compass and route lines, warm purposeful light",
   default:
-    "an elegant editorial poster: a deep brand-colour field, a subtle arch or window shape, restrained gold accents, fine grain, and a single small cross as a line icon",
+    "the exterior of a welcoming church building at blue hour with warm light glowing from its windows, a clear sky in the brand colour, cinematic and calm",
 };
 
 /**
- * One art direction per layout style the writer picks. The key was already
- * chosen, validated and carried to within one call of the prompt without ever
- * being read; it is the natural place to hang a design brief.
+ * One art direction per layout style the writer picks. Each one is a rich,
+ * photographic key visual with designed type over it — the look pastors were
+ * getting from a general-purpose image app, and the flat abstract posters
+ * were not.
  */
 export const ART_DIRECTION: Record<SocialTemplateKey, string> = {
   general:
-    "Modern editorial poster design, typography-led, with layered shapes and a subtle paper or grain texture. Confident and clean, the kind of piece a good print designer would make.",
+    "Premium editorial event poster: a rich, cinematic photograph of the scene as the hero visual, dramatic natural light and shallow depth of field, colour-graded toward the brand palette, with clean, confident typography set on a soft gradient scrim.",
   youth:
-    "Bold, energetic poster design: oversized type, high-contrast colour blocking, halftone and grain textures, playful cropped shapes. Loud, but still disciplined.",
+    "Bold, high-energy event graphic: a vivid photograph lit with saturated brand-colour light, high contrast, subtle grain, oversized display type with a modern condensed face. Loud, but disciplined.",
   outreach:
-    "Warm, welcoming community poster: friendly rounded shapes, generous whitespace, approachable type, soft textures. Inviting rather than slick.",
+    "Warm, welcoming community poster: a sunlit, inviting photograph of the place, golden tones, generous breathing room for friendly, approachable type.",
   "worship-night":
-    "Atmospheric, moody design: deep gradients, soft light rays, refined gold accents, elegant restrained type. Quiet and beautiful.",
+    "Atmospheric, moody worship graphic: a low-light photograph with haze, light rays and candle glow, deep brand-colour shadows, refined gold accents, elegant restrained type.",
 };
 
 export type ImagePromptMode = "background" | "flyer";
@@ -86,7 +87,13 @@ export type GenerateEventBackgroundInput = {
   templateKey?: SocialTemplateKey | null;
   churchName: string;
   primaryColor: string;
-  location?: string;
+  /**
+   * The ONE short location line to print, already resolved from what the
+   * church saved (see lib/social/event-details). Null leaves it off.
+   */
+  location?: string | null;
+  /** "autumn", "winter"... from the event date, for the light and mood. */
+  season?: string | null;
   mode?: ImagePromptMode;
   // Flyer-mode fields (text is rendered by the model into the image itself):
   accentColor?: string;
@@ -125,36 +132,44 @@ export function buildImagePrompt(input: GenerateEventBackgroundInput): string {
 }
 
 /**
- * Prompt for a COMPLETE, ready-to-post church event flyer with all text baked
- * into the image by the model: a designed poster with a clear hierarchy,
- * texture, shape and iconography, and nobody in it.
+ * Prompt for a COMPLETE, ready-to-post church event flyer with its text baked
+ * in by the model: a cinematic photograph of the event's scene with designed
+ * typography, nobody in it, and as few words as possible so every one of them
+ * is spelled right.
  */
 export function buildFullFlyerPrompt(input: GenerateEventBackgroundInput): string {
   const scene = resolveScene(input);
   const title = (input.headline || input.title).trim();
+  // Only offer a script accent for words the title really has; offered in the
+  // abstract, the model wrote "with the" into "Ladies Bible Study".
+  const connector = title.match(/\b(with the|with|at the|of the|and the|for the)\b/i)?.[0] ?? null;
   const details: string[] = [];
-  if (input.dateLine?.trim()) details.push(`Date: "${input.dateLine.trim()}"`);
-  if (input.timeLine?.trim()) details.push(`Time: "${input.timeLine.trim()}"`);
-  if (input.location?.trim()) details.push(`Location: "${input.location.trim()}"`);
+  if (input.dateLine?.trim()) details.push(`"${input.dateLine.trim()}"`);
+  if (input.timeLine?.trim()) details.push(`"${input.timeLine.trim()}"`);
+  if (input.location?.trim()) details.push(`"${input.location.trim()}"`);
+  const season = input.season?.trim()
+    ? `Set it in ${input.season.trim()}: let the light, colour temperature and any natural details feel like ${input.season.trim()}.`
+    : "";
 
   return [
-    "Design a complete, ready-to-post CHURCH EVENT FLYER as a single 16:9 landscape graphic. It is a piece of graphic design a skilled designer would be proud of, not a stock photograph with words on it.",
+    "Design a complete, ready-to-post CHURCH EVENT FLYER as a single 16:9 landscape graphic, the quality of a professional church communications team: a striking, cinematic hero image with polished graphic-design typography over it. Not flat clip-art, not a generic stock photo with words pasted on.",
     `ART DIRECTION: ${artDirection(input)}`,
-    `VISUAL MOTIF: ${scene}. Treat it as designed elements (shapes, texture, line iconography, illustration, abstract light), not as a documentary photo.`,
-    `COLOUR: build the palette from the brand colour ${input.primaryColor} and the accent ${input.accentColor || "#C5A059"}, with at most two supporting tones. Cohesive, printable, and never washed out.`,
+    `HERO SCENE: ${scene}. Photographic and richly detailed: real materials and textures, dramatic natural light, depth of field, a clear focal point, professional colour grading.`,
+    season,
+    `COLOUR: grade the image and accents toward the brand colour ${input.primaryColor} and the accent ${input.accentColor || "#C5A059"}. Cohesive, rich, and never washed out or muddy.`,
     NO_PEOPLE_RULE,
     "",
-    "TEXT TO RENDER ON THE FLYER (spell every word EXACTLY, no misspellings, no extra or invented words, no lorem ipsum):",
-    `- Large hero TITLE: "${title}". The dominant element, set in one display typeface chosen to suit the event: a condensed grotesk, a wide geometric sans, or a refined serif. If the title contains a short connecting phrase (like "with the"), that phrase alone may be set smaller in an elegant script.`,
+    "TEXT TO RENDER (these are the ONLY words allowed in the image). Copy each one character for character: same spelling, same capitalisation, same digits and punctuation. Do not translate, abbreviate, expand, correct, or add words such as a city, state, zip code, web address, or slogan:",
+    `- Large hero TITLE: "${title}", exactly these words in this order, nothing added or removed. The dominant element, in one display typeface chosen to suit the event (a condensed grotesk, a wide geometric sans, or a refined serif).${connector ? ` The connecting words "${connector}" may be set smaller in an elegant script.` : ""}`,
     `- Church name: "${input.churchName}" in small, clean, letter-spaced uppercase.`,
     details.length
-      ? `- Event details, each on its own line with a small matching line icon: ${details.join("; ")}.`
+      ? `- Details, set small on one or two lines with thin separators or tiny line icons: ${details.join(" · ")}.`
       : "",
     "",
-    "LAYOUT: a clear hierarchy on an underlying grid, generous margins, and every word inside the central 80% of the frame so nothing is lost when the edges are cropped. Shapes and texture support the type; they never compete with it. Where type sits over a busy area, use a flat colour panel or a soft scrim so it stays crisp.",
-    "TYPOGRAPHY: real, correctly spelled type with excellent kerning; one display face for the title and one clean secondary face for the details. Sharp and legible, never warped, garbled, duplicated, or nonsensical.",
-    "STYLE: modern editorial and poster design. Layered flat shapes, subtle paper or grain texture, tasteful gradients, line iconography, illustrated or abstract elements. Photography is allowed only as a treated backdrop of a place or an object (architecture, landscape, still life) with no one in it. No watermarks, no stock-photo logos, no UI chrome, no border around the whole image, no page curl.",
-    "SUBJECT DISCIPLINE: design around the motif described above and nothing else. Do not add coffee cups, mugs, lattes or cafe tables unless that motif explicitly names them.",
+    "LAYOUT: put the text on the calmer side of the image over a soft gradient scrim or a subtle brand-colour panel so it is crisp and high-contrast; keep the hero scene clearly visible on the other side. Every word inside the central 80% of the frame so nothing is lost when the edges are cropped.",
+    "TYPOGRAPHY: real, correctly spelled type with excellent kerning; one display face for the title and one clean secondary face for the details. Sharp and legible, never warped, garbled, duplicated, mirrored, or nonsensical. If you cannot set a word perfectly, set it larger and simpler rather than inventing letters.",
+    "No watermarks, no stock-photo logos, no extra signage or readable text in the scene itself, no UI chrome, no border around the whole image, no page curl.",
+    "SUBJECT DISCIPLINE: build the image around the hero scene described above and nothing else. Do not add coffee cups, mugs, lattes or cafe tables unless that scene explicitly names them.",
     "Output one cohesive finished flyer image.",
   ]
     .filter(Boolean)
@@ -170,22 +185,18 @@ export function buildBackgroundPrompt(
   input: GenerateEventBackgroundInput,
 ): string {
   const scene = resolveScene(input);
-  const locationHint = input.location?.trim()
-    ? `The setting may subtly evoke "${input.location}" through architecture or landscape, without readable signage.`
-    : "";
 
   return [
     "A designed background for a premium church event social media graphic, 16:9 landscape.",
     `Event theme: "${input.headline || input.title}" for ${input.churchName}.`,
     `ART DIRECTION: ${artDirection(input)}`,
-    `VISUAL MOTIF: ${scene}.`,
-    locationHint,
+    `HERO SCENE: ${scene}.`,
     `COLOUR: a palette built from ${input.primaryColor}, with deep shadows, one warm accent, and fine grain. Moody yet inviting, never flat or washed out.`,
     "COMPOSITION: keep the left third and the bottom-left quadrant calm (flat colour, soft gradient, or negative space) for text to be set over later. Do not place busy detail in the lower-left corner.",
     NO_PEOPLE_RULE,
     "Absolutely NO text, letters, words, numbers, dates, times, captions, logos, watermarks, signatures, UI elements, borders, frames, collages, maps with labels, or infographics anywhere in the image.",
     "Design around the motif described above and nothing else. Do NOT add coffee cups, mugs, lattes or cafe tables unless that motif explicitly names them.",
-    "Style: layered shapes, texture, light and line iconography, as a designer would make it. Photography only as a treated backdrop of a place or object with no one in it.",
+    "Style: a cinematic, richly lit photograph of the scene with real textures and depth of field, colour-graded toward the brand palette, with no one in it.",
   ]
     .filter(Boolean)
     .join(" ");
