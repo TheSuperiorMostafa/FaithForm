@@ -8,6 +8,11 @@ import {
   formatEventWhenForPrompt,
 } from "@/lib/queries/announcements";
 import { storageKeySegment } from "@/lib/security/storage-path";
+import {
+  ensureCaptionDetails,
+  formatCaptionWhen,
+  resolveEventLocation,
+} from "@/lib/social/event-details";
 import { resolveFlyerHeadline } from "@/lib/social/headline-display";
 import {
   generateSocialGraphic,
@@ -129,20 +134,42 @@ export async function generateSocialPreview(
     input.allDay,
   );
 
+  // The church's saved address is the ground truth for "where"; the caption
+  // gets it to copy, never to compose.
+  const place = resolveEventLocation(input.location, branding);
+  const whenDisplay = formatCaptionWhen(
+    input.startAt,
+    input.endAt,
+    branding.timezone,
+    input.allDay,
+  );
+  const churchCity = [branding.city, branding.state]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+
   const { object, modelUsed } = await aiGenerateObject({
     churchId: input.churchId,
     system: eventSocialSystemPrompt({
       churchName: branding.name,
       title: input.title,
       when: whenForPrompt,
-      location: input.location,
+      location: place.full,
+      locationAssumed: place.assumed,
+      whenDisplay,
+      churchCity,
       notes: input.notes,
       staff,
     }),
     prompt:
       "Write a Facebook caption and graphic headline for this church event. Return structured JSON only.",
     schema: eventSocialPreviewSchema,
-    maxOutputTokens: 1024,
+    maxOutputTokens: 1500,
+  });
+
+  const facebookCaption = ensureCaptionDetails(object.facebookCaption, {
+    when: whenDisplay,
+    location: place.assumed ? null : place.full,
   });
 
   const draftKey = buildDraftKey(input);
@@ -151,7 +178,7 @@ export async function generateSocialPreview(
   if (input.skipImage) {
     return {
       headline: flyerHeadline,
-      facebookCaption: object.facebookCaption,
+      facebookCaption,
       backgroundTag: object.backgroundTag,
       templateKey: object.templateKey,
       graphicUrl: "",
@@ -179,7 +206,7 @@ export async function generateSocialPreview(
 
   return {
     headline: flyerHeadline,
-    facebookCaption: object.facebookCaption,
+    facebookCaption,
     backgroundTag: object.backgroundTag,
     templateKey: object.templateKey,
     graphicUrl: graphic.graphicUrl,

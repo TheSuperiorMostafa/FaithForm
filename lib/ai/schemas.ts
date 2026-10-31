@@ -63,7 +63,7 @@ export const socialTemplateKeySchema = z.enum([
 
 export const eventSocialPreviewSchema = z.object({
   headline: z.string().min(3).max(60),
-  facebookCaption: z.string().min(10).max(400),
+  facebookCaption: z.string().min(10).max(1000),
   backgroundTag: socialBackgroundTagSchema,
   templateKey: socialTemplateKeySchema,
   /**
