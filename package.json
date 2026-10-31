@@ -148,7 +148,7 @@
       "qs": "6.16.0",
       "sharp": "0.35.5",
       "source-map-js": "1.2.2",
-      "follow-redirects": "1.16.1"
+      "follow-redirects": "1.16.2"
     },
     "patchedDependencies": {
       "image-size@1.2.1": "patches/image-size@1.2.1.patch"
