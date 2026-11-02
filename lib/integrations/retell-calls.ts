@@ -35,17 +35,106 @@ export type UpsertRetellCallResult = {
   phoneCallId: string;
 };
 
-function readChurchIdFromCall(_call: RetellCallPayload): string | null {
-  return null;
+type RetellAgentWeight = { agent_id: string };
+
+/** The subset of Retell's phone-number object that says which agents answer it. */
+export type RetellNumberBinding = {
+  phone_number: string;
+  inbound_agents?: RetellAgentWeight[] | null;
+  outbound_agents?: RetellAgentWeight[] | null;
+};
+
+const E164 = /^\+[1-9]\d{7,14}$/;
+
+/** The church's own Retell number on a call: who was dialed inbound, who dialed outbound. */
+export function churchSideNumber(call: RetellCallPayload): string | null {
+  const number = call.direction === "outbound" ? call.from_number : call.to_number;
+  const trimmed = number?.trim();
+  return trimmed && E164.test(trimmed) ? trimmed : null;
+}
+
+/** Every agent a Retell number routes to, inbound or outbound. */
+export function agentIdsOnNumber(binding: RetellNumberBinding): string[] {
+  const ids = [...(binding.inbound_agents ?? []), ...(binding.outbound_agents ?? [])]
+    .map((agent) => agent.agent_id)
+    .filter((id): id is string => typeof id === "string" && id.length > 0);
+  return [...new Set(ids)];
+}
+
+/**
+ * A number can split its calls across several agents (an A/B weight, say),
+ * but a church row stores only one. Every agent sharing a number with the
+ * church's saved agent answers for that church.
+ */
+export function agentIdsForChurch(
+  primaryAgentId: string,
+  numbers: RetellNumberBinding[],
+): string[] {
+  const ids = new Set([primaryAgentId]);
+  for (const binding of numbers) {
+    const onNumber = agentIdsOnNumber(binding);
+    if (onNumber.includes(primaryAgentId)) onNumber.forEach((id) => ids.add(id));
+  }
+  return [...ids];
+}
+
+/**
+ * The church a call belongs to when its agent is not the one the church saved:
+ * only when the call's agent is actually bound to the number the call used,
+ * and exactly one church has saved an agent on that number.
+ */
+export function churchForSiblingAgent(
+  call: RetellCallPayload,
+  binding: RetellNumberBinding,
+  rows: Array<{ church_id: string; retail_ai_agent_id: string | null }>,
+): string | null {
+  if (!call.agent_id) return null;
+  const onNumber = agentIdsOnNumber(binding);
+  if (!onNumber.includes(call.agent_id)) return null;
+  const churches = new Set(
+    rows
+      .filter((row) => row.retail_ai_agent_id && onNumber.includes(row.retail_ai_agent_id))
+      .map((row) => row.church_id),
+  );
+  return churches.size === 1 ? [...churches][0] : null;
+}
+
+async function churchFromCallNumber(
+  call: RetellCallPayload,
+  client: SupabaseClient,
+): Promise<string | null> {
+  const number = churchSideNumber(call);
+  if (!number || !call.agent_id) return null;
+
+  let binding: RetellNumberBinding;
+  try {
+    // No church is known yet, so this uses FaithForm's shared key — the
+    // account the church's number lives in unless the church saved its own.
+    binding = await retellRequest<RetellNumberBinding>({
+      method: "GET",
+      path: `/get-phone-number/${encodeURIComponent(number)}`,
+    });
+  } catch {
+    return null;
+  }
+
+  const onNumber = agentIdsOnNumber(binding);
+  if (!onNumber.includes(call.agent_id)) return null;
+  const { data } = await client
+    .from("voice_assistant_settings")
+    .select("church_id, retail_ai_agent_id")
+    .in("retail_ai_agent_id", onNumber);
+  return churchForSiblingAgent(
+    call,
+    binding,
+    (data ?? []) as Array<{ church_id: string; retail_ai_agent_id: string | null }>,
+  );
 }
 
 export async function resolveChurchIdFromRetellCall(
   call: RetellCallPayload,
   admin?: SupabaseClient,
 ): Promise<string | null> {
-  const fromPayload = readChurchIdFromCall(call);
-  if (fromPayload) return fromPayload;
-
   if (!call.agent_id) return null;
 
   const client = admin ?? createAdminClient();
@@ -55,7 +144,11 @@ export async function resolveChurchIdFromRetellCall(
     .eq("retail_ai_agent_id", call.agent_id)
     .maybeSingle();
 
-  return (data?.church_id as string | undefined) ?? null;
+  const direct = (data?.church_id as string | undefined) ?? null;
+  if (direct) return direct;
+
+  // A second agent on the church's number (e.g. the 20% side of a split).
+  return churchFromCallNumber(call, client);
 }
 
 function formatOutcome(call: RetellCallPayload): string | null {
@@ -98,11 +191,13 @@ export function buildPhoneCallRow(churchId: string, call: RetellCallPayload, eve
 export async function upsertPhoneCallFromRetell(
   call: RetellCallPayload,
   admin?: SupabaseClient,
-  options: { event?: RetellCallEvent; score?: boolean } = {},
+  options: { event?: RetellCallEvent; score?: boolean; churchId?: string } = {},
 ): Promise<UpsertRetellCallResult | null> {
   if (!isRealRetellPhoneCall(call)) return null;
   const client = admin ?? createAdminClient();
-  const churchId = await resolveChurchIdFromRetellCall(call, client);
+  // The importer already proved the call is this church's (its agent is on the
+  // church's number); the webhook still has to resolve it.
+  const churchId = options.churchId ?? await resolveChurchIdFromRetellCall(call, client);
   if (!churchId) return null;
 
   const event = options.event ?? (call.call_analysis ? "call_analyzed" : "call_ended");
@@ -182,6 +277,60 @@ type RetellListCallsResponse = {
 const RETELL_CALL_PAGE_LIMIT = 50;
 const RETELL_CALL_PAGE_CAP = 20;
 
+type ListPhoneNumbersResponse = {
+  items?: RetellNumberBinding[];
+  has_more?: boolean;
+  pagination_key?: string | null;
+};
+
+/**
+ * The church's saved agent plus every agent sharing a Retell number with it.
+ * An agent another church saved is never claimed. If the numbers can't be
+ * listed, import still covers the saved agent.
+ */
+async function listChurchAgentIds(
+  churchId: string,
+  primaryAgentId: string,
+  admin: SupabaseClient,
+  signal?: AbortSignal,
+): Promise<string[]> {
+  const numbers: RetellNumberBinding[] = [];
+  try {
+    let paginationKey: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const query = new URLSearchParams({ limit: "1000" });
+      if (paginationKey) query.set("pagination_key", paginationKey);
+      const response = await retellRequest<ListPhoneNumbersResponse>({
+        method: "GET",
+        path: `/v2/list-phone-numbers?${query.toString()}`,
+        churchId,
+        admin,
+        signal,
+      });
+      numbers.push(...(response?.items ?? []));
+      if (!response?.has_more || !response.pagination_key) break;
+      paginationKey = response.pagination_key;
+    }
+  } catch {
+    signal?.throwIfAborted();
+    console.warn("[retell import] could not list phone numbers; importing the saved agent only", churchId);
+    return [primaryAgentId];
+  }
+
+  const ids = agentIdsForChurch(primaryAgentId, numbers);
+  if (ids.length === 1) return ids;
+  const { data } = await admin
+    .from("voice_assistant_settings")
+    .select("church_id, retail_ai_agent_id")
+    .in("retail_ai_agent_id", ids);
+  const claimedElsewhere = new Set(
+    ((data ?? []) as Array<{ church_id: string; retail_ai_agent_id: string | null }>)
+      .filter((row) => row.church_id !== churchId && row.retail_ai_agent_id)
+      .map((row) => row.retail_ai_agent_id as string),
+  );
+  return ids.filter((id) => !claimedElsewhere.has(id));
+}
+
 export async function importRetellCallsForChurch(
   churchId: string,
   limit = 50,
@@ -199,6 +348,8 @@ export async function importRetellCallsForChurch(
     throw new Error("No Retell agent linked yet. Save your voice assistant settings first.");
   }
 
+  const agentIds = await listChurchAgentIds(churchId, agentId, admin, options.signal);
+
   const calls: RetellCallPayload[] = [];
   let paginationKey: string | undefined;
   let remaining = Math.max(0, limit);
@@ -215,7 +366,7 @@ export async function importRetellCallsForChurch(
       path: "/v3/list-calls",
       body: {
         filter_criteria: {
-          agent: [{ agent_id: agentId }],
+          agent: agentIds.map((id) => ({ agent_id: id })),
         },
         sort_order: "descending",
         limit: pageLimit,
@@ -245,8 +396,9 @@ export async function importRetellCallsForChurch(
     options.signal?.throwIfAborted();
     if (!call.call_id || !isRealRetellPhoneCall(call)) { skipped += 1; continue; }
     const detail = await retellRequest<RetellCallPayload>({ method: "GET", path: `/v2/get-call/${encodeURIComponent(call.call_id)}`, churchId, admin, signal: options.signal });
-    if (detail.agent_id !== agentId) throw new Error("Retell returned a call for another agent.");
+    if (!detail.agent_id || !agentIds.includes(detail.agent_id)) throw new Error("Retell returned a call for another agent.");
     const result = await upsertPhoneCallFromRetell(detail, admin, {
+      churchId,
       event: detail.call_status === "ongoing" ? "call_started" : detail.call_analysis ? "call_analyzed" : "call_ended",
       score: options.score,
     });
