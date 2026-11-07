@@ -1,6 +1,6 @@
 "use client";
 import { usePathname } from "next/navigation";
-import { CalendarPlus, Megaphone, MessageCircle, Pencil, Plus, Search, UserPlus } from "lucide-react";
+import { CalendarPlus, MessageCircle, Pencil, Plus, Search, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
@@ -39,7 +39,7 @@ function Rows({ count = 3, action = true }: { count?: number; action?: boolean }
 function SectionSkeleton({ section }: { section: GroupsSection }) {
   const copy = GROUPS_SECTIONS[section];
   return <SkeletonContainer label={copy.title.toLowerCase()} className="flex w-full flex-col gap-8">
-    <PageHeader title={copy.title} description={copy.description} action={section === "list" ? <StaticButton><Plus className="size-5" aria-hidden />Create group</StaticButton> : undefined} />
+    <PageHeader title={copy.title} description={copy.description} action={section === "list" ? <><StaticButton><Plus className="size-5" aria-hidden />Add group</StaticButton><StaticButton variant="outline"><Plus className="size-5" aria-hidden />Send a message</StaticButton></> : undefined} />
     <GroupsNav />
     <SectionBody section={section} />
   </SkeletonContainer>;
@@ -78,7 +78,6 @@ function SectionBody({ section }: { section: GroupsSection }) {
 
 function ListBody() {
   return <div className="flex flex-col gap-6">
-    <div className="flex justify-end"><Button variant="outline" disabled><Megaphone className="size-5" aria-hidden />Send announcement</Button></div>
     <dl className="g-summary">{["Active groups", "People in groups", "Group leaders"].map(t => <div key={t}><dt>{t}</dt><dd><Skeleton className="mt-1 h-[30px] w-14" /></dd></div>)}</dl>
     <div className="g-toolbar">
       <div className="g-segment">{["Active", "Waiting to join", "Archived"].map((t, i) => <button type="button" key={t} disabled className={i === 0 ? "is-active" : undefined}>{t} <Skeleton className="h-4 w-4" /></button>)}</div>

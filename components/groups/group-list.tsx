@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { base, Empty, GroupAvatar, Pill, Tag, TextLink } from "./shared";
 import { CreateGroupButton } from "./group-form";
 import { peopleCount } from "./labels";
-import { GroupAnnouncement } from "./group-announcement";
 
 type Filter = "active" | "attention" | "archived";
 
@@ -20,7 +19,6 @@ export function GroupList({ groups, summary, types, campuses }: { groups: StaffG
   const searching = Boolean(query.trim() || category);
 
   return <div className="flex flex-col gap-6">
-    <div className="flex justify-end"><GroupAnnouncement groups={groups} /></div>
     <dl className="g-summary" aria-label="Groups at a glance">
       <div><dt>Active groups</dt><dd>{summary.activeGroups}</dd></div>
       <div><dt>People in groups</dt><dd>{summary.peopleInGroups}</dd></div>

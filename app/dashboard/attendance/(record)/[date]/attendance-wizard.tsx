@@ -868,7 +868,7 @@ function ModeCard({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "flex min-h-24 items-start gap-3 rounded-2xl border-2 bg-card p-4 text-left shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none",
+        "flex items-center gap-3 rounded-2xl border-2 bg-card p-4 text-left shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none",
         selected ? "border-accent bg-accent/[0.06]" : "border-border hover:border-accent/50",
       )}
     >

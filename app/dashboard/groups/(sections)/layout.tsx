@@ -13,13 +13,14 @@ export const dynamic = "force-dynamic";
  */
 export default async function GroupsSectionsLayout({ children }: { children: ReactNode }) {
   const ctx = await requireGroupsStaff();
-  const [counts, types, campuses] = await Promise.all([
+  const [counts, types, campuses, activeGroups] = await Promise.all([
     groupsNavCounts(ctx),
     groups.listStaffGroupTypes(ctx),
     groups.listStaffCampuses(ctx),
+    groups.listStaffGroups(ctx),
   ]);
   return (
-    <GroupsSectionChrome counts={counts} types={types} campuses={campuses}>
+    <GroupsSectionChrome counts={counts} types={types} campuses={campuses} groups={activeGroups}>
       {children}
     </GroupsSectionChrome>
   );

@@ -53,3 +53,16 @@ revocation and checkout before dispatch, and a staff Alert. Verify a real privat
 recording upload and narrow/short Safari editor windows before calling rollout
 fully validated. The email's unannotated "adjustments to website" screenshot did
 not define another independently testable visual change.
+
+## Later follow-up requests
+
+Included the separate Groups header request: + Send a message next to Add group,
+opening a padded, accessible modal with the existing retry-safe delivery flow.
+Removed the duplicate body action and matched header/loading geometry. Removed
+extra height below attendance choice labels and matched that loading state.
+The streaming helper is downloadable without a repository checkout; the iPhone
+pickup card now wraps/clamps loading, names and alerts to narrow screen widths.
+
+Follow-up validation: 55 focused Groups/Attendance tests, scoped ESLint and
+TypeScript pass. Runtime Safari and iOS app-host layout assertions remain
+unverified in this sandbox.

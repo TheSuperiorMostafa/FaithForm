@@ -3,8 +3,9 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { PageHeader } from "@/components/ui/page-header";
-import type { StaffGroupType } from "@/lib/groups/staff/groups";
+import type { StaffGroupListItem, StaffGroupType } from "@/lib/groups/staff/groups";
 import { CreateGroupButton } from "./group-form";
+import { GroupAnnouncement } from "./group-announcement";
 import { base, GroupsNav } from "./shared";
 import { GROUPS_SECTIONS, type GroupsSection } from "./sections";
 
@@ -32,11 +33,13 @@ export function GroupsSectionChrome({
   counts,
   types,
   campuses,
+  groups,
   children,
 }: {
   counts: { requests: number; reports: number };
   types: StaffGroupType[];
   campuses: { id: string; name: string }[];
+  groups: StaffGroupListItem[];
   children: ReactNode;
 }) {
   const section = groupsSectionFromPath(usePathname() ?? base);
@@ -46,7 +49,7 @@ export function GroupsSectionChrome({
       <PageHeader
         title={copy.title}
         description={copy.description}
-        action={section === "list" ? <CreateGroupButton types={types} campuses={campuses} /> : undefined}
+        action={section === "list" ? <><CreateGroupButton types={types} campuses={campuses} label="Add group" /><GroupAnnouncement groups={groups} /></> : undefined}
       />
       <GroupsNav requests={counts.requests} reports={counts.reports} />
       {children}

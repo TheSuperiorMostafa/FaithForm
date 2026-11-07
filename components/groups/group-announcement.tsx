@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Megaphone, Send } from "lucide-react";
+import { useId, useRef, useState } from "react";
+import { Plus, Send } from "lucide-react";
 import { StreamChat } from "stream-chat";
 import { toast } from "sonner";
 import type { StaffGroupListItem } from "@/lib/groups/staff/groups";
@@ -21,6 +21,8 @@ async function session(): Promise<ChatSessionDto> {
 
 /** Uses the staff member's own chat credential: the provider enforces church reach. */
 export function GroupAnnouncement({ groups }: { groups: StaffGroupListItem[] }) {
+  const titleId = useId();
+  const descriptionId = useId();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState("");
@@ -58,17 +60,17 @@ export function GroupAnnouncement({ groups }: { groups: StaffGroupListItem[] }) 
     }
   };
   return <>
-    <Button variant="outline" onClick={() => setOpen(true)}><Megaphone className="size-5" aria-hidden />Send announcement</Button>
+    <Button size="lg" variant="outline" onClick={() => setOpen(true)}><Plus className="size-5" aria-hidden />Send a message</Button>
     <Dialog open={open} onOpenChange={value => { if (!pending) setOpen(value); }}>
-      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl">
-        <DialogHeader className="shrink-0"><DialogTitle>New group announcement</DialogTitle><DialogDescription>Announcements are sent through Messaging. Members on the app can receive a notification.</DialogDescription></DialogHeader>
-        <div className="min-h-0 flex-auto space-y-5 overflow-y-auto py-4">
+      <DialogContent aria-labelledby={titleId} aria-describedby={descriptionId} className="max-h-[calc(100dvh-2rem)] overflow-hidden sm:max-w-xl">
+        <DialogHeader className="shrink-0 pr-14"><DialogTitle id={titleId}>Send a message</DialogTitle><DialogDescription id={descriptionId}>Choose groups and write a message. Members on the app can receive a notification.</DialogDescription></DialogHeader>
+        <div className="min-h-0 flex-auto space-y-5 overflow-y-auto px-6 py-4">
           {ready.length ? <SearchPicker items={ready.map(group => ({ id: group.id, label: group.name, description: `${group.memberCount} people` }))} value={selected} onChange={ids => { if (!pending) setSelected(ids); }} multiple label="To" placeholder="Search groups" emptyText="No available groups match." showAllWhenEmpty /> : <p>There are no active groups with Messaging available. Turn on chat in Group settings first.</p>}
-          <label className="block space-y-2"><span className="font-medium">Announcement</span><textarea className="min-h-36 w-full rounded-xl border bg-background p-3 text-base" maxLength={5000} value={message} disabled={pending} onChange={event => { setMessage(event.target.value); batch.current = null; }} placeholder="Type a message…" /></label>
+          <label className="block space-y-2"><span className="font-medium">Message</span><textarea className="min-h-36 w-full rounded-xl border bg-background p-3 text-base" maxLength={5000} value={message} disabled={pending} onChange={event => { setMessage(event.target.value); batch.current = null; }} placeholder="Type a message…" /></label>
           <p className="text-right text-sm text-muted-foreground">{message.length}/5000</p>
           {error && <p role="alert" className="text-destructive">{error}</p>}
         </div>
-        <DialogFooter className="shrink-0"><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button><Button onClick={() => void send()} disabled={pending || !message.trim() || !selected.length}><Send className="size-5" aria-hidden />{pending ? "Sending…" : "Send announcement"}</Button></DialogFooter>
+        <DialogFooter className="shrink-0"><Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button><Button onClick={() => void send()} disabled={pending || !message.trim() || !selected.length}><Send className="size-5" aria-hidden />{pending ? "Sending…" : "Send message"}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </>;
