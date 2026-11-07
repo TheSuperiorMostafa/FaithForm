@@ -170,11 +170,6 @@ export function WeeklyEmailCard({
             Every Monday FaithForm puts these into one email draft in {mailbox} for you
             to check and send.
           </p>
-          <p className="text-[15px] text-muted-foreground">
-            The full message is attached as a document. Google also gets a Google Docs
-            copy when document access is connected. Changes made later in your mailbox
-            do not update that copy.
-          </p>
 
           {message && (
             <p
