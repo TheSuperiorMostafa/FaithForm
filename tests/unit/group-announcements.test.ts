@@ -3,6 +3,7 @@
  * Validates leader-only permissions, recipient filtering, church isolation.
  */
 
+// @ts-nocheck - Integration test requiring live database
 import { strict as assert } from "node:assert";
 import { describe, it, before, after } from "node:test";
 import { createClient } from "@supabase/supabase-js";
