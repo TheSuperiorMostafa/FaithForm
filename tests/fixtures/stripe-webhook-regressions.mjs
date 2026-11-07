@@ -28,6 +28,12 @@ const db = {
     const query = {
       select() { return query; },
       eq(key, value) { filters[key] = value; return query; },
+      is(key, value) { filters[key] = value; return query; },
+      gt() { return query; },
+      not() { return query; },
+      order() { return query; },
+      limit() { return query; },
+      returns() { return query; },
       or(value) { bound = value.split(".lte.")[1]; return query; },
       update(value) { operation = "update"; row = value; return query; },
       insert(value) { operation = "insert"; row = value; return query; },
@@ -51,6 +57,9 @@ const db = {
         return { data: null, error: null };
       }
       assert.equal(table, "giving_donations", `Unexpected table ${table}`);
+      if (scenario === "legacy-invoice-fees" && operation === "read") {
+        return { data: donation.net_amount_cents === null ? [donation] : [], error: null };
+      }
       if (operation === "insert") {
         donationInserts++;
         donation = { ...row, id: "donation_mock" };
@@ -77,9 +86,49 @@ const db = {
     return { data: [{ ok: true }], error: scenario.endsWith("rpc-error") ? { code: "08006" } : null };
   },
 };
+const settledCharge = {
+  paid: true, amount_captured: 1040, currency: "usd",
+  balance_transaction: { amount: 1040, currency: "usd", fee: 40, net: 1000 },
+};
+const stripe = {
+  charges: {
+    async retrieve(id, params, options) {
+      assert.equal(id, "ch_mock");
+      assert.deepEqual(params, { expand: ["balance_transaction"] });
+      assert.equal(options.stripeAccount, "acct_mock");
+      return settledCharge;
+    },
+  },
+  invoicePayments: {
+    async list(params, options) {
+      assert.equal(params.invoice, "in_mock");
+      assert.equal(options.stripeAccount, "acct_mock");
+      return { data: [{ status: "paid", payment: { payment_intent: "pi_mock" } }] };
+    },
+  },
+  paymentIntents: {
+    async retrieve(id, params, options) {
+      assert.equal(id, "pi_mock");
+      assert.deepEqual(params, { expand: ["latest_charge.balance_transaction"] });
+      assert.equal(options.stripeAccount, "acct_mock");
+      return { status: "succeeded", latest_charge: settledCharge };
+    },
+  },
+  subscriptions: {
+    async retrieve() { return subscription; },
+  },
+};
 const mocked = new Map([
   ["lib/supabase/admin", { createAdminClient: () => db }],
-  ["lib/stripe/client", { getStripe: () => { throw new Error("Provider access forbidden in regression harness"); } }],
+  ["lib/stripe/client", {
+    isStripeConfigured: () => true,
+    getStripe: () => {
+      if (!["covered-renewal-fees", "legacy-invoice-fees"].includes(scenario)) {
+        throw new Error("Provider access forbidden in regression harness");
+      }
+      return stripe;
+    },
+  }],
   ["lib/stripe/receipt-delivery", { deliverDonationReceipt: async () => {} }],
   ["lib/stripe/webhook-state", {
     claimStripeEvent: async (id) => ({ claimed: eventStatuses.get(id) !== "processed", claimToken: "claim_mock", attempt: 1, status: eventStatuses.get(id) ?? "processing" }),
@@ -130,6 +179,39 @@ function seedDonation(created = 123) {
     await event("charge.refunded", charge, 124);
     assert.equal(donation.status, "refunded");
     assert.deepEqual(completed, ["retryable", "processed", "processed"]);
+  } else if (scenario === "legacy-invoice-fees") {
+    seedDonation();
+    Object.assign(donation, {
+      stripe_charge_id: null, stripe_payment_intent_id: null, stripe_invoice_id: "in_mock",
+      amount_cents: 1040, currency: "usd", net_amount_cents: null,
+      updated_at: "2026-09-19T00:00:00.000Z", churches: { stripe_account_id: "acct_mock" },
+    });
+    const { reconcileDonationFees } = loadTypeScript(path.join(root, "lib/stripe/gift-fees.ts"), import.meta.url);
+    const originalEventTime = donation.stripe_event_created_at;
+    assert.deepEqual(await reconcileDonationFees(), { feeChecks: 1, feeErrors: 0 });
+    assert.equal(donation.stripe_fee_cents, 40);
+    assert.equal(donation.net_amount_cents, 1000);
+    assert.equal(donation.status, "succeeded");
+    assert.equal(donation.stripe_event_created_at, originalEventTime);
+    assert.deepEqual(await reconcileDonationFees(), { feeChecks: 0, feeErrors: 0 });
+  } else if (scenario === "covered-renewal-fees") {
+    const invoice = {
+      id: "in_mock", subscription: "sub_mock", payment_intent: "pi_mock",
+      amount_paid: 1040, currency: "usd", metadata: {},
+      subscription_details: { metadata: { cover_fees: "true", intended_amount_cents: "1000" } },
+    };
+    await event("invoice.paid", invoice);
+    assert.equal(donation.fee_covered, true);
+    assert.equal(donation.intended_amount_cents, 1000);
+
+    // The same payment event can arrive without any subscription metadata.
+    await event("payment_intent.succeeded", {
+      id: "pi_mock", amount: 1040, currency: "usd", metadata: {}, latest_charge: "ch_mock",
+    });
+    assert.equal(donation.fee_covered, true);
+    assert.equal(donation.intended_amount_cents, 1000);
+    assert.equal(donation.stripe_fee_cents, 40);
+    assert.equal(donation.net_amount_cents, 1000);
   } else if (scenario.startsWith("subscription-error") || scenario === "subscription-insert-race") {
     await assert.rejects(event("customer.subscription.updated", subscription), /subscription_reconciliation_failed/);
     assert.deepEqual(completed, ["retryable"]);

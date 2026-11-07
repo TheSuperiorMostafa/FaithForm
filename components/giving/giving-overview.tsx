@@ -16,6 +16,7 @@ import { InitialsAvatar, List, ListRow } from "@/components/ui/list-row";
 import { SectionHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { donorDisplayName, giftStatus, giftTypeLabel } from "@/lib/giving/labels";
+import type { GiftNet } from "@/lib/giving/net-amount";
 import { defaultStatementYear } from "@/lib/giving/statement-year";
 import { getGivingByFundPeriods, getGivingSummary } from "@/lib/queries/giving";
 import { formatCents } from "@/lib/utils/currency";
@@ -105,10 +106,10 @@ export async function GivingOverview({
           label="This week"
           cents={summary.weekCents}
           gifts={summary.weekGifts}
-          netCents={summary.weekNetCents}
+          net={summary.weekNet}
         />
-        <TotalCard label="This month" cents={summary.monthCents} gifts={summary.monthGifts} netCents={summary.monthNetCents} />
-        <TotalCard label="This year" cents={summary.yearCents} gifts={summary.yearGifts} netCents={summary.yearNetCents} />
+        <TotalCard label="This month" cents={summary.monthCents} gifts={summary.monthGifts} net={summary.monthNet} />
+        <TotalCard label="This year" cents={summary.yearCents} gifts={summary.yearGifts} net={summary.yearNet} />
       </section>
 
       <section aria-labelledby="recent-gifts" className="flex flex-col gap-4">
@@ -139,13 +140,13 @@ function TotalCard({
   cents,
   gifts,
   highlight = false,
-  netCents,
+  net,
 }: {
   label: string;
   cents: number;
   gifts: number;
   highlight?: boolean;
-  netCents: number | null;
+  net: GiftNet;
 }) {
   return (
     <Card
@@ -173,7 +174,10 @@ function TotalCard({
         )}
       >
         Gross · {plural(gifts, "gift")}
-        <span className="mt-2 block">Net after fees: {netCents === null ? "Waiting for fees" : formatCents(netCents)}</span>
+        <span className="mt-2 block">
+          {net.estimated ? "Estimated net after fees" : "Net after fees"}:{" "}
+          {net.cents === null ? "Waiting for fees" : formatCents(net.cents)}
+        </span>
       </p>
     </Card>
   );

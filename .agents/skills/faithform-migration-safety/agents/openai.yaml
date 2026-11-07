@@ -1,0 +1,3 @@
+interface:
+  display_name: "Faithform Migration Safety"
+  short_description: "Use when authoring or reviewing FaithForm Postgres migrations, R"

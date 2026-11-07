@@ -99,6 +99,7 @@ import kotlinx.serialization.json.*
     var editing by remember { mutableStateOf(false) }
     var announcing by remember { mutableStateOf(false) }
     var detail by remember(groupId) { mutableStateOf<GroupDetail?>(null) }
+    var joining by remember(groupId) { mutableStateOf(false) }
     var reload by remember { mutableIntStateOf(0) }
     var confirmingLeave by remember { mutableStateOf(false) }
     var asking by remember { mutableStateOf(false) }
@@ -176,7 +177,7 @@ import kotlinx.serialization.json.*
             d.description?.takeIf { it.isNotBlank() }?.let { text ->
                 item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("About this group") { Text(text, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary) } } }
             }
-            item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("When & where") {
+            item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("When & Where") {
                 d.schedules.forEach { Text(it.text, style = MaterialTheme.typography.bodyMedium) }
                 d.location?.let { location -> location.name?.let { Text(it) }; location.address?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }; if (location.membersOnly && location.address == null) Text("The meeting address is shared with members.", style = MaterialTheme.typography.bodySmall); location.onlineMeetingUrl?.let { link -> TextButton(onClick = { uri.openUri(link) }) { Text("Join online meeting") } } } ?: if (d.schedules.isEmpty()) Text("Details will be shared soon.", style = MaterialTheme.typography.bodyMedium) else Unit
             } } }
@@ -195,7 +196,19 @@ import kotlinx.serialization.json.*
             item {
                 Box(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
                     when (d.group.joinAction) {
-                        "join" -> Button(enabled = !store.busy, onClick = { scope.launch { store.membership(d.group); reload++ } }, modifier = Modifier.fillMaxWidth()) { Text("Join this group") }
+                        "join" -> Button(enabled = !joining && !store.busy, onClick = {
+                            if (!joining && !store.busy) {
+                                joining = true
+                                scope.launch {
+                                    try {
+                                        // Refresh inline so the old Join action cannot flash between requests.
+                                        if (store.membership(d.group)) detail = store.read("${store.path}/$groupId")
+                                    } catch (e: CancellationException) { throw e }
+                                    catch (e: Exception) { detail = null; store.error = GroupsStore.message(e) }
+                                    finally { joining = false }
+                                }
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(if (joining || store.busy) "Joining…" else "Join this group") }
                         "request" -> Button(onClick = { asking = true }, modifier = Modifier.fillMaxWidth()) { Text("Ask to join") }
                         "cancel_request" -> Column { Text("Your request is with the group leaders.", style = MaterialTheme.typography.bodyMedium); TextButton(enabled = !store.busy, onClick = { scope.launch { store.membership(d.group); reload++ } }) { Text("Cancel request") } }
                         "leave" -> TextButton(onClick = { confirmingLeave = true }, modifier = Modifier.fillMaxWidth()) { Text("Leave group", color = MaterialTheme.colorScheme.error) }

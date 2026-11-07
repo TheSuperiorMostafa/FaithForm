@@ -6,6 +6,7 @@ import { RefundButton } from "@/components/giving/refund-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { donorDisplayName, giftStatus, giftTypeLabel, isRefundable } from "@/lib/giving/labels";
+import { giftNetAfterFees } from "@/lib/giving/net-amount";
 import { formatCents } from "@/lib/utils/currency";
 import type { GivingDonationRow } from "@/types/giving";
 
@@ -62,6 +63,9 @@ export function GiftsTable({
           {donations.map((d) => {
             const status = giftStatus(d.status);
             const name = donorDisplayName(d);
+            const net = d.status === "succeeded"
+              ? giftNetAfterFees(d)
+              : { cents: d.netAmountCents, estimated: false };
             return (
               <tr key={d.id} className="border-b border-border/60 last:border-0">
                 <td className="whitespace-nowrap px-5 py-4 text-foreground">
@@ -86,7 +90,8 @@ export function GiftsTable({
                   {formatCents(d.amountCents, d.currency)}
                 </td>
                 <td className="whitespace-nowrap px-5 py-4 text-right text-muted-foreground">
-                  {d.netAmountCents != null ? formatCents(d.netAmountCents, d.currency) : "—"}
+                  {net.cents === null ? "—" : formatCents(net.cents, d.currency)}
+                  {net.estimated && <span className="block text-sm">Estimated</span>}
                 </td>
                 <td className="px-5 py-4 text-muted-foreground">
                   {d.fundName ?? d.fundDesignation ?? "—"}

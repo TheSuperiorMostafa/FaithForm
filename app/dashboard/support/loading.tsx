@@ -109,7 +109,7 @@ export default function SupportLoading() {
         </ul>
       </section>
 
-      <section className="flex flex-col gap-4">
+      <section id="answers" className="flex scroll-mt-24 flex-col gap-4">
         <SectionHeader title="Common questions" />
         <div className="grid gap-4 md:grid-cols-2">
           {Array.from({ length: 4 }).map((_, index) => (

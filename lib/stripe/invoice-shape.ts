@@ -116,7 +116,7 @@ export type InvoicePaymentLister = {
   invoicePayments: {
     list(
       params: { invoice: string; limit?: number },
-      options: { stripeAccount: string },
+      options: { stripeAccount: string; timeout?: number; maxNetworkRetries?: number },
     ): PromiseLike<{ data: readonly InvoicePaymentShape[] }>;
   };
 };
@@ -131,10 +131,11 @@ export async function fetchInvoicePaymentIntentId(
   stripe: InvoicePaymentLister,
   invoiceId: string,
   stripeAccount: string,
+  options?: { timeout?: number; maxNetworkRetries?: number },
 ): Promise<string | null> {
   const payments = await stripe.invoicePayments.list(
     { invoice: invoiceId, limit: 10 },
-    { stripeAccount },
+    { ...options, stripeAccount },
   );
   return invoicePaymentIntentId({ payments });
 }

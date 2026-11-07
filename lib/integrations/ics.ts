@@ -404,8 +404,7 @@ function addMonthsUtc(dt: IcsDateTime, months: number): IcsDateTime {
   const total = (dt.year * 12 + (dt.month - 1)) + months;
   const year = Math.floor(total / 12);
   const month = (total % 12) + 1;
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-  return { ...dt, year, month, day: Math.min(dt.day, lastDay) };
+  return { ...dt, year, month };
 }
 
 function weekdayOf(dt: IcsDateTime): number {
@@ -429,7 +428,10 @@ function ruleStarts(
   rangeEnd: Date,
 ): IcsDateTime[] {
   const starts: IcsDateTime[] = [];
-  let cursor = rule.count === null ? fastForward(start, rule, rangeStart) : start;
+  const monthlyOrYearly = rule.freq === "MONTHLY" || rule.freq === "YEARLY";
+  const weeklyWithDays = rule.freq === "WEEKLY" && rule.byDay.length > 0;
+  const anchor = monthlyOrYearly ? { ...start, day: 1 } : start;
+  let cursor = rule.count === null ? fastForward(anchor, rule, rangeStart) : anchor;
   let generated = 0;
   let periods = 0;
 
@@ -447,7 +449,7 @@ function ruleStarts(
   while (periods < MAX_OCCURRENCES && starts.length < MAX_OCCURRENCES) {
     let keepGoing = true;
 
-    if (rule.freq === "WEEKLY" && rule.byDay.length > 0) {
+    if (weeklyWithDays) {
       // A weekly rule can name several days; walk the week the cursor opens.
       const weekStart = addDaysUtc(cursor, -weekdayOf(cursor));
       for (const day of [...rule.byDay].sort((a, b) => a.weekday - b.weekday)) {
@@ -482,6 +484,10 @@ function ruleStarts(
         keepGoing = push({ ...cursor, day });
         if (!keepGoing) break;
       }
+    } else if (monthlyOrYearly) {
+      // A missing day skips that period and leaves the original date anchored.
+      const lastDay = new Date(Date.UTC(cursor.year, cursor.month, 0)).getUTCDate();
+      if (start.day <= lastDay) keepGoing = push({ ...cursor, day: start.day });
     } else {
       keepGoing = push(cursor);
     }
@@ -494,9 +500,9 @@ function ruleStarts(
     else if (rule.freq === "MONTHLY") cursor = addMonthsUtc(cursor, rule.interval);
     else cursor = addMonthsUtc(cursor, 12 * rule.interval);
 
-    // Past the window and not counting toward a COUNT limit: nothing later
-    // can come back into range.
-    if (wallTimeToUtc(cursor).getTime() > rangeEnd.getTime()) break;
+    // A chosen weekday can precede the cursor within the next week.
+    const nextPeriodStart = weeklyWithDays ? addDaysUtc(cursor, -weekdayOf(cursor)) : cursor;
+    if (wallTimeToUtc(nextPeriodStart).getTime() > rangeEnd.getTime()) break;
   }
 
   return starts;

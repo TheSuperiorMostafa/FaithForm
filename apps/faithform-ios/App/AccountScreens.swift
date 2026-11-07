@@ -192,6 +192,7 @@ struct AccountView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(theme.palette.background.ignoresSafeArea())
+        .foregroundStyle(theme.palette.contentPrimary)
         .sheet(isPresented: $editingName) {
             NameEditorSheet(root: root, current: displayName ?? "")
         }
@@ -237,12 +238,15 @@ struct AccountView: View {
                 Text("Appearance")
                     .font(theme.font(FaithFormTokens.Text.bodySmall))
                     .foregroundStyle(theme.palette.contentSecondary)
-                Picker("Appearance", selection: $appearance) {
-                    Text("System").tag("system")
-                    Text("Light").tag("light")
-                    Text("Dark").tag("dark")
-                }
-                .pickerStyle(.segmented)
+                FaithFormPillSwitcher(
+                    selection: $appearance,
+                    options: [
+                        .init("system", title: "System"),
+                        .init("light", title: "Light"),
+                        .init("dark", title: "Dark")
+                    ],
+                    accessibilityLabel: "Appearance"
+                )
             }
 
             Divider().overlay(theme.palette.divider)
@@ -416,7 +420,7 @@ private struct ProfileHeroView: View {
                 Circle().fill(theme.palette.brandAccent)
                 Image(systemName: hasPhoto ? "pencil" : "plus")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(theme.palette.brandPrimary)
+                    .foregroundStyle(theme.palette.contentOnAccent)
             }
             .frame(width: 34, height: 34)
             .overlay(Circle().strokeBorder(theme.palette.background, lineWidth: 3))

@@ -10,13 +10,11 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
-import Link from "next/link";
 import { EventLocationField } from "@/components/announcements/event-location-field";
 import { EventRepeatFields } from "@/components/announcements/event-repeat-fields";
-import type { EventRepeat } from "@/lib/announcements/recurrence";
+import { DEFAULT_CUSTOM_EVENT_REPEAT, type EventRepeat } from "@/lib/announcements/recurrence";
 import {
   Bell,
-  CalendarPlus,
   Check,
   ExternalLink,
   ImagePlus,
@@ -88,7 +86,6 @@ import { toast } from "sonner";
 export type ComposerSettings = {
   churchId: string;
   churchTimeZone: string | null;
-  isAdmin: boolean;
   facebookConnected: boolean;
   /** Monday's email can be made (Google or iCloud Mail, and not switched off). */
   emailAvailable: boolean;
@@ -96,9 +93,6 @@ export type ComposerSettings = {
   emailSwitchedOff: boolean;
   /** The church has the FaithForm app. Off: nothing new is offered for the app. */
   appAvailable: boolean;
-  calendarConnected: boolean;
-  /** A calendar FaithForm can add events to (not a read-only iCloud link). */
-  canCreateEvents: boolean;
   /** Church name for the "Add church" location fill. */
   churchName: string | null;
   /** Street / city / state / zip from Church info. */
@@ -133,7 +127,6 @@ type Values = {
   appOn: boolean;
   emailOn: boolean;
   facebookOn: boolean;
-  addToCalendar: boolean;
   caption: string;
 };
 
@@ -292,7 +285,6 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
     appOn: true,
     emailOn: settings.emailAvailable,
     facebookOn: false,
-    addToCalendar: settings.canCreateEvents && settings.isAdmin,
     caption: "",
   };
 
@@ -323,7 +315,6 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
         // Something that already happened is not on Home and is not worth a
         // notification, so the app is opt-in for it.
         appOn: !over,
-        addToCalendar: false,
       },
       calendar,
       graphic: NO_GRAPHIC,
@@ -349,7 +340,6 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
         appOn: visibility !== "none",
         emailOn: row.push_to_team || mode.item.queuedForWeeklyEmail,
         facebookOn: false,
-        addToCalendar: false,
         caption: row.facebook_caption ?? "",
       } satisfies Values,
       calendar:
@@ -384,7 +374,6 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
           ? { date: "", startTime: "", endTime: "" }
           : splitWhen(item.startAt, item.endAt, item.allDay)),
         location: item.location ?? "",
-        addToCalendar: false,
       } satisfies Values,
       calendar: null,
       graphic: savedGraphic(item.graphicUrl, item.graphicPath),
@@ -449,9 +438,10 @@ export function AnnouncementComposer({
 }) {
   // Frozen at open: a page refresh behind the composer must not move it.
   const [initial] = useState(() => initialState(mode, settings));
+  const [values, setValues] = useState<Values>(initial.values);
   const [repeat, setRepeat] = useState<EventRepeat>("none");
   const [repeatUntil, setRepeatUntil] = useState("");
-  const [values, setValues] = useState<Values>(initial.values);
+  const [customRepeat, setCustomRepeat] = useState(DEFAULT_CUSTOM_EVENT_REPEAT);
   const [graphic, dispatchGraphic] = useReducer(graphicReducer, initial.graphic);
   const calendar = initial.calendar;
   const [restoredDraft, setRestoredDraft] = useState(
@@ -460,10 +450,7 @@ export function AnnouncementComposer({
 
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [errorNeedsSettings, setErrorNeedsSettings] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
-  /** A calendar event this composer already made, reused if posting is retried. */
-  const [createdEvent, setCreatedEvent] = useState<CalendarEventPreview | null>(null);
 
   const [pictureLoading, setPictureLoading] = useState(false);
   const [captionLoading, setCaptionLoading] = useState(false);
@@ -508,8 +495,8 @@ export function AnnouncementComposer({
   });
   const whenOk = "startAt" in when ? when : null;
   const undated = !dated;
+  const canRepeat = mode.kind === "new" && dated;
   const alreadyOver = whenOk ? hasLeftAppFeed(whenOk) : false;
-  const hasTime = Boolean(values.startTime.trim()) && dated && !calendar?.allDay;
 
   const facebookOnPage = Boolean(already?.facebook.published);
 
@@ -537,15 +524,6 @@ export function AnnouncementComposer({
   const appOn = values.appOn && (settings.appAvailable || appAlready);
   const showAppRow = settings.appAvailable || appAlready;
   const showEmailRow = !settings.emailSwitchedOff || emailAlready;
-  const willAddToCalendar =
-    !calendar &&
-    !createdEvent &&
-    mode.kind === "new" &&
-    values.addToCalendar &&
-    hasTime &&
-    settings.canCreateEvents &&
-    settings.isAdmin;
-
   const facebookTiming = facebookNew
     ? resolveFacebookTiming({
         startIso: whenOk?.startAt ?? null,
@@ -584,7 +562,7 @@ export function AnnouncementComposer({
   const dirty =
     !outcome &&
     (mode.kind === "new"
-      ? Boolean(values.title.trim() || values.details.trim() || currentGraphic)
+      ? Boolean(values.title.trim() || values.details.trim() || currentGraphic || repeat !== "none")
       : JSON.stringify(values) !== originalSnapshot ||
         (currentGraphic?.path ?? null) !== initialGraphicPath);
 
@@ -629,6 +607,9 @@ export function AnnouncementComposer({
   }, [pending, dirty, mode.kind, settings.churchId, onClose]);
 
   const startOver = () => {
+    setRepeat("none");
+    setRepeatUntil("");
+    setCustomRepeat(DEFAULT_CUSTOM_EVENT_REPEAT);
     clearComposerDraft(settings.churchId);
     setValues({ ...initial.values, title: "", details: "", dated: false, date: "", startTime: "", endTime: "", location: "", audience: "followers" });
     setRestoredDraft(false);
@@ -748,7 +729,7 @@ export function AnnouncementComposer({
       return "Choose a start time for this event.";
     }
     const emailOn = values.emailOn && settings.emailAvailable;
-    if (!appOn && !emailOn && !facebookNew && !changing && !willAddToCalendar) {
+    if (!appOn && !emailOn && !facebookNew && !changing) {
       return "Choose at least one place to share it.";
     }
     if (facebookNew && aiStale) {
@@ -783,43 +764,8 @@ export function AnnouncementComposer({
     if (posterAltText) form.set("poster_alt_text", posterAltText);
   };
 
-  const createCalendarEvent = async (): Promise<CalendarEventPreview | null> => {
-    if (!whenOk) return null;
-    const res = await fetch("/api/announcements/calendar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: values.title.trim(),
-        repeat,
-        repeatUntil,
-        location: values.location.trim() || undefined,
-        startAt: whenOk.startAt,
-        endAt: whenOk.endAt,
-        description: values.details.trim() || undefined,
-      }),
-    });
-    if (!res.ok) {
-      let message = "We couldn't add it to your church calendar. Nothing was posted.";
-      let reconnect = false;
-      try {
-        const data = (await res.json()) as { error?: string; reconnect?: boolean };
-        if (data.error) message = `${data.error.replace(/[.!?]$/, "")}. Nothing was posted.`;
-        reconnect = Boolean(data.reconnect);
-      } catch {
-        // Keep the plain message.
-      }
-      setErrorNeedsSettings(reconnect);
-      setError(`${message} You can untick "Also add it to your church calendar" to post without it.`);
-      return null;
-    }
-    const data = (await res.json()) as { event: CalendarEventPreview };
-    setCreatedEvent(data.event);
-    return data.event;
-  };
-
   const submit = () => {
     setError(null);
-    setErrorNeedsSettings(false);
     const problem = validate();
     if (problem || !whenOk) {
       setError(problem ?? "Check the date and time.");
@@ -867,18 +813,6 @@ export function AnnouncementComposer({
           return;
         }
 
-        let event: CalendarEventPreview | null = createdEvent;
-        if (willAddToCalendar) {
-          event = await createCalendarEvent();
-          if (!event) return;
-        }
-
-        const link = calendar
-          ? { eventId: calendar.eventId, calendarId: calendar.calendarId }
-          : event
-            ? { eventId: event.googleEventId, calendarId: event.calendarId }
-            : null;
-
         const form = new FormData();
         form.set("church_id", settings.churchId);
         form.set("title", values.title.trim());
@@ -887,9 +821,9 @@ export function AnnouncementComposer({
         if (whenOk.endAt) form.set("end_at", whenOk.endAt);
         form.set("all_day", whenOk.allDay ? "true" : "false");
         form.set("notes", values.details.trim());
-        if (link) {
-          form.set("google_event_id", link.eventId);
-          form.set("google_calendar_id", link.calendarId);
+        if (calendar) {
+          form.set("google_event_id", calendar.eventId);
+          form.set("google_calendar_id", calendar.calendarId);
         } else if (undated) {
           form.set("undated", "true");
         }
@@ -909,21 +843,14 @@ export function AnnouncementComposer({
           form.set("original_location", calendar.original.location);
           form.set("original_start_at", calendar.original.startAt);
           form.set("original_end_at", calendar.original.endAt ?? "");
-        } else if (event) {
-          // Just made from these details: nothing to write back.
-          form.set("original_title", event.title);
-          form.set("original_location", event.location);
-          form.set("original_start_at", event.startAt);
-          form.set("original_end_at", event.endAt ?? "");
+        }
+        if (canRepeat && repeat !== "none") {
+          form.set("repeat", repeat);
+          form.set("repeat_until", repeatUntil);
+          if (repeat === "custom") form.set("custom_repeat", JSON.stringify(customRepeat));
         }
         appendFacebook(form);
         appendPicture(form);
-        
-        // Recurring event fields (E4)
-        if (repeat !== "none" && repeatUntil) {
-          form.set("repeat", repeat);
-          form.set("repeat_until", repeatUntil);
-        }
 
         const result = await publishAnnouncement(form);
         if (!result.ok) {
@@ -941,7 +868,6 @@ export function AnnouncementComposer({
             facebookUrl: result.facebookUrl,
             facebookScheduledAt: result.facebookScheduledAt,
             timeZone: facebookTiming?.zone ?? settings.churchTimeZone,
-            calendarAdded: Boolean(event && !calendar),
             updated: changing,
           }),
           problems: result.errors,
@@ -993,7 +919,6 @@ export function AnnouncementComposer({
         : "Goes on Facebook as soon as you post.",
     );
   }
-  if (willAddToCalendar) whatHappens.push("Added to your church calendar.");
   if (whatHappens.length === 0) whatHappens.push("Not shared anywhere yet. Tick a place above.");
 
   const previewWhen = !whenOk
@@ -1079,7 +1004,7 @@ export function AnnouncementComposer({
             {/* Use a content-based flex basis: Safari can collapse flex-1 to
                 zero inside an auto-height dialog capped only by max-height. */}
             <div className="min-h-0 flex-auto overflow-y-auto">
-              <div className="grid gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="grid grid-cols-[minmax(0,1fr)] gap-6 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,1fr)_17rem]">
                 <div className="flex min-w-0 flex-col gap-8">
                   {restoredDraft && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/40 px-4 py-3 text-[15px]">
@@ -1149,8 +1074,13 @@ export function AnnouncementComposer({
                     )}
                     {dated && (
                       <div className="flex flex-col gap-4">
-                        <div className="grid gap-4 sm:grid-cols-3">
-                          <div className="flex min-w-0 flex-col gap-2">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                          <div
+                            className={cn(
+                              "col-span-full flex min-w-0 flex-col gap-2",
+                              calendar?.allDay ? "sm:col-span-2" : "sm:col-span-1",
+                            )}
+                          >
                             <Label htmlFor="composer-date" className="text-[15px]">
                               Day
                             </Label>
@@ -1176,7 +1106,7 @@ export function AnnouncementComposer({
                                   type="time"
                                   value={values.startTime}
                                   onChange={(e) => setDetail("startTime", e.target.value)}
-                                  className="min-w-0 tabular-nums"
+                                  className="min-w-0 px-2 tabular-nums sm:px-4"
                                 />
                               </div>
                               <div className="flex min-w-0 flex-col gap-2">
@@ -1189,7 +1119,7 @@ export function AnnouncementComposer({
                                   value={values.endTime}
                                   onChange={(e) => setDetail("endTime", e.target.value)}
                                   disabled={!values.startTime}
-                                  className="min-w-0 tabular-nums"
+                                  className="min-w-0 px-2 tabular-nums sm:px-4"
                                 />
                               </div>
                             </>
@@ -1202,37 +1132,39 @@ export function AnnouncementComposer({
                           <Label htmlFor="composer-location" className="text-[15px]">
                             Location <span className="font-normal text-muted-foreground">(optional)</span>
                           </Label>
-                          <div className="flex items-center gap-2">
-                            <EventLocationField id="composer-location" value={values.location} onChange={(value) => setDetail("location", value)} />
-                            <Button
-                              type="button"
-                              variant="outline"
-                              disabled={!churchAddressLine}
-                              onClick={fillChurchLocation}
-                              title={
-                                churchAddressLine
-                                  ? "Fill in your church name and address"
-                                  : "Add your church address in Settings first"
-                              }
-                            >
-                              Add church
-                            </Button>
-                          </div>
-                        </div>
-                        {mode.kind === "new" && values.addToCalendar && hasTime && settings.canCreateEvents && settings.isAdmin && <EventRepeatFields id="composer-event" repeat={repeat} until={repeatUntil} onRepeat={setRepeat} onUntil={setRepeatUntil} />}
-                        {mode.kind === "new" && settings.canCreateEvents && settings.isAdmin && (
-                          <CheckRow
-                            id="composer-calendar"
-                            icon={<CalendarPlus className="size-5" strokeWidth={1.75} aria-hidden />}
-                            label="Also add it to your church calendar"
-                            checked={values.addToCalendar && hasTime}
-                            disabled={!hasTime}
-                            onChange={(checked) => set("addToCalendar", checked)}
-                            hint={
-                              hasTime
-                                ? "It shows up with your other events, ready for check-in."
-                                : "Add a start time to also put it on your calendar."
+                          <EventLocationField
+                            id="composer-location"
+                            value={values.location}
+                            onChange={(value) => setDetail("location", value)}
+                            actions={
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="px-3"
+                                disabled={!churchAddressLine}
+                                onClick={fillChurchLocation}
+                                title={
+                                  churchAddressLine
+                                    ? "Fill in your church name and address"
+                                    : "Add your church address in Settings first"
+                                }
+                              >
+                                Use church address
+                              </Button>
                             }
+                          />
+                        </div>
+                        {canRepeat && (
+                          <EventRepeatFields
+                            id="composer-event"
+                            repeat={repeat}
+                            until={repeatUntil}
+                            custom={customRepeat}
+                            startDate={values.date}
+                            onRepeat={setRepeat}
+                            onUntil={setRepeatUntil}
+                            onCustom={setCustomRepeat}
                           />
                         )}
                       </div>
@@ -1412,7 +1344,7 @@ export function AnnouncementComposer({
                 </div>
 
                 {/* Preview */}
-                <aside className="flex flex-col gap-4 lg:sticky lg:top-0 lg:self-start" aria-label="Preview">
+                <aside className="flex min-w-0 flex-col gap-4 [overflow-wrap:anywhere] lg:sticky lg:top-0 lg:self-start" aria-label="Preview">
                   <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
                   <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     {currentGraphic ? (
@@ -1468,17 +1400,6 @@ export function AnnouncementComposer({
                   className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[15px] text-destructive"
                 >
                   {error}
-                  {errorNeedsSettings && (
-                    <>
-                      {" "}
-                      <Link
-                        href="/dashboard/settings?tab=accounts"
-                        className="font-semibold underline underline-offset-2"
-                      >
-                        Open Settings
-                      </Link>
-                    </>
-                  )}
                 </p>
               )}
               <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">

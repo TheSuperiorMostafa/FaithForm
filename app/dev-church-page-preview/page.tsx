@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 
-import { ChurchInfoEditor } from "@/components/member-app/church-info-editor";
+import { ChurchAppSettings } from "@/components/member-app/church-app-settings";
 import type { ChurchAppInfo, ChurchAppInfoContext } from "@/lib/queries/church-app-info";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +60,7 @@ export default function DevChurchPagePreview() {
   return (
     <main className="min-h-screen bg-background p-6 text-foreground">
       <div className="mx-auto max-w-7xl">
-        <ChurchInfoEditor initial={SAMPLE} context={CONTEXT} canEdit />
+        <ChurchAppSettings churchInfo={{ info: SAMPLE, context: CONTEXT }} canEdit />
       </div>
     </main>
   );

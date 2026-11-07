@@ -1,0 +1,8 @@
+{
+  "repo": "AvdLee/SwiftUI-Agent-Skill",
+  "path": "skills/swiftui-expert-skill",
+  "commit": "9897311e3e42cc77e87603226e74bea711092fbd",
+  "folder": "swiftui-expert-skill",
+  "upstream_skill_sha256": "3b794f9cb46efb016eafcad2fcedce7127c74d60c50a949619e0bcd2bc38351f",
+  "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+}

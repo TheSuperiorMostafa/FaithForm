@@ -87,6 +87,7 @@ struct GroupInfoScreen: View {
     @State private var editing = false
     @State private var announcing = false
     @State private var joinedRecently = false
+    @State private var joining = false
     @State private var leaving = false
 
     var body: some View {
@@ -248,7 +249,7 @@ struct GroupInfoScreen: View {
     }
 
     private func meeting(_ detail: GroupDetail) -> some View {
-        GroupPanelView("When & where") {
+        GroupPanelView("When & Where") {
             VStack(alignment: .leading, spacing: 14) {
                 ForEach(detail.schedules, id: \.text) { Label($0.text, systemImage: "calendar").font(.subheadline) }
                 if let location = detail.location {
@@ -317,7 +318,11 @@ struct GroupInfoScreen: View {
         switch group.joinAction {
         case "join":
             Button {
+                guard !joining, !model.busy else { return }
+                joining = true
                 Task {
+                    // Keep the button busy until this screen has fresh membership details.
+                    defer { joining = false }
                     let success = await model.changeMembership(group)
                     if success {
                         await load()
@@ -325,8 +330,8 @@ struct GroupInfoScreen: View {
                         withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { joinedRecently = true }
                     }
                 }
-            } label: { primaryLabel(model.busy ? "Joining…" : "Join this group") }
-                .buttonStyle(GroupPressStyle()).disabled(model.busy)
+            } label: { primaryLabel(joining || model.busy ? "Joining…" : "Join this group") }
+                .buttonStyle(GroupPressStyle()).disabled(joining || model.busy)
         case "request":
             Button { asking = true } label: { primaryLabel("Ask to join") }.buttonStyle(GroupPressStyle())
         case "cancel_request":

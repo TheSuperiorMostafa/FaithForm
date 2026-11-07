@@ -43,8 +43,9 @@ test("without fee coverage the metadata's intended amount is the charge", () => 
 });
 
 test("both receipt paths are bounded by the charge", () => {
-  assert.match(webhooks, /intendedAmountCents: receiptAmountCents\(pi\.metadata, pi\.amount\)/);
-  assert.match(webhooks, /intendedAmountCents = receiptAmountCents\(\s*sub\.metadata,/);
+  assert.match(webhooks, /intendedAmountCents: [^\n]*receiptAmountCents\(pi\.metadata, pi\.amount\)/);
+  assert.match(webhooks, /intendedAmountCents \?\?= receiptAmountCents\(\s*sub\.metadata,/);
+  assert.match(webhooks, /receiptAmountCents\(invoiceSubscriptionMeta, invoice\.amount_paid \|\| invoice\.amount_due\)/);
   assert.doesNotMatch(webhooks, /parseIntendedCents\(pi\.metadata\) \?\? pi\.amount/);
 });
 

@@ -9,7 +9,7 @@ import {
 import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
 import { AutomaticCheckinSummaryCard } from "@/components/attendance/automatic-checkin-summary-card";
 import { FaithFormVisibilityCard } from "@/components/member-app/app-visibility-card";
-import { ChurchInfoEditor } from "@/components/member-app/church-info-editor";
+import { ChurchAppSettings } from "@/components/member-app/church-app-settings";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
 import { ChurchBrandColorsCard } from "@/components/settings/church-brand-colors-card";
@@ -26,11 +26,6 @@ import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Your church in the member app, in one place: the church page people open
- * from Home — edited beside a live phone — and then how people find and add
- * your church.
- */
 export default async function MemberAppPage() {
   if (await pageFeatureBlocked("member_app")) return null;
 
@@ -79,71 +74,64 @@ export default async function MemberAppPage() {
         description="Your church's page in the FaithForm app, and how people find and add your church."
       />
 
-      {joinRequests.length > 0 && <JoinRequestsPanel requests={joinRequests} />}
-
-      <section className="flex flex-col gap-4" aria-labelledby="church-page-heading">
-        <SectionHeader
-          id="church-page-heading"
-          title="Your church page"
-          description="What people see when they open your church in the app. Your website and phone assistant use the same details, so a change here updates them too."
-        />
-        {churchInfo ? (
-          <ChurchInfoEditor
-            initial={churchInfo.info}
-            context={churchInfo.context}
-            canEdit={auth.isAdmin}
-          />
-        ) : (
+      <ChurchAppSettings
+        churchInfo={churchInfo}
+        canEdit={auth.isAdmin}
+        editorFallback={
           <ErrorState
             title="We couldn't load your church page"
             description="Nothing was changed. Refresh the page to try again."
             compact
           />
+        }
+        colors={auth.isAdmin && (
+          <section id="app-colors" className="scroll-mt-6" aria-label="App colors">
+            <Suspense fallback={<SkeletonContainer label="App colors"><BrandColorsSkeleton /></SkeletonContainer>}>
+              <ChurchBrandColorsCard churchId={auth.churchId} appEnabled />
+            </Suspense>
+          </section>
         )}
-      </section>
+        access={
+          <div className="flex flex-col gap-8">
+            {joinRequests.length > 0 && <JoinRequestsPanel requests={joinRequests} />}
 
-      {auth.isAdmin && (
-        <section id="app-colors" className="scroll-mt-6" aria-label="App colors">
-          <Suspense fallback={<SkeletonContainer label="App colors"><BrandColorsSkeleton /></SkeletonContainer>}>
-            <ChurchBrandColorsCard churchId={auth.churchId} appEnabled />
-          </Suspense>
-        </section>
-      )}
+            <section className="flex flex-col gap-4" aria-labelledby="church-access-heading">
+              <SectionHeader
+                id="church-access-heading"
+                title="How people add your church"
+                description="Each person has one church in the app. Invitation links are the easiest way in; being listed in search is optional."
+              />
+              <div className="grid gap-5 lg:grid-cols-2">
+                <FaithFormVisibilityCard
+                  isAdmin={auth.isAdmin}
+                  isDiscoverable={discovery.isDiscoverable}
+                  publicSummary={discovery.publicSummary}
+                  joinPolicy={discovery.joinPolicy}
+                  slug={discovery.slug}
+                  campuses={campuses}
+                  canFindAddress={auth.isAdmin && canUseAttendance}
+                />
+                <VisitorInvitationsCard
+                  isAdmin={auth.isAdmin}
+                  invitations={invitationPage.items}
+                />
+              </div>
+            </section>
 
-      <section className="flex flex-col gap-4" aria-labelledby="church-access-heading">
-        <SectionHeader
-          id="church-access-heading"
-          title="How people add your church"
-          description="Each person has one church in the app. Invitation links are the easiest way in; being listed in search is optional."
-        />
-        <div className="grid gap-5 lg:grid-cols-2">
-          <FaithFormVisibilityCard
-            isAdmin={auth.isAdmin}
-            isDiscoverable={discovery.isDiscoverable}
-            publicSummary={discovery.publicSummary}
-            joinPolicy={discovery.joinPolicy}
-            slug={discovery.slug}
-            campuses={campuses}
-            canFindAddress={auth.isAdmin && canUseAttendance}
-          />
-          <VisitorInvitationsCard
-            isAdmin={auth.isAdmin}
-            invitations={invitationPage.items}
-          />
-        </div>
-      </section>
-
-      {readiness ? (
-        <AutomaticCheckinSummaryCard
-          problem={readiness.problem}
-          watching={readiness.regions.map((region) => ({
-            campusName: region.campusName,
-            radiusMeters: region.radiusMeters,
-          }))}
-          nextWindow={readiness.windows[0] ?? null}
-          canOpenSetup={canUseAttendance}
-        />
-      ) : null}
+            {readiness ? (
+              <AutomaticCheckinSummaryCard
+                problem={readiness.problem}
+                watching={readiness.regions.map((region) => ({
+                  campusName: region.campusName,
+                  radiusMeters: region.radiusMeters,
+                }))}
+                nextWindow={readiness.windows[0] ?? null}
+                canOpenSetup={canUseAttendance}
+              />
+            ) : null}
+          </div>
+        }
+      />
     </div>
   );
 }

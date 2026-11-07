@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { EventLocationField } from "@/components/announcements/event-location-field";
 import { EventRepeatFields } from "@/components/announcements/event-repeat-fields";
-import type { EventRepeat } from "@/lib/announcements/recurrence";
+import {
+  DEFAULT_CUSTOM_EVENT_REPEAT,
+  eventRepeatStartDate,
+  type EventRepeat,
+} from "@/lib/announcements/recurrence";
+import { resolveScheduleTimeZone } from "@/lib/announcements/facebook-schedule";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -34,6 +39,7 @@ type CreateEventDialogProps = {
   onOpenChange: (open: boolean) => void;
   /** Day the calendar is focused on; used to prefill the date. */
   defaultDate: Date;
+  timeZone: string | null;
   attendanceCampuses: EventAttendanceCampus[];
   attendancePolicy: AttendanceSetupPolicy;
   onCreated: (event: CalendarEventPreview, attendance?: EventAttendanceSettings | null) => void;
@@ -51,12 +57,14 @@ export function CreateEventDialog({
   open,
   onOpenChange,
   defaultDate,
+  timeZone,
   attendanceCampuses,
   attendancePolicy,
   onCreated,
 }: CreateEventDialogProps) {
   const [repeat, setRepeat] = useState<EventRepeat>("none");
   const [repeatUntil, setRepeatUntil] = useState("");
+  const [customRepeat, setCustomRepeat] = useState(DEFAULT_CUSTOM_EVENT_REPEAT);
   const [title, setTitle] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
@@ -68,12 +76,17 @@ export function CreateEventDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
+  const startIso = fromDatetimeLocalValue(startAt);
+  const repeatStartDate = startIso
+    ? eventRepeatStartDate(startIso, resolveScheduleTimeZone(timeZone))
+    : "";
 
   useEffect(() => {
     if (open) {
       setTitle("");
       setRepeat("none");
       setRepeatUntil("");
+      setCustomRepeat(DEFAULT_CUSTOM_EVENT_REPEAT);
       setStartAt(datetimeLocalAt(defaultDate, 9));
       setEndAt(datetimeLocalAt(defaultDate, 10));
       setLocation("");
@@ -98,7 +111,6 @@ export function CreateEventDialog({
       setError("Give the event a title.");
       return;
     }
-    const startIso = fromDatetimeLocalValue(startAt);
     if (!startIso) {
       setError("Choose a start date and time.");
       return;
@@ -122,6 +134,7 @@ export function CreateEventDialog({
           title: trimmedTitle,
           repeat,
           repeatUntil,
+          customRepeat: repeat === "custom" ? customRepeat : undefined,
           location: location.trim() || undefined,
           startAt: startIso,
           endAt: endIso,
@@ -157,7 +170,7 @@ export function CreateEventDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(92vh,760px)] max-w-lg overflow-y-auto">
+      <DialogContent className="max-h-[min(calc(100dvh-2rem),760px)] max-w-lg">
         <DialogHeader>
           <DialogTitle>New calendar event</DialogTitle>
           <DialogDescription>
@@ -166,89 +179,99 @@ export function CreateEventDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 px-6 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="event-title">Event title</Label>
-            <Input
-              id="event-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Sunday Worship Service"
-              autoFocus
-              required
-            />
-          </div>
-
-          {/* `min-w-0` on each cell: a `datetime-local` control reports a wide
-              intrinsic size, and without it the two columns push past the
-              dialog and sit on top of each other. */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="min-w-0 space-y-2">
-              <Label htmlFor="event-start">Starts</Label>
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-auto flex-col">
+          <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto px-6 py-5 [&>*]:shrink-0">
+            <div className="space-y-2">
+              <Label htmlFor="event-title">Event title</Label>
               <Input
-                id="event-start"
-                type="datetime-local"
-                value={startAt}
-                onChange={(e) => setStartAt(e.target.value)}
+                id="event-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Sunday Worship Service"
+                autoFocus
                 required
-                className="min-w-0 tabular-nums"
               />
             </div>
-            <div className="min-w-0 space-y-2">
-              <Label htmlFor="event-end">Ends</Label>
-              <Input
-                id="event-end"
-                type="datetime-local"
-                value={endAt}
-                onChange={(e) => setEndAt(e.target.value)}
-                className="min-w-0 tabular-nums"
+
+            {/* `min-w-0` on each cell: a `datetime-local` control reports a wide
+                intrinsic size, and without it the two columns push past the
+                dialog and sit on top of each other. */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="min-w-0 space-y-2">
+                <Label htmlFor="event-start">Starts</Label>
+                <Input
+                  id="event-start"
+                  type="datetime-local"
+                  value={startAt}
+                  onChange={(e) => setStartAt(e.target.value)}
+                  required
+                  className="min-w-0 tabular-nums"
+                />
+              </div>
+              <div className="min-w-0 space-y-2">
+                <Label htmlFor="event-end">Ends</Label>
+                <Input
+                  id="event-end"
+                  type="datetime-local"
+                  value={endAt}
+                  onChange={(e) => setEndAt(e.target.value)}
+                  className="min-w-0 tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="event-location">Location</Label>
+              <EventLocationField id="event-location" value={location} onChange={setLocation} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="event-description">Description</Label>
+              <Textarea
+                id="event-description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Optional details saved to the calendar event."
               />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="event-location">Location</Label>
-            <EventLocationField id="event-location" value={location} onChange={setLocation} />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="event-description">Description</Label>
-            <Textarea
-              id="event-description"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Optional details saved to the calendar event."
+            <EventRepeatFields
+              id="new-event"
+              repeat={repeat}
+              until={repeatUntil}
+              custom={customRepeat}
+              startDate={repeatStartDate}
+              onRepeat={setRepeat}
+              onUntil={setRepeatUntil}
+              onCustom={setCustomRepeat}
             />
+
+            <EventAttendanceFields
+              value={attendance}
+              onChange={setAttendance}
+              campuses={attendanceCampuses}
+              policy={attendancePolicy}
+              disabled={submitting}
+            />
+
+            {error && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {error}
+                {needsReconnect && (
+                  <>
+                    {" "}
+                    <Link
+                      href="/dashboard/settings?tab=accounts"
+                      className="font-semibold underline underline-offset-2"
+                    >
+                      Reconnect it in Settings
+                    </Link>
+                  </>
+                )}
+              </p>
+            )}
           </div>
-
-          <EventRepeatFields id="new-event" repeat={repeat} until={repeatUntil} onRepeat={setRepeat} onUntil={setRepeatUntil} />
-
-          <EventAttendanceFields
-            value={attendance}
-            onChange={setAttendance}
-            campuses={attendanceCampuses}
-            policy={attendancePolicy}
-            disabled={submitting}
-          />
-
-          {error && (
-            <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {error}
-              {needsReconnect && (
-                <>
-                  {" "}
-                  <Link
-                    href="/dashboard/settings?tab=accounts"
-                    className="font-semibold underline underline-offset-2"
-                  >
-                    Reconnect it in Settings
-                  </Link>
-                </>
-              )}
-            </p>
-          )}
-
-          <DialogFooter className="-mx-6 -mb-5 mt-1">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"

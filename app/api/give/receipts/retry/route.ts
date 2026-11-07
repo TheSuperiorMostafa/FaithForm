@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { compareSecret } from "@/lib/security/compare-secret";
+import { reconcileDonationFees } from "@/lib/stripe/gift-fees";
 import { retryPendingDonationReceipts } from "@/lib/stripe/receipt-delivery";
 
 export async function GET(request: Request) {
@@ -10,6 +11,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await retryPendingDonationReceipts();
-  return NextResponse.json({ ok: true, ...result });
+  const [receipts, fees] = await Promise.allSettled([
+    retryPendingDonationReceipts(),
+    reconcileDonationFees(),
+  ]);
+  if (receipts.status === "rejected" || fees.status === "rejected") {
+    console.error("[giving] scheduled receipt or fee check failed");
+    return NextResponse.json({ error: "Giving maintenance failed" }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true, ...receipts.value, ...fees.value });
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { MAX_RECORDING_UPLOAD_BYTES, recordingUploadPath, validateRecordingUpload } from "@/lib/stream/recording-upload";
+import { describeRecordingUploadError, MAX_RECORDING_UPLOAD_BYTES, recordingUploadPath, validateRecordingUpload } from "@/lib/stream/recording-upload";
 
 const valid = { title: "Sunday service", filename: "sunday.mp4", size: 1024 };
 test("recording uploads require a named MP4 with a finite bounded size", () => {
@@ -10,6 +10,15 @@ test("recording uploads require a named MP4 with a finite bounded size", () => {
   for (const patch of [{ title: " " }, { title: "x".repeat(121) }, { filename: "bad.html" }, { filename: "video.mp4.html" }, { size: 0 }, { size: NaN }, { size: Infinity }, { size: 0.5 }, { size: MAX_RECORDING_UPLOAD_BYTES + 1 }]) {
     assert.ok(validateRecordingUpload({ ...valid, ...patch }), JSON.stringify(patch));
   }
+});
+
+test("oversized recordings are refused before transfer and storage rejections explain the limit", () => {
+  assert.equal(validateRecordingUpload({ ...valid, size: MAX_RECORDING_UPLOAD_BYTES }), null);
+  assert.equal(validateRecordingUpload({ ...valid, size: 107_021_468 }), null);
+  assert.match(validateRecordingUpload({ ...valid, size: MAX_RECORDING_UPLOAD_BYTES + 1 }) ?? "", /up to 5 GB/);
+  assert.match(describeRecordingUploadError({ status: 400, statusCode: "EntityTooLarge" }), /storage limit/);
+  assert.match(describeRecordingUploadError({ status: 413 }), /storage limit/);
+  assert.match(describeRecordingUploadError({ status: 503 }), /connection/);
 });
 
 test("the upload object identity is derived from the authorized church and recording", () => {

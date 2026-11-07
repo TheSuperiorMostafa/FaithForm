@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { prepareRecordingUpload, finishRecordingUpload, cancelRecordingUpload } from "@/app/dashboard/live-streaming/upload-actions";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
-import { validateRecordingUpload } from "@/lib/stream/recording-upload";
+import { describeRecordingUploadError, MIN_RECORDING_OPTIMIZE_BYTES, validateRecordingUpload } from "@/lib/stream/recording-upload";
 
 export function UploadRecording() {
   const router = useRouter();
@@ -20,6 +20,8 @@ export function UploadRecording() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [stage, setStage] = useState("");
+  const [optimizing, setOptimizing] = useState(false);
+  const optimizationRef = useRef<AbortController | null>(null);
   const [pending, startTransition] = useTransition();
   // Keep the completed upload for a finalize retry: never send gigabytes twice.
   const [uploadedId, setUploadedId] = useState<string | null>(null);
@@ -31,18 +33,52 @@ export function UploadRecording() {
     setError(null);
     startTransition(async () => {
       let id = uploadedId;
+      let releaseVideo: (() => Promise<void>) | undefined;
       try {
         if (!id) {
           setStage("Starting upload…");
-          const durationSec = await videoDuration(file);
-          const prepared = await prepareRecordingUpload({ title, filename: file.name, size: file.size, durationSec });
+          const durationSec = await videoDuration(file).catch(() => null);
+          if (durationSec === null) {
+            setError("We couldn't read this video. Export it as an MP4 with H.264 video and AAC audio, then try again.");
+            return;
+          }
+          let video: Blob = file;
+          if (file.size >= MIN_RECORDING_OPTIMIZE_BYTES && typeof VideoEncoder !== "undefined") {
+            const controller = new AbortController();
+            optimizationRef.current = controller;
+            setOptimizing(true);
+            setStage("Optimizing video…");
+            try {
+              const { optimizeRecording } = await import("@/lib/stream/optimize-recording");
+              const optimized = await optimizeRecording(file, durationSec, controller.signal, (fraction) => {
+                setStage(`Optimizing video… ${Math.floor(fraction * 100)}%`);
+              });
+              if (optimized) {
+                video = optimized.file;
+                releaseVideo = optimized.release;
+              }
+            } catch {
+              // Compression is optional. A device or module loading failure
+              // still allows the original recording to be uploaded.
+            } finally {
+              optimizationRef.current = null;
+              setOptimizing(false);
+            }
+          }
+          setStage("Starting upload…");
+          const prepared = await prepareRecordingUpload({ title, filename: file.name, size: video.size, durationSec });
           if (!prepared.ok) { setError(prepared.error); return; }
           id = prepared.recordingId;
           setStage("Uploading video. Keep this window open…");
-          const result = await createClient().storage.from(STREAM_RECORDINGS_BUCKET).uploadToSignedUrl(prepared.path, prepared.token, file, { contentType: "video/mp4", upsert: false });
+          if (video.type !== "video/mp4") video = video.slice(0, video.size, "video/mp4");
+          const result = await createClient().storage.from(STREAM_RECORDINGS_BUCKET)
+            .uploadToSignedUrl(prepared.path, prepared.token, video, { upsert: false });
           if (result.error) {
             await cancelRecordingUpload(id);
-            setError("The video couldn't be uploaded. Check your connection and try again. If it keeps happening, contact FaithForm support.");
+            const { error } = result;
+            setError(describeRecordingUploadError(
+              "statusCode" in error ? { status: error.status, statusCode: error.statusCode } : {},
+            ));
             return;
           }
           setUploadedId(id);
@@ -56,22 +92,40 @@ export function UploadRecording() {
         router.refresh();
       } catch {
         setError("We couldn't finish the upload. Please try again.");
-      } finally { setStage(""); }
+      } finally {
+        await releaseVideo?.();
+        setStage("");
+      }
     });
   }
 
   return <>
-    <div className="flex justify-end">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <p className="text-[15px] text-muted-foreground">Streamed services and videos you upload.</p>
       <Button onClick={() => { setTitle(""); setFile(null); setError(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
     </div>
     <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
       <DialogContent aria-labelledby="upload-recording-title" onRequestClose={() => !pending}>
-        <DialogHeader><DialogTitle id="upload-recording-title">Upload recording</DialogTitle><DialogDescription>Add an MP4 video, then review it before sharing with your church. Use H.264 video and AAC audio for phone playback. Maximum 5 GB; your church&apos;s upload limit may be lower.</DialogDescription></DialogHeader>
+        <DialogHeader>
+          <DialogTitle id="upload-recording-title">Upload recording</DialogTitle>
+        </DialogHeader>
         <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col">
           <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
             <div className="space-y-2"><Label htmlFor="recording-upload-title">Recording title</Label><Input id="recording-upload-title" required maxLength={120} value={title} disabled={pending || Boolean(uploadedId)} onChange={(event) => setTitle(event.target.value)} /></div>
             <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); }} /></div>
-            {pending ? <p role="status" className="text-sm text-muted-foreground">{stage}</p> : null}
+            {pending && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p role="status" className="text-sm text-muted-foreground">{stage}</p>
+                {optimizing && (
+                  <Button type="button" variant="outline" onClick={() => {
+                    optimizationRef.current?.abort();
+                    setOptimizing(false);
+                  }}>
+                    Use original video
+                  </Button>
+                )}
+              </div>
+            )}
             {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           </div>
           <DialogFooter><Button variant="outline" type="button" disabled={pending} onClick={() => setOpen(false)}>Close</Button><Button type="submit" disabled={pending}>{pending ? "Uploading…" : uploadedId ? "Finish upload" : "Upload video"}</Button></DialogFooter>

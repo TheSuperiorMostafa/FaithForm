@@ -58,14 +58,12 @@
 	<string>FaithForm checks you in when you arrive at your church, even if the app is closed. It only ever looks at whether you are near a place your church set up, and never where else you go.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>FaithForm uses your location to show churches near you and, if you turn on automatic check-in, to notice when you arrive for a service. It never keeps a record of where you have been.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>FaithForm saves a photo from a group chat to your library when you choose Save Image.</string>
-	<!-- App Store validation checks APIs linked by StreamChat even when our
-	     system pickers and disabled voice composer do not request access. -->
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>FaithForm uses photo library access to let you choose photos and videos to share in chat or a photo for your profile.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FaithForm uses your microphone only when you choose to record a voice message in chat.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>FaithForm saves a photo from a group chat to your library when you choose Save Image.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>FaithForm uses photo library access to let you choose photos and videos to share in chat or a photo for your profile.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -1,4 +1,5 @@
 import { eventRecurrenceRule } from "@/lib/announcements/recurrence";
+import { resolveScheduleTimeZone } from "@/lib/announcements/facebook-schedule";
 import { NextResponse } from "next/server";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -36,6 +37,7 @@ type CreateEventBody = {
   attendance?: Record<string, unknown>;
   repeat?: unknown;
   repeatUntil?: unknown;
+  customRepeat?: unknown;
 };
 
 function isValidIso(value: string | null | undefined): value is string {
@@ -194,8 +196,9 @@ export async function POST(request: Request) {
   }
 
   let recurrence: string | null;
+  const timeZone = resolveScheduleTimeZone(auth.churchTimezone);
   try {
-    recurrence = eventRecurrenceRule(body.repeat, body.repeatUntil, startAt, auth.churchTimezone);
+    recurrence = eventRecurrenceRule(body.repeat, body.repeatUntil, startAt, timeZone, body.customRepeat);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Check the repeat dates." }, { status: 400 });
   }
@@ -203,7 +206,7 @@ export async function POST(request: Request) {
   try {
     const event = await insertChurchCalendarEvent(
       auth.churchId,
-      { title, location, startAt, endAt, description, recurrence: recurrence ? [recurrence] : undefined, timeZone: auth.churchTimezone || "America/New_York" },
+      { title, location, startAt, endAt, description, recurrence: recurrence ? [recurrence] : undefined, timeZone },
       supabase,
     );
     let attendance = null;

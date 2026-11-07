@@ -8,6 +8,7 @@ import {
   syncChurchFromStripeAccount,
 } from "@/lib/stripe/connect";
 import { getStripe } from "@/lib/stripe/client";
+import { stripeChargeFees } from "@/lib/stripe/gift-fees";
 import {
   fetchInvoicePaymentIntentId,
   invoicePaymentIntentId,
@@ -62,30 +63,6 @@ async function resolveDonorId(params: {
     name: params.donorName ?? "",
   });
   return donorId;
-}
-
-async function fetchChargeFees(
-  chargeId: string,
-  connectedAccount?: string,
-): Promise<{ stripeFeeCents: number | null; netAmountCents: number | null }> {
-  try {
-    const stripe = getStripe();
-    const charge = await stripe.charges.retrieve(
-      chargeId,
-      { expand: ["balance_transaction"] },
-      connectedAccount ? { stripeAccount: connectedAccount } : undefined,
-    );
-    const bt = charge.balance_transaction;
-    if (typeof bt === "object" && bt !== null) {
-      return {
-        stripeFeeCents: bt.fee,
-        netAmountCents: bt.net,
-      };
-    }
-  } catch {
-    /* ignore */
-  }
-  return { stripeFeeCents: null, netAmountCents: null };
 }
 
 /** Columns an update leaves alone rather than clear; see `upsertDonation`. */
@@ -189,6 +166,7 @@ async function upsertDonation(params: {
   for (const key of NEVER_CLEARED_ON_UPDATE) {
     if (updateRow[key] === null) delete updateRow[key];
   }
+  if (params.feeCovered === undefined) delete updateRow.fee_covered;
   if (params.giftType === "one_time" && !params.stripeInvoiceId && !params.stripeSubscriptionId) {
     delete updateRow.gift_type;
   }
@@ -389,6 +367,12 @@ function metaFundId(meta: Stripe.Metadata | null | undefined): string | null {
   return meta?.fund_id || null;
 }
 
+function parseFeeCoverage(meta: Stripe.Metadata | null | undefined): boolean | undefined {
+  if (meta?.cover_fees === "true") return true;
+  if (meta?.cover_fees === "false") return false;
+  return undefined;
+}
+
 function parseIntendedCents(meta: Stripe.Metadata | null | undefined): number | null {
   const raw = meta?.intended_amount_cents;
   if (!raw) return null;
@@ -433,18 +417,21 @@ async function handlePaymentIntent(
   const donorEmail = pi.receipt_email ?? pi.metadata?.donor_email ?? null;
   const donorName = pi.metadata?.donor_name || null;
 
-  let stripeFeeCents: number | null = null;
-  let netAmountCents: number | null = null;
-  let chargeId: string | null = null;
-
-  if (status === "succeeded" && pi.latest_charge) {
-    chargeId =
-      typeof pi.latest_charge === "string"
-        ? pi.latest_charge
-        : pi.latest_charge.id;
-    const fees = await fetchChargeFees(chargeId, connectedAccount);
-    stripeFeeCents = fees.stripeFeeCents;
-    netAmountCents = fees.netAmountCents;
+  const chargeId = status === "succeeded" && pi.latest_charge
+    ? typeof pi.latest_charge === "string" ? pi.latest_charge : pi.latest_charge.id
+    : null;
+  let fees: ReturnType<typeof stripeChargeFees> = null;
+  if (chargeId && connectedAccount) {
+    try {
+      const charge = await getStripe().charges.retrieve(
+        chargeId,
+        { expand: ["balance_transaction"] },
+        { stripeAccount: connectedAccount },
+      );
+      fees = stripeChargeFees(charge, pi.currency, pi.amount);
+    } catch {
+      // The scheduled sweep retries fees independently of payment confirmation.
+    }
   }
 
   const donationId = await upsertDonation({
@@ -460,10 +447,10 @@ async function handlePaymentIntent(
     fundDesignation: pi.metadata?.fund_name || pi.metadata?.fund_designation || null,
     fundId: metaFundId(pi.metadata),
     donorId: pi.metadata?.donor_id || null,
-    intendedAmountCents: receiptAmountCents(pi.metadata, pi.amount),
-    feeCovered: pi.metadata?.cover_fees === "true",
-    stripeFeeCents,
-    netAmountCents,
+    intendedAmountCents: pi.metadata?.intended_amount_cents ? receiptAmountCents(pi.metadata, pi.amount) : null,
+    feeCovered: parseFeeCoverage(pi.metadata),
+    stripeFeeCents: fees?.stripe_fee_cents,
+    netAmountCents: fees?.net_amount_cents,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 
@@ -654,7 +641,12 @@ async function handleInvoice(
   let fundId: string | null = null;
   let fundDesignation: string | null = null;
   let donorId: string | null = null;
-  let intendedAmountCents: number | null = null;
+  const invoiceSubscriptionMeta = invoice.parent?.subscription_details?.metadata ??
+    (invoice as Stripe.Invoice & { subscription_details?: { metadata?: Stripe.Metadata | null } }).subscription_details?.metadata;
+  let feeCovered = parseFeeCoverage(invoiceSubscriptionMeta);
+  let intendedAmountCents = invoiceSubscriptionMeta?.intended_amount_cents
+    ? receiptAmountCents(invoiceSubscriptionMeta, invoice.amount_paid || invoice.amount_due)
+    : null;
 
   if (subId && connectedAccount) {
     try {
@@ -670,7 +662,8 @@ async function handleInvoice(
       fundDesignation =
         sub.metadata?.fund_name || sub.metadata?.fund_designation || null;
       donorId = sub.metadata?.donor_id ?? null;
-      intendedAmountCents = receiptAmountCents(
+      feeCovered ??= parseFeeCoverage(sub.metadata);
+      intendedAmountCents ??= receiptAmountCents(
         sub.metadata,
         invoice.amount_paid || invoice.amount_due,
       );
@@ -709,6 +702,7 @@ async function handleInvoice(
     fundDesignation,
     donorId,
     intendedAmountCents,
+    feeCovered,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 

@@ -8,6 +8,7 @@ import { logActivity } from "@/lib/activity/log";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
 import {
   checkFacebookScheduleTime,
+  resolveScheduleTimeZone,
   suggestFacebookSchedule,
 } from "@/lib/announcements/facebook-schedule";
 import {
@@ -15,6 +16,7 @@ import {
   removeFromEmailQueue,
 } from "@/lib/announcements/email-queue";
 import { toZonedInputValue } from "@/lib/announcements/facebook-schedule";
+import { buildEventRecurrence } from "@/lib/announcements/recurrence";
 import { createRecurringOccurrences } from "@/lib/announcements/recurring-events";
 import { facebookPostUrl } from "@/lib/announcements/published-channels";
 import {
@@ -209,15 +211,15 @@ function parsePublishForm(formData: FormData) {
   const originalStartAt = String(formData.get("original_start_at") ?? "").trim();
   const originalEndAt = String(formData.get("original_end_at") ?? "").trim();
 
-  // Recurring event fields (E4)
-  const repeatRaw = String(formData.get("repeat") ?? "none").trim();
-  const repeat = (["none", "daily", "weekly", "monthly"] as const).includes(repeatRaw as never)
-    ? (repeatRaw as "none" | "daily" | "weekly" | "monthly")
-    : "none";
-  const repeatUntil = repeat === "none" ? null : String(formData.get("repeat_until") ?? "").trim();
-  if (repeat !== "none" && (!repeatUntil || !/^\d{4}-\d{2}-\d{2}$/.test(repeatUntil) ||
-      Number.isNaN(Date.parse(repeatUntil)) || new Date(repeatUntil).toISOString().slice(0, 10) !== repeatUntil)) {
-    return { ok: false as const, error: "Choose a valid date to stop repeating." };
+  const repeat = String(formData.get("repeat") ?? "none").trim();
+  const repeatUntil = String(formData.get("repeat_until") ?? "").trim();
+  let customRepeat: unknown;
+  if (repeat === "custom") {
+    try {
+      customRepeat = JSON.parse(String(formData.get("custom_repeat") ?? ""));
+    } catch {
+      return { ok: false as const, error: "Choose how often this event repeats." };
+    }
   }
 
   if (!title) return { ok: false as const, error: "Give the announcement a title." };
@@ -277,6 +279,7 @@ function parsePublishForm(formData: FormData) {
       posterAltText,
       repeat,
       repeatUntil,
+      customRepeat,
     },
   };
 }
@@ -414,6 +417,28 @@ export async function publishAnnouncement(
   }
 
   const { payload } = parsed;
+  let recurrence: ReturnType<typeof buildEventRecurrence> = null;
+  let recurrenceTimeZone: string | undefined;
+  if (payload.repeat !== "none") {
+    if (payload.undated) {
+      return { ok: false, errors: ["Choose the first date for this repeating event."] };
+    }
+    recurrenceTimeZone = resolveScheduleTimeZone(await getChurchTimezone(ctx.supabase, ctx.churchId));
+    try {
+      recurrence = buildEventRecurrence(
+        payload.repeat,
+        payload.repeatUntil,
+        payload.startAt,
+        payload.allDay ? "UTC" : recurrenceTimeZone,
+        payload.customRepeat,
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        errors: [error instanceof Error ? error.message : "Check the repeat dates."],
+      };
+    }
+  }
   // With the Member App switched off nothing new goes to the app. Something
   // already there keeps updating: people already connected keep its content.
   if (
@@ -471,11 +496,10 @@ export async function publishAnnouncement(
     published_at: new Date().toISOString(),
     published_by: ctx.user.id,
     last_publish_error: null,
-    // Recurring event fields (E4)
-    ...(!payload.announcementId || payload.repeatUntil ? {
-      is_recurring: payload.repeat !== "none" && Boolean(payload.repeatUntil),
-      recurrence_rule: payload.repeatUntil ? `FREQ=${payload.repeat.toUpperCase()};UNTIL=${payload.repeatUntil}` : null,
-      recurrence_until: payload.repeatUntil,
+    ...(!payload.announcementId || recurrence ? {
+      is_recurring: Boolean(recurrence),
+      recurrence_rule: recurrence?.rule.slice("RRULE:".length) ?? null,
+      recurrence_until: recurrence?.untilDate ?? null,
     } : {}),
     ...socialFields,
   };
@@ -594,10 +618,9 @@ export async function publishAnnouncement(
 
   announcementId = saved.id;
 
-  // Generate recurring occurrences if this is a recurring event (E4)
-  if (payload.repeat !== "none" && payload.repeatUntil) {
+  if (recurrence && recurrenceTimeZone) {
     try {
-      const timeZone = await getChurchTimezone(ctx.supabase, ctx.churchId);
+      const timeZone = recurrenceTimeZone;
       const localStart = payload.allDay
         ? new Date(payload.startAt).toISOString().slice(0, 10)
         : toZonedInputValue(Date.parse(payload.startAt), timeZone);
@@ -608,8 +631,10 @@ export async function publishAnnouncement(
           startDate: localStart.slice(0, 10),
           startTime: payload.allDay ? null : localStart.slice(11, 16),
           endTime: payload.allDay || !payload.endAt ? null : toZonedInputValue(Date.parse(payload.endAt), timeZone).slice(11, 16),
-          frequency: payload.repeat,
-          untilDate: payload.repeatUntil,
+          frequency: recurrence.frequency,
+          interval: recurrence.interval,
+          weekdays: recurrence.weekdays,
+          untilDate: recurrence.untilDate,
           timezone: timeZone,
           allDay: payload.allDay,
         },
@@ -618,7 +643,7 @@ export async function publishAnnouncement(
       if (result.error) throw new Error(result.error);
     } catch (error) {
       console.error("Failed to generate recurring occurrences:", error);
-      // Don't fail the whole publish if occurrence generation fails
+      errors.push("The announcement was saved, but we couldn't create its repeat dates. Contact FaithForm support.");
     }
   }
 

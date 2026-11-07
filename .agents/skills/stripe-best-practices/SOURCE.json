@@ -1,0 +1,8 @@
+{
+  "repo": "stripe/ai",
+  "path": "providers/claude/plugin/skills/stripe-best-practices",
+  "commit": "9a33771f666e59c21cd71a3d043459464a42f9e3",
+  "folder": "stripe-best-practices",
+  "upstream_skill_sha256": "63f3389c75ad7606bdf27fe4625ef8043a618001d6cd6e19623ada55a4e4d5c7",
+  "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+}

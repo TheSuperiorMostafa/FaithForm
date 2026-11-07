@@ -268,7 +268,7 @@ struct GroupPanelView<Content: View>: View {
     init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(title).font(.headline)
+            Text(title).font(.headline).foregroundStyle(theme.palette.contentPrimary)
             content
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))

@@ -808,6 +808,7 @@ export function MonthCalendar({
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultDate={selectedDay}
+        timeZone={timeZone}
         attendanceCampuses={attendanceCampuses}
         attendancePolicy={attendancePolicy}
         onCreated={handleEventCreated}

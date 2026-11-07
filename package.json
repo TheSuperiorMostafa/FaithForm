@@ -108,6 +108,7 @@
     "imapflow": "^2.0.5",
     "jszip": "^3.10.1",
     "lucide-react": "^1.16.0",
+    "mediabunny": "1.56.1",
     "next": "15.5.28",
     "pptxgenjs": "^3.12.0",
     "qrcode": "^1.5.4",
@@ -151,7 +152,8 @@
       "follow-redirects": "1.16.2"
     },
     "patchedDependencies": {
-      "image-size@1.2.1": "patches/image-size@1.2.1.patch"
+      "image-size@1.2.1": "patches/image-size@1.2.1.patch",
+      "mediabunny@1.56.1": "patches/mediabunny@1.56.1.patch"
     }
   }
 }

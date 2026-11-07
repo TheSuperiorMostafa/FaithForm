@@ -1,0 +1,147 @@
+{
+  "review_date": "2026-10-02",
+  "canonical_directory": ".agents/skills",
+  "claude_directory": ".claude/skills",
+  "skills": [
+    {
+      "name": "android-permissions-security",
+      "skill_sha256": "b0f980e3ef41a8b5ff410d19ed457d6fa1b5ecf64e76fdc7de977e74fd8149fe",
+      "source": {
+        "repo": "android/skills",
+        "path": "security/android-permissions-security",
+        "commit": "42dc2270e96032bd860bb94511e440aa00a43125",
+        "upstream_skill_sha256": "693d43a8d0244d3dd4f548cb8c9d8e941b5acb81205c147506a26e2701ab1f5d",
+        "local_adaptation": "Narrow task router; preserve current SDK and project scope."
+      }
+    },
+    {
+      "name": "edge-to-edge",
+      "skill_sha256": "c7e46636069a54ed101d263dfda5b167ff65e535963411141b438b82ae3cfdea",
+      "source": {
+        "repo": "android/skills",
+        "path": "system/edge-to-edge",
+        "commit": "42dc2270e96032bd860bb94511e440aa00a43125",
+        "upstream_skill_sha256": "4ca04cb6a5330b96e51410bc815f878b4ca642fba46fe5e1ad724c94e04d6eb8",
+        "local_adaptation": "Narrow task router; preserve current SDK and project scope."
+      }
+    },
+    {
+      "name": "faithform-attendance",
+      "skill_sha256": "44854d0ee470ac3254a733f25ddc22ce54bbe42d5244aea1bca8cf30b261971e",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-church-privacy",
+      "skill_sha256": "0bd56bcc7cb161e73a38cd989537a5e99912f1c3f4c9dc16f9ab96e8d146be6f",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-dashboard-ui",
+      "skill_sha256": "3b27b9801b08a4bcc17827f4a222bfdff5ffd631910db43c9685d50702dcace9",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-giving-state",
+      "skill_sha256": "cba2dc003a85e245e38d7a39dda14fcf8bca409360bedab54f057eb69b185b97",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-migration-safety",
+      "skill_sha256": "51d04a64eaaffb5f5d8095701175174fbd213a85135f5b2d36e54841ac1984ac",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-mobile-parity",
+      "skill_sha256": "ac2e74cc863fe37dbbab17fb42ec3693fcb9e2612aeab07b7c8d3fc4291694ff",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "faithform-release-readiness",
+      "skill_sha256": "9d1dcfd954870615d18b454e6bd0f7bc8c54d0c13b35e69ec0aa92f51c8a1e64",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-10-02"
+      }
+    },
+    {
+      "name": "stripe-best-practices",
+      "skill_sha256": "2cbf7ce6ef646b15377a6a1c70f5907be641232f2abf0cc64c5aac8a20fe120f",
+      "source": {
+        "repo": "stripe/ai",
+        "path": "providers/claude/plugin/skills/stripe-best-practices",
+        "commit": "9a33771f666e59c21cd71a3d043459464a42f9e3",
+        "folder": "stripe-best-practices",
+        "upstream_skill_sha256": "63f3389c75ad7606bdf27fe4625ef8043a618001d6cd6e19623ada55a4e4d5c7",
+        "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+      }
+    },
+    {
+      "name": "supabase-postgres-best-practices",
+      "skill_sha256": "f9f1179370c3c029d27bb44ecae209322cdac619cf7554099b29884e8d796127",
+      "source": {
+        "repo": "supabase/agent-skills",
+        "path": "skills/supabase-postgres-best-practices",
+        "commit": "c9be0e931b7930f7d02126d04774d904c381e7d7",
+        "folder": "supabase-postgres-best-practices",
+        "upstream_skill_sha256": "ad65e776f45e761bafc609d3f506c77c1032225aa65e0c4c02f241b8071e5855",
+        "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+      }
+    },
+    {
+      "name": "swiftui-expert-skill",
+      "skill_sha256": "8b7ae5666e40a6d545519e9f011456a55edf0e5a83f08dcd88e2d00675ca92ad",
+      "source": {
+        "repo": "AvdLee/SwiftUI-Agent-Skill",
+        "path": "skills/swiftui-expert-skill",
+        "commit": "9897311e3e42cc77e87603226e74bea711092fbd",
+        "folder": "swiftui-expert-skill",
+        "upstream_skill_sha256": "3b794f9cb46efb016eafcad2fcedce7127c74d60c50a949619e0bcd2bc38351f",
+        "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+      }
+    },
+    {
+      "name": "vercel-react-best-practices",
+      "skill_sha256": "2e6608a62c9cfd39816fd74b940bb471ba626ba32a30fe5cb6a3765e1b5dff1b",
+      "source": {
+        "repo": "vercel-labs/agent-skills",
+        "path": "skills/react-best-practices",
+        "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+        "folder": "react-best-practices",
+        "upstream_skill_sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+        "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+      }
+    }
+  ],
+  "metrics": {
+    "before": {
+      "count": 0,
+      "name_description_characters": 0,
+      "approx_tokens_chars_div_4": 0,
+      "invalid_headers": []
+    },
+    "after": {
+      "count": 13,
+      "name_description_characters": 1879,
+      "approx_tokens_chars_div_4": 470,
+      "invalid_headers": []
+    }
+  }
+}

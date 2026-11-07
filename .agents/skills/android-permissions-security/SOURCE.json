@@ -1,0 +1,7 @@
+{
+  "repo": "android/skills",
+  "path": "security/android-permissions-security",
+  "commit": "42dc2270e96032bd860bb94511e440aa00a43125",
+  "upstream_skill_sha256": "693d43a8d0244d3dd4f548cb8c9d8e941b5acb81205c147506a26e2701ab1f5d",
+  "local_adaptation": "Narrow task router; preserve current SDK and project scope."
+}

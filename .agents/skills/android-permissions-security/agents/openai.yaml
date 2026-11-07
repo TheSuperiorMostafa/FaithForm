@@ -1,0 +1,3 @@
+interface:
+  display_name: "Android Permissions Security"
+  short_description: "Use for FaithForm Android runtime permission flows, exported com"

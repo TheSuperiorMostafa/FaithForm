@@ -1,0 +1,3 @@
+interface:
+  display_name: "Stripe Best Practices"
+  short_description: "Use for Stripe payment, subscription, Connect, or webhook design"

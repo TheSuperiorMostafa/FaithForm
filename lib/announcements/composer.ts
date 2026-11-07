@@ -105,7 +105,6 @@ export type PostOutcome = {
   facebookScheduledAt?: string;
   /** The church's zone, so a Facebook time reads on the church's clock. */
   timeZone?: string | null;
-  calendarAdded?: boolean;
   /** An announcement that was already posted and has been changed. */
   updated?: boolean;
 };
@@ -143,7 +142,6 @@ export function describePostOutcome(outcome: PostOutcome): string[] {
   } else if (outcome.facebookUrl) {
     lines.push("Posted on Facebook.");
   }
-  if (outcome.calendarAdded) lines.push("Added to your church calendar.");
 
   return lines;
 }

@@ -22,12 +22,14 @@ import SwiftUI
 /// Both families are SIL OFL 1.1. The licences ship beside them in `Resources/Fonts`.
 public enum FaithFormFonts {
     /// The PostScript names CoreText exposes after registration — not the file
-    /// names, which are only how they are stored.
+    /// names, which are only how they are stored. These static font instances
+    /// retain their source variable fonts' Thin/ExtraLight family prefixes in
+    /// their internal PostScript names, even for regular and bold instances.
     public enum Name {
-        public static let displaySemibold = "Montserrat-SemiBold"
-        public static let displayBold = "Montserrat-Bold"
-        public static let textRegular = "Nunito-Regular"
-        public static let textSemibold = "Nunito-SemiBold"
+        public static let displaySemibold = "MontserratThin-SemiBold"
+        public static let displayBold = "MontserratThin-Bold"
+        public static let textRegular = "NunitoExtraLight-Regular"
+        public static let textSemibold = "NunitoExtraLight-SemiBold"
     }
 
     private static let files = [
@@ -70,13 +72,16 @@ public enum FaithFormFonts {
 
         // Proof rather than assumption: ask CoreText whether the face actually
         // resolves before letting the theme depend on it.
-        #if canImport(UIKit)
-        return UIFont(name: Name.textRegular, size: 12) != nil
-        #else
-        return (CTFontCopyPostScriptName(
-            CTFontCreateWithName(Name.textRegular as CFString, 12, nil)
-        ) as String) == Name.textRegular
-        #endif
+        let names = [Name.displaySemibold, Name.displayBold, Name.textRegular, Name.textSemibold]
+        return names.allSatisfy { name in
+            #if canImport(UIKit)
+            return UIFont(name: name, size: 12) != nil
+            #else
+            return (CTFontCopyPostScriptName(
+                CTFontCreateWithName(name as CFString, 12, nil)
+            ) as String) == name
+            #endif
+        }
     }()
 
     /// Reads `isAvailable`, which is what triggers registration. Named for the

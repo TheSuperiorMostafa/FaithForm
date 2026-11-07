@@ -19,14 +19,12 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SectionHeader } from "@/components/ui/page-header";
-import { Select } from "@/components/ui/select";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import type { StreamEvent } from "@/lib/stream/events";
 import { formatServiceTime } from "@/lib/stream/format";
 import { churchServiceStartIso } from "@/lib/stream/schedule-time";
 import { serviceStatusLabel } from "@/lib/stream/user-errors";
 import { cn } from "@/lib/utils";
-import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 
 type ScheduleCardProps = {
   isAdmin: boolean;
@@ -90,8 +88,6 @@ export function ScheduleCard({
     const title = formData.get("title")?.toString().trim() || "The service";
 
     startTransition(async () => {
-      const imageError = await prepareServiceArtwork(formData);
-      if (imageError) { toast.error(imageError); return; }
       try {
         const result = await createScheduledStream(formData);
         if (!result.ok) {
@@ -156,7 +152,11 @@ export function ScheduleCard({
           <div className="flex items-start justify-between gap-3">
             <h3 className="font-heading text-xl font-bold">Schedule a service</h3>
           </div>
-          <ServiceDetailsFields series={series} disabled={pending} />
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="event-title">Title</Label>
+            <Input id="event-title" name="title" defaultValue="Sunday Service" required maxLength={120} />
+            <p className="text-[15px] text-muted-foreground">Next, add artwork, series and speaker in the service editor.</p>
+          </div>
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-starts">Date and start time</Label>
@@ -370,53 +370,4 @@ function CheckRow({
       </span>
     </label>
   );
-}
-
-/** The same saved details are used by the service's recording. */
-function ServiceDetailsFields({ series, event, disabled }: {
-  series: { id: string; name: string }[];
-  event?: StreamEvent;
-  disabled: boolean;
-}) {
-  const [seriesId, setSeriesId] = useState(event?.seriesId ?? "");
-  return (
-    <fieldset disabled={disabled} className="flex min-w-0 flex-col gap-5">
-      <legend className="sr-only">Service details</legend>
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="event-title">Title</Label>
-          <Input id="event-title" name="title" defaultValue={event?.title ?? "Sunday Service"} required maxLength={120} />
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="event-series">Series (optional)</Label>
-          <Select id="event-series" name="series_id" value={seriesId} onChange={event => setSeriesId(event.target.value)}>
-            <option value="">No series</option>
-            {series.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            <option value="__new__">New series…</option>
-          </Select>
-          {seriesId === "__new__" ? <Input name="new_series_name" aria-label="New series name" placeholder="Series name" required maxLength={120} /> : null}
-        </div>
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="event-artwork">Artwork (optional)</Label>
-        {event?.artworkUrl ? <Image src={event.artworkUrl} alt="Current service artwork" width={240} height={135} unoptimized className="h-auto max-h-40 w-fit max-w-full rounded-xl object-contain" /> : null}
-        <Input id="event-artwork" name="artwork" type="file" accept="image/jpeg,image/png,image/webp" className="h-auto py-2" />
-        <p className="text-[15px] text-muted-foreground">Choose a JPG, PNG or WebP. Leave this empty to keep the current artwork or use the series artwork.</p>
-        {event?.artworkUrl ? <CheckRow name="remove_artwork" label="Remove current artwork (use series artwork if available)" /> : null}
-      </div>
-    </fieldset>
-  );
-}
-
-async function prepareServiceArtwork(form: FormData): Promise<string | null> {
-  const file = form.get("artwork");
-  if (!(file instanceof File) || file.size === 0) return null;
-  try {
-    const ready = await downscaleForUpload(file);
-    if (ready.size > UPLOAD_BUDGET_BYTES) return "That photo is too large to upload. Save it as a JPG and try again.";
-    form.set("artwork", ready);
-    return null;
-  } catch {
-    return "That photo couldn't be opened. Choose a JPG, PNG or WebP and try again.";
-  }
 }

@@ -1,0 +1,46 @@
+diff --git a/dist/modules/src/conversion.d.ts b/dist/modules/src/conversion.d.ts
+index 635f23177a0d6afa6137795ccb110f37ad325abe..220d366004700359f5112ef34e4246dbeaaeecc1 100644
+--- a/dist/modules/src/conversion.d.ts
++++ b/dist/modules/src/conversion.d.ts
+@@ -177,6 +177,8 @@ export type ConversionVideoOptions = {
+      * `'no-preference'`, the default.
+      */
+     hardwareAcceleration?: 'no-preference' | 'prefer-hardware' | 'prefer-software';
++    /** Optional full WebCodecs video codec string. */
++    fullCodecString?: string;
+     /** When `true`, video will always be re-encoded instead of directly copying over the encoded packets. */
+     forceTranscode?: boolean;
+     /**
+diff --git a/dist/modules/src/conversion.js b/dist/modules/src/conversion.js
+index 73513b57f47cf79e8ace326ae73c62ae4d81d208..648052d266b2fb8f5838744de268cf195df73c97 100644
+--- a/dist/modules/src/conversion.js
++++ b/dist/modules/src/conversion.js
+@@ -1068,6 +1068,7 @@ export class Conversion {
+                 sizeChangeBehavior: trackOptions.fit ?? 'passThrough',
+                 alpha,
+                 hardwareAcceleration: trackOptions.hardwareAcceleration,
++                fullCodecString: trackOptions.fullCodecString,
+                 transform: {},
+             };
+             assert(encodingConfig.transform);
+diff --git a/src/conversion.ts b/src/conversion.ts
+index fb28d9bf27f4305d1e5004869124386b7abf72e0..a7d4f905d8d8a5691fb2aa0c7925e64349a75b32 100644
+--- a/src/conversion.ts
++++ b/src/conversion.ts
+@@ -246,6 +246,8 @@ export type ConversionVideoOptions = {
+ 	 * `'no-preference'`, the default.
+ 	 */
+ 	hardwareAcceleration?: 'no-preference' | 'prefer-hardware' | 'prefer-software';
++	/** Optional full WebCodecs video codec string. */
++	fullCodecString?: string;
+ 	/** When `true`, video will always be re-encoded instead of directly copying over the encoded packets. */
+ 	forceTranscode?: boolean;
+ 	/**
+@@ -1691,6 +1693,7 @@ export class Conversion {
+ 				sizeChangeBehavior: trackOptions.fit ?? 'passThrough',
+ 				alpha,
+ 				hardwareAcceleration: trackOptions.hardwareAcceleration,
++				fullCodecString: trackOptions.fullCodecString,
+ 				transform: {},
+ 			};
+ 			assert(encodingConfig.transform);

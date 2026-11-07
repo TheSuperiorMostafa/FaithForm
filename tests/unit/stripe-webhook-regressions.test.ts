@@ -8,6 +8,8 @@ for (const [scenario, description] of [
   ["payment-projection-throw", "thrown payment projection errors retry and repair the mobile attempt"],
   ["unknown-church", "unknown connected accounts remain acknowledged without recording a gift"],
   ["mismatched-church", "mismatched church metadata remains acknowledged without recording a gift"],
+  ["legacy-invoice-fees", "the scheduled pass fills in fees for an old invoice on the church account"],
+  ["covered-renewal-fees", "a renewal keeps the covered fee and intended gift when its payment event arrives"],
   ["refund-order", "a refund before payment projection retries and later wins"],
   ["subscription-error", "subscription update failures remain retryable"],
   ["subscription-insert-race", "subscription insert-race update failures remain retryable"],

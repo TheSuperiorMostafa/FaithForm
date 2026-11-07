@@ -112,16 +112,19 @@ function TabsContent({
   value,
   className,
   children,
+  keepMounted = false,
 }: {
   value: string;
   className?: string;
   children: React.ReactNode;
+  keepMounted?: boolean;
 }) {
   const ctx = React.useContext(TabsContext);
-  if (!ctx || ctx.value !== value) return null;
+  if (!ctx || (!keepMounted && ctx.value !== value)) return null;
   return (
     <div
       role="tabpanel"
+      hidden={ctx.value !== value}
       id={`${ctx.baseId}-panel-${value}`}
       aria-labelledby={`${ctx.baseId}-tab-${value}`}
       tabIndex={0}

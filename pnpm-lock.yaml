@@ -17,6 +17,9 @@ patchedDependencies:
   image-size@1.2.1:
     hash: fiep3lqkkcrald6st2umnuhc5y
     path: patches/image-size@1.2.1.patch
+  mediabunny@1.56.1:
+    hash: exvwpcamrwdoh7kydsuglv57ya
+    path: patches/mediabunny@1.56.1.patch
 
 dependencies:
   '@ai-sdk/anthropic':
@@ -70,6 +73,9 @@ dependencies:
   lucide-react:
     specifier: ^1.16.0
     version: 1.16.0(react@19.2.8)
+  mediabunny:
+    specifier: 1.56.1
+    version: 1.56.1(patch_hash=exvwpcamrwdoh7kydsuglv57ya)
   next:
     specifier: 15.5.28
     version: 15.5.28(@types/node@20.19.41)(react-dom@19.2.8)(react@19.2.8)
@@ -1524,6 +1530,16 @@ packages:
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
     dependencies:
       '@types/ms': 2.1.0
+    dev: false
+
+  /@types/dom-mediacapture-transform@0.1.12:
+    resolution: {integrity: sha512-d7/QsLRwF864A5mgIM/YrfiglHoYn7zgCcAoJgW404r+2DwnNr7EBbLnCWpmOMgH8y0te73L1AV6H1bmauaWFw==}
+    dependencies:
+      '@types/dom-webcodecs': 0.1.13
+    dev: false
+
+  /@types/dom-webcodecs@0.1.13:
+    resolution: {integrity: sha512-O5hkiFIcjjszPIYyUSyvScyvrBoV3NOEEZx/pMlsu44TKzWNkLVBBxnxJz42in5n3QIolYOcBYFCPZZ0h8SkwQ==}
     dev: false
 
   /@types/estree-jsx@1.0.5:
@@ -4541,6 +4557,14 @@ packages:
   /media-engine@1.0.3:
     resolution: {integrity: sha512-aa5tG6sDoK+k70B9iEX1NeyfT8ObCKhNDs6lJVpwF6r8vhUfuKMslIcirq6HIUYuuUYLefcEQOn9bSBOvawtwg==}
     dev: false
+
+  /mediabunny@1.56.1(patch_hash=exvwpcamrwdoh7kydsuglv57ya):
+    resolution: {integrity: sha512-DNOm0bRBmeOxJgCK/g3LxNWbxY5morTauNdlychujGmJ9L37ezVezkNoI1WtO2Xdb4WlWWJlYfIKnOEzd5phRw==}
+    dependencies:
+      '@types/dom-mediacapture-transform': 0.1.12
+      '@types/dom-webcodecs': 0.1.13
+    dev: false
+    patched: true
 
   /memoize-one@5.2.1:
     resolution: {integrity: sha512-zYiwtZUcYyXKo/np96AGZAckk+FWWsUdJ3cHGGmld7+AhvcWmQyGCYUh1hc4Q/pkOhb65dQR/pqCyK0cOaHz4Q==}

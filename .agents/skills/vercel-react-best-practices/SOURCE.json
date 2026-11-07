@@ -1,0 +1,8 @@
+{
+  "repo": "vercel-labs/agent-skills",
+  "path": "skills/react-best-practices",
+  "commit": "063bee94c3f4df8453406c830b0a7df0f2860278",
+  "folder": "react-best-practices",
+  "upstream_skill_sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+  "local_adaptation": "Short topic router; installed-version and project-policy constraints override generic upstream defaults."
+}

@@ -2,6 +2,7 @@ package io.faithform.app.design
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -158,7 +159,12 @@ fun FaithFormTheme(
         )
     }
 
-    CompositionLocalProvider(LocalFaithFormTheme provides state) {
+    // Box/Column screens do not establish a Material Surface. Give their
+    // unstyled text and icons the current palette instead of default black.
+    CompositionLocalProvider(
+        LocalFaithFormTheme provides state,
+        LocalContentColor provides palette.contentPrimary,
+    ) {
         MaterialTheme(
             colorScheme = colors,
             typography = Typography(

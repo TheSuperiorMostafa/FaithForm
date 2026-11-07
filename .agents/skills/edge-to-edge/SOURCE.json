@@ -1,0 +1,7 @@
+{
+  "repo": "android/skills",
+  "path": "system/edge-to-edge",
+  "commit": "42dc2270e96032bd860bb94511e440aa00a43125",
+  "upstream_skill_sha256": "4ca04cb6a5330b96e51410bc815f878b4ca642fba46fe5e1ad724c94e04d6eb8",
+  "local_adaptation": "Narrow task router; preserve current SDK and project scope."
+}

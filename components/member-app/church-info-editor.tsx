@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 
 import { saveChurchAppInfo, uploadChurchAppImage } from "@/app/dashboard/app/actions";
+import type { ChurchEditorPage } from "@/components/member-app/church-app-settings";
 import { ChurchAppPreview, SOCIAL_STYLE } from "@/components/member-app/church-app-preview";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { Button } from "@/components/ui/button";
@@ -49,14 +50,14 @@ const LINK_SUGGESTIONS = [
   "Events",
 ];
 
-const SECTIONS = [
-  { id: "identity", label: "Look & name", icon: ImageIcon },
-  { id: "about", label: "About", icon: Type },
-  { id: "services", label: "Service times", icon: Clock },
-  { id: "contact", label: "Location & contact", icon: MapPin },
-  { id: "social", label: "Social", icon: Users },
-  { id: "links", label: "Links", icon: Link2 },
-] as const;
+const VISIT_FIELDS = ["about", "serviceTimes", "address", "city", "state", "zip", "phone", "email", "website", "mapsUrl"];
+
+function pageForField(field: string): ChurchEditorPage {
+  const group = field.split(".")[0];
+  if (VISIT_FIELDS.includes(group)) return "church-details";
+  if (group === "social" || group === "quickLinks") return "links-and-social";
+  return "appearance";
+}
 
 /** Where the same church details are also edited, so it reads as one set. */
 const SHARED_NOTE = "Also shown in Settings → Church info.";
@@ -76,10 +77,14 @@ export function ChurchInfoEditor({
   initial,
   context,
   canEdit,
+  page,
+  onPageChange,
 }: {
   initial: ChurchAppInfo;
   context: ChurchAppInfoContext;
   canEdit: boolean;
+  page: ChurchEditorPage;
+  onPageChange: (page: ChurchEditorPage) => void;
 }) {
   const [saved, setSaved] = useState(initial);
   const [form, setForm] = useState(initial);
@@ -107,16 +112,19 @@ export function ChurchInfoEditor({
       } else {
         setFieldError({ field: result.field, message: result.error });
         toast.error(result.error);
-        if (result.field) {
-          const target = formRef.current?.querySelector<HTMLElement>(
-            `[data-field="${CSS.escape(result.field)}"]`,
-          );
-          target?.scrollIntoView({ behavior: "smooth", block: "center" });
-          target?.focus();
-        }
+        if (result.field) onPageChange(pageForField(result.field));
       }
     });
-  }, [canEdit, pending, form]);
+  }, [canEdit, pending, form, onPageChange]);
+
+  // Wait for the tab with the invalid field to become visible before focusing it.
+  useEffect(() => {
+    if (pending || !fieldError?.field) return;
+    const target = formRef.current?.querySelector<HTMLElement>(
+      `[data-field="${CSS.escape(fieldError.field)}"]`,
+    );
+    target?.focus();
+  }, [fieldError, pending]);
 
   // ⌘S / Ctrl+S saves, like every other editor people already use.
   useEffect(() => {
@@ -175,24 +183,14 @@ export function ChurchInfoEditor({
     <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
       <form
         ref={formRef}
+        noValidate
         onSubmit={(event) => {
           event.preventDefault();
           save();
         }}
         className="flex min-w-0 flex-col gap-5"
       >
-        {/* Section jump bar + completeness */}
-        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card p-2">
-          {SECTIONS.map((section) => (
-            <a
-              key={section.id}
-              href={`#church-${section.id}`}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground"
-            >
-              <section.icon className="size-4" aria-hidden />
-              {section.label}
-            </a>
-          ))}
+        <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card px-3">
           <div className="ml-auto flex items-center gap-2 px-2" title="How complete your church page is">
             <div className="h-1.5 w-20 overflow-hidden rounded-full bg-muted">
               <div
@@ -213,6 +211,7 @@ export function ChurchInfoEditor({
         )}
 
         <Section
+          hidden={page !== "appearance"}
           id="identity"
           icon={ImageIcon}
           title="Look & name"
@@ -266,7 +265,7 @@ export function ChurchInfoEditor({
           </div>
         </Section>
 
-        <Section id="about" icon={Type} title="About" description="Who you are and what a first visit is like. Long text folds behind “Read more”.">
+        <Section hidden={page !== "church-details"} id="about" icon={Type} title="About" description="Who you are and what a first visit is like. Long text folds behind “Read more”.">
           <Field label="About your church" field="about" counter={`${form.about.length}/2000`} error={errorFor("about")}>
             <Textarea
               data-field="about"
@@ -281,6 +280,7 @@ export function ChurchInfoEditor({
         </Section>
 
         <Section
+          hidden={page !== "church-details"}
           id="services"
           icon={Clock}
           title="Service times"
@@ -388,6 +388,7 @@ export function ChurchInfoEditor({
         </Section>
 
         <Section
+          hidden={page !== "church-details"}
           id="contact"
           icon={MapPin}
           title="Location & contact"
@@ -441,6 +442,7 @@ export function ChurchInfoEditor({
         </Section>
 
         <Section
+          hidden={page !== "links-and-social"}
           id="social"
           icon={Users}
           title="Social"
@@ -463,6 +465,7 @@ export function ChurchInfoEditor({
         </Section>
 
         <Section
+          hidden={page !== "links-and-social"}
           id="links"
           icon={Link2}
           title="Links"
@@ -579,15 +582,9 @@ export function ChurchInfoEditor({
         </Section>
 
         {/* Sticky save bar */}
-        {canEdit && (
-          <div
-            className={cn(
-              "sticky bottom-4 z-20 transition-all duration-300",
-              dirty || pending ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0",
-            )}
-            aria-hidden={!dirty && !pending}
-          >
-            <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/95 p-3 pl-5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.35)] backdrop-blur">
+        {canEdit && (dirty || pending) && (
+          <div className="sticky bottom-4 z-20">
+            <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-card/95 p-3 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.35)] backdrop-blur">
               <span className="size-2 rounded-full bg-accent" aria-hidden />
               <p className="text-sm font-semibold text-foreground">Unsaved changes</p>
               <p className="hidden text-sm text-muted-foreground sm:block">⌘S to save</p>
@@ -636,6 +633,7 @@ function linkProblem(value: string): string | undefined {
 }
 
 function Section({
+  hidden,
   id,
   icon: Icon,
   title,
@@ -643,6 +641,7 @@ function Section({
   aside,
   children,
 }: {
+  hidden: boolean;
   id: string;
   icon: LucideIcon;
   title: string;
@@ -651,7 +650,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section id={`church-${id}`} className="scroll-mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+    <section hidden={hidden} id={`church-${id}`} className="scroll-mt-6 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
       <header className="mb-5 flex items-start gap-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/12 text-accent">
           <Icon className="size-[18px]" aria-hidden />

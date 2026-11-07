@@ -122,13 +122,10 @@ export default async function AnnouncementsPage() {
   const settings: ComposerSettings = {
     churchId,
     churchTimeZone,
-    isAdmin: auth.isAdmin,
     facebookConnected: integrationStatus.facebook.connected,
     emailAvailable: weeklyEmail.available,
     emailSwitchedOff: weeklyEmail.switchedOff,
     appAvailable,
-    calendarConnected,
-    canCreateEvents,
     churchName: churchProfile?.name ?? auth.churchName,
     churchAddress: churchProfile?.address ?? null,
     churchCity: churchProfile?.city ?? null,

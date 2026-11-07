@@ -86,7 +86,7 @@ export const AUTH_USER_CASCADES: readonly Reference[] = [
 ];
 
 /**
- * The person's own messaging data, keyed by sign-in because staff chat from
+ * The person's own messaging and notification data, keyed by sign-in because staff chat from
  * the dashboard as well as members from the app. Removed *with* the Auth user,
  * and deliberately **not** sign-in dependents: holding a chat identity, a
  * block or a conversation must never be the reason an account deletion keeps
@@ -105,4 +105,7 @@ export const AUTH_USER_OWNED: readonly Reference[] = [
   { table: "messaging_blocks", column: "blocked_user_id", action: "cascade" },
   { table: "messaging_restrictions", column: "user_id", action: "cascade" },
   { table: "group_staff_reads", column: "user_id", action: "cascade" },
+  // Preferences and delivery jobs grant no staff access and retain no church records.
+  { table: "staff_notification_preferences", column: "user_id", action: "cascade" },
+  { table: "staff_notification_jobs", column: "user_id", action: "cascade" },
 ];

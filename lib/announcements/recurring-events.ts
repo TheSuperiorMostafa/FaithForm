@@ -6,12 +6,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fromZonedInputValue } from "@/lib/announcements/facebook-schedule";
 
-export type RecurrenceFrequency = "daily" | "weekly" | "monthly";
+import { EVENT_REPEAT_WEEKDAYS, type EventFrequency, type EventWeekday } from "@/lib/announcements/recurrence";
+
+export type RecurrenceFrequency = EventFrequency;
 
 export interface RecurringEventConfig {
   churchId: string;
   announcementId: string;
   frequency: RecurrenceFrequency;
+  interval?: number;
+  weekdays?: readonly EventWeekday[];
   startDate: string; // YYYY-MM-DD in church timezone
   startTime: string | null; // HH:MM in church timezone, null for all-day
   endTime: string | null;
@@ -50,45 +54,54 @@ export function generateOccurrenceDates(config: RecurringEventConfig): Occurrenc
   fiveYearsOut.setUTCFullYear(fiveYearsOut.getUTCFullYear() + 5);
   const maxDate = new Date(Math.min(until.getTime(), fiveYearsOut.getTime()));
   
+  const interval = config.interval ?? 1;
+  const startDay = start.getUTCDate();
+  const startWeekday = start.getUTCDay();
+  const weekdays = config.weekdays?.length
+    ? new Set(config.weekdays)
+    : new Set([EVENT_REPEAT_WEEKDAYS[startWeekday].code]);
   const current = new Date(start);
-  let count = 0;
-  
-  while (current.getTime() <= maxDate.getTime() && count < MAX_OCCURRENCES) {
-    const dateStr = current.toISOString().split("T")[0];
-    
-    // Build proper ISO timestamps in the church timezone
-    const { startAt, endAt } = buildOccurrenceTimestamps(
-      dateStr,
-      config.startTime,
-      config.endTime,
-      config.timezone,
-      config.allDay
-    );
-    
-    occurrences.push({ date: dateStr, startAt, endAt });
-    
-    // Advance to next occurrence
+
+  function repeatsOn(elapsedDays: number): boolean {
     switch (config.frequency) {
       case "daily":
-        current.setUTCDate(current.getUTCDate() + 1);
-        break;
-      case "weekly":
-        current.setUTCDate(current.getUTCDate() + 7);
-        break;
+        return elapsedDays % interval === 0;
+      case "weekly": {
+        const elapsedWeeks = Math.floor((elapsedDays + startWeekday) / 7);
+        return elapsedWeeks % interval === 0 && weekdays.has(EVENT_REPEAT_WEEKDAYS[current.getUTCDay()].code);
+      }
       case "monthly":
-        // Keep same day of month, handle month-end edge cases
-        const targetDay = start.getUTCDate();
-        current.setUTCDate(1); // Set to 1st first to avoid skipping months
-        current.setUTCMonth(current.getUTCMonth() + 1);
-        // If target day doesn't exist in new month (e.g., Jan 31 -> Feb 31), use last day
-        const lastDayOfMonth = new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).getUTCDate();
-        current.setUTCDate(Math.min(targetDay, lastDayOfMonth));
-        break;
+      case "annually": {
+        const elapsedMonths = (current.getUTCFullYear() - start.getUTCFullYear()) * 12 +
+          current.getUTCMonth() - start.getUTCMonth();
+        const periodMonths = config.frequency === "annually" ? 12 * interval : interval;
+        if (elapsedMonths % periodMonths !== 0) return false;
+
+        // The existing monthly preset uses the last day of a short month.
+        // Custom and annual rules skip dates that do not exist.
+        const targetDay = config.frequency === "monthly" && config.interval === undefined
+          ? Math.min(startDay, new Date(Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 0)).getUTCDate())
+          : startDay;
+        return current.getUTCDate() === targetDay;
+      }
     }
-    
-    count++;
   }
-  
+
+  for (let elapsedDays = 0; current <= maxDate && occurrences.length < MAX_OCCURRENCES; elapsedDays += 1) {
+    if (repeatsOn(elapsedDays)) {
+      const date = current.toISOString().slice(0, 10);
+      const timestamps = buildOccurrenceTimestamps(
+        date,
+        config.startTime,
+        config.endTime,
+        config.timezone,
+        config.allDay,
+      );
+      occurrences.push({ date, ...timestamps });
+    }
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
   return occurrences;
 }
 
