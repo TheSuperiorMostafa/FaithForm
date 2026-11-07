@@ -97,6 +97,9 @@ struct GroupInfoScreen: View {
                         VStack(alignment: .leading, spacing: 22) {
                             GroupFeedback(model: model)
                             tiles(detail)
+                            if detail.group.membershipState == "member" && !detail.isArchived {
+                                GroupAvailabilityView(model: model, groupId: groupId)
+                            }
                             if let description = detail.description, !description.isEmpty {
                                 GroupPanelView("About this group") {
                                     Text(description).font(.subheadline)

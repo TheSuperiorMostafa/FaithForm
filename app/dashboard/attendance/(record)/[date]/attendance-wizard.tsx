@@ -476,14 +476,12 @@ export function AttendanceWizard({
         <ModeCard
           icon={Users}
           title="By name"
-          description="Mark who came, so you can follow up with who missed."
           selected={mode === "names"}
           onSelect={() => setMode("names")}
         />
         <ModeCard
           icon={Hash}
           title="Just a number"
-          description="Type one total. The fastest way."
           selected={mode === "number"}
           disabled={!numberAllowed}
           disabledNote="This Sunday was saved by name. Edit the names so nobody's mark is lost."
@@ -818,9 +816,6 @@ export function AttendanceWizard({
               </Checkbox.Root>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-base font-semibold text-foreground">First time guest</span>
-                <span className="text-[15px] text-muted-foreground">
-                  Send a welcome text from Follow-up after you save.
-                </span>
               </span>
             </label>
 
@@ -853,7 +848,6 @@ export function AttendanceWizard({
 function ModeCard({
   icon: Icon,
   title,
-  description,
   selected,
   disabled = false,
   disabledNote,
@@ -861,7 +855,6 @@ function ModeCard({
 }: {
   icon: typeof Hash;
   title: string;
-  description: string;
   selected: boolean;
   disabled?: boolean;
   disabledNote?: string;
@@ -893,9 +886,9 @@ function ModeCard({
           {title}
           {selected ? <Check className="size-5 text-accent" aria-hidden /> : null}
         </span>
-        <span className="text-[15px] text-muted-foreground">
-          {disabled && disabledNote ? disabledNote : description}
-        </span>
+        {disabled && disabledNote ? (
+          <span className="text-[15px] text-muted-foreground">{disabledNote}</span>
+        ) : null}
       </span>
     </button>
   );

@@ -1,13 +1,19 @@
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { LiveNoteSkeleton, SitePreviewSkeleton } from "@/components/website-admin/skeletons";
 
-/** Mirrors Website → Pages: section list beside the 520px preview. */
+/** Mirrors Website → Pages: large preview beside the 340px adjustment panel. */
 export default function WebsitePagesLoading() {
   return (
     <SkeletonContainer
-      className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]"
+      className="flex w-full min-w-0 flex-col gap-4"
       label="website pages"
     >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[15px] text-muted-foreground">Preview your page, then choose a section to adjust its words and photos.</p>
+        <span className="inline-flex min-h-11 items-center rounded-lg border border-border px-6 text-sm font-medium">Open full-screen editor</span>
+      </div>
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <SitePreviewSkeleton sticky />
       <div className="flex min-w-0 flex-col gap-4">
         <LiveNoteSkeleton />
 
@@ -41,7 +47,7 @@ export default function WebsitePagesLoading() {
         </div>
       </div>
 
-      <SitePreviewSkeleton sticky />
+      </div>
     </SkeletonContainer>
   );
 }

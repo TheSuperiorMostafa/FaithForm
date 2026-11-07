@@ -23,12 +23,14 @@ import { List, ListRow } from "@/components/ui/list-row";
 import { PageHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { MEMBERSHIP_STATUSES, type MembershipStatus } from "@/lib/people/membership-status";
 import type { ChurchMember } from "@/lib/queries/members";
 import { cn } from "@/lib/utils";
 
 type PeopleManagerProps = {
   initialMembers: ChurchMember[];
   isAdmin: boolean;
+  canEdit?: boolean;
   /**
    * Whether the church offers the member app. When it does, every person
    * shows whether they are on it; when it does not, the question is noise.
@@ -45,6 +47,7 @@ type PeopleManagerProps = {
 export function PeopleManager({
   initialMembers,
   isAdmin,
+  canEdit = isAdmin,
   showAppStatus = false,
   appConnections = {},
   appPhotos = {},
@@ -60,6 +63,7 @@ export function PeopleManager({
   }, [initialMembers]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<PeopleFilter>("all");
+  const [membershipStatus, setMembershipStatus] = useState<MembershipStatus | "all">("all");
   const [sortBy, setSortBy] = useState<PeopleSort>("last-name");
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"create" | "edit">("edit");
@@ -85,8 +89,8 @@ export function PeopleManager({
   const counts = useMemo(() => countPeople(members, isOnApp), [members, isOnApp]);
 
   const filteredMembers = useMemo(
-    () => filterPeople(members, { search, filter, sortBy, isOnApp }),
-    [members, search, filter, sortBy, isOnApp],
+    () => filterPeople(members, { search, filter, sortBy, isOnApp, membershipStatus }),
+    [members, search, filter, sortBy, isOnApp, membershipStatus],
   );
 
   const openCreatePanel = useCallback(() => {
@@ -103,12 +107,12 @@ export function PeopleManager({
   const addRequested = searchParams.get("add") === "1";
   useEffect(() => {
     if (!addRequested) return;
-    if (isAdmin) openCreatePanel();
+    if (canEdit) openCreatePanel();
     const next = new URLSearchParams(searchParams.toString());
     next.delete("add");
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [addRequested, isAdmin, openCreatePanel, pathname, router, searchParams]);
+  }, [addRequested, canEdit, openCreatePanel, pathname, router, searchParams]);
 
   function openMemberPanel(member: ChurchMember) {
     returnFocus.current = document.activeElement as HTMLElement | null;
@@ -227,7 +231,7 @@ export function PeopleManager({
         title="People"
         description={PEOPLE_DESCRIPTION}
         action={
-          isAdmin ? (
+          canEdit ? (
             <Button
               type="button"
               size="lg"
@@ -265,7 +269,7 @@ export function PeopleManager({
           />
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
             {filters.map(({ value, label }) => (
               <button
@@ -294,6 +298,13 @@ export function PeopleManager({
           </div>
 
           <label className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
+            <span className="shrink-0">Status</span>
+            <Select value={membershipStatus} onChange={event => setMembershipStatus(event.target.value as MembershipStatus | "all")} className="min-h-11 w-auto">
+              <option value="all">All statuses</option>
+              {MEMBERSHIP_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+            </Select>
+          </label>
+          <label className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
             <span className="shrink-0">Sort by</span>
             <Select
               value={sortBy}
@@ -313,9 +324,9 @@ export function PeopleManager({
           </p>
         ) : null}
 
-        {!isAdmin ? (
+        {!canEdit ? (
           <p className="text-[15px] text-muted-foreground">
-            Only church admins can add people or change their details.
+            You can view these people. Ask your church admin for People access to edit them.
           </p>
         ) : null}
 
@@ -325,7 +336,7 @@ export function PeopleManager({
             title="No people yet"
             description="Add the people in your church so you can take attendance, check children in and stay in touch."
             action={
-              isAdmin ? (
+              canEdit ? (
                 <Button type="button" size="lg" onClick={openCreatePanel}>
                   <UserPlus aria-hidden />
                   Add your first person
@@ -350,6 +361,7 @@ export function PeopleManager({
                 onClick={() => {
                   setSearch("");
                   setFilter("all");
+                  setMembershipStatus("all");
                 }}
               >
                 Show everyone
@@ -394,7 +406,7 @@ export function PeopleManager({
         )}
       </section>
 
-      {isAdmin ? (
+      {canEdit ? (
         <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
           <Button
             type="button"
@@ -434,6 +446,7 @@ export function PeopleManager({
                 key={panelKey}
                 member={panelMode === "edit" ? selectedMember : null}
                 isAdmin={isAdmin}
+                canEdit={canEdit}
                 onClose={closePanel}
                 onSaved={handleSaved}
                 onDeactivated={handleDeactivated}

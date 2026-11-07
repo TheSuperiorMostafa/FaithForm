@@ -35,6 +35,9 @@ struct GroupMembersView: View {
                                 GroupMemberAvatar(name: member.name, url: member.avatarUrl)
                                 VStack(alignment: .leading, spacing: 6) {
                                     Text(member.name).font(.headline).foregroundStyle(theme.palette.contentPrimary)
+                                    if let availability = member.availability, !availability.isEmpty {
+                                        Text("Availability: \(availability)").font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                                    }
                                     Text(member.isYou ? "You · \(member.groupRole.capitalized)" : member.groupRole.capitalized)
                                         .font(.caption.weight(.medium)).foregroundStyle(theme.palette.contentSecondary)
                                 }.frame(maxWidth: .infinity, alignment: .leading)

@@ -42,6 +42,7 @@ const files = [
   "supabase/migrations/0074_automatic_attendance_setup.sql",
   "supabase/migrations/0082_mobile_live_immediate.sql",
   "supabase/migrations/0083_app_members_in_people_and_one_attendance.sql",
+  "supabase/migrations/0144_offline_giving.sql",
 ];
 
 try {
@@ -65,6 +66,7 @@ const result = spawnSync(
     "tests/database/checkin-sessions.test.ts",
     "tests/database/media-publication.test.ts",
     "tests/database/giving.test.ts",
+    "tests/database/offline-giving.test.ts",
     "tests/database/query-plans.test.ts",
     "tests/database/automatic-attendance-setup.test.ts",
     "tests/database/app-people-and-attendance.test.ts",

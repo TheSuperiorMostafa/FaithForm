@@ -1,4 +1,5 @@
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { Upload } from "lucide-react";
 import { RECORDING_FILTERS } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +14,10 @@ export default function RecordingsLoading() {
       className="flex w-full flex-col gap-6"
       label="recordings"
     >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[15px] text-muted-foreground">Streamed services and videos you upload.</p>
+        <span className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-6 text-sm font-medium text-primary-foreground"><Upload className="size-4" aria-hidden />Upload recording</span>
+      </div>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap gap-2">
           {RECORDING_FILTERS.map((filter, index) => (

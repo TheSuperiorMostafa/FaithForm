@@ -29,12 +29,14 @@ export function SitePreview({
   /** Bumping this from a parent re-loads the frame after a save. */
   refreshToken,
   sticky = false,
+  fillHeight = false,
   onNavigate,
 }: {
   previewUrl: string;
   className?: string;
   refreshToken?: unknown;
   sticky?: boolean;
+  fillHeight?: boolean;
   /** Church-local path, so the page editor can follow preview navigation. */
   onNavigate?: (path: string) => void;
 }) {
@@ -48,6 +50,7 @@ export function SitePreview({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [scale, setScale] = useState(1);
+  const [frameHeight, setFrameHeight] = useState(620);
 
   /**
    * Wake any lazy image inside the frame.
@@ -121,13 +124,14 @@ export function SitePreview({
     const measure = () => {
       const available = shell.clientWidth;
       setScale(available > 0 ? Math.min(1, available / WIDTHS[device]) : 1);
+      setFrameHeight(shell.clientHeight || 620);
     };
 
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(shell);
     return () => observer.disconnect();
-  }, [device]);
+  }, [device, fillHeight]);
 
   const width = WIDTHS[device];
 
@@ -184,7 +188,7 @@ export function SitePreview({
       <div
         ref={shellRef}
         className="relative overflow-hidden rounded-xl border border-border bg-muted/30"
-        style={{ height: 620 }}
+        style={{ height: fillHeight ? "max(360px, calc(100dvh - 13rem))" : 620 }}
       >
         {loading ? (
           <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-muted-foreground">
@@ -204,7 +208,7 @@ export function SitePreview({
           sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
           style={{
             width,
-            height: 620 / scale,
+            height: frameHeight / scale,
             transform: `scale(${scale})`,
             transformOrigin: "top left",
             border: 0,

@@ -131,7 +131,7 @@ export const FEATURES: FeatureDefinition[] = [
   },
   {
     key: "announcements",
-    label: "Announcements",
+    label: "Events",
     description:
       "Calendar queue, Facebook publishing, and the weekly email draft.",
     href: "/dashboard/announcements",

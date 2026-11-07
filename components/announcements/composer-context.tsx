@@ -96,7 +96,7 @@ export function NewAnnouncementButton() {
   return (
     <Button size="lg" onClick={() => openComposer({ kind: "new" })}>
       <Megaphone aria-hidden strokeWidth={1.75} />
-      New announcement
+      New event
     </Button>
   );
 }

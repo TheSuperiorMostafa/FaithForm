@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, ein, statement_address, timezone")
+    .select("name, ein, statement_address, phone, email, timezone")
     .eq("id", session.churchId)
     .single();
 
@@ -55,7 +55,9 @@ export async function GET(request: Request) {
       churchName: church.name as string,
       ein: (church.ein as string) ?? null,
       statementAddress: (church.statement_address as string) ?? null,
-      donorName: (donor.name as string) ?? (donor.email as string),
+      churchPhone: (church.phone as string | null) ?? null,
+      churchEmail: (church.email as string | null) ?? null,
+      donorName: (donor.name as string) || "Donor",
       donorEmail: donor.email as string,
       year,
       gifts,

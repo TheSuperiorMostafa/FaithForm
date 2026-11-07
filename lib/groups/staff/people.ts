@@ -30,6 +30,7 @@ export type StaffMemberRow = {
   role: GroupRole;
   joinedAt: string;
   source: string;
+  availability: string;
   hasApp: boolean;
   memberId: string | null;
   attendedRecent: number | null;
@@ -47,7 +48,7 @@ export async function listStaffMembers(
   const [{ data }, { data: participation }] = await Promise.all([
     ctx.admin
       .from("group_memberships")
-      .select("id, member_id, account_id, group_role, joined_at, source")
+      .select("id, member_id, account_id, group_role, joined_at, source, availability")
       .eq("group_id", group.id)
       .eq("church_id", ctx.churchId)
       .eq("status", "active")
@@ -65,6 +66,7 @@ export async function listStaffMembers(
     group_role: GroupRole;
     joined_at: string;
     source: string;
+    availability: string;
   }[];
   const labels = await labelMemberships(ctx.admin, rows);
   const byMembership = new Map(
@@ -85,6 +87,7 @@ export async function listStaffMembers(
         role: row.group_role,
         joinedAt: new Date(row.joined_at).toISOString(),
         source: row.source,
+        availability: row.availability ?? "",
         hasApp: Boolean(row.account_id),
         memberId: row.member_id,
         attendedRecent: p ? Number(p.attended) : null,

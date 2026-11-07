@@ -27,7 +27,7 @@ export async function GET(request: Request, context: RouteContext) {
   const admin = createAdminClient();
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, ein, statement_address, timezone")
+    .select("name, ein, statement_address, phone, email, timezone")
     .eq("id", auth.churchId)
     .single();
   if (churchError || !church) {
@@ -62,7 +62,9 @@ export async function GET(request: Request, context: RouteContext) {
       churchName: church.name as string,
       ein: (church.ein as string) ?? null,
       statementAddress: (church.statement_address as string) ?? null,
-      donorName: (donor.name as string) ?? (donor.email as string),
+      churchPhone: (church.phone as string | null) ?? null,
+      churchEmail: (church.email as string | null) ?? null,
+      donorName: (donor.name as string) || "Donor",
       donorEmail: donor.email as string,
       year,
       gifts,

@@ -1,9 +1,9 @@
-import { ChevronDown, Download, FileText, Landmark, Mail, Palette, Plus, Receipt, Repeat, Search, Users } from "lucide-react";
+import { ChevronDown, Download, FileText, Landmark, Mail, Palette, Plus, Search } from "lucide-react";
 
+import { GivingActions } from "@/components/giving/giving-actions";
 import { GIVING_COPY, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { SetupSteps } from "@/components/giving/giving-setup";
 import { StatementYearPicker } from "@/components/giving/statement-year-picker";
-import { ActionCard, ActionGrid } from "@/components/ui/action-card";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { List } from "@/components/ui/list-row";
@@ -113,7 +113,7 @@ function StaticAdvanced({ title, description }: { title: string; description: st
 // Overview
 // ---------------------------------------------------------------------------
 
-export function GivingOverviewSkeleton({ headerless = false }: { headerless?: boolean }) {
+export function GivingOverviewSkeleton({ headerless = false, isAdmin = true }: { headerless?: boolean; isAdmin?: boolean }) {
   const now = new Date();
   const statementYear = defaultStatementYear(now);
   const statementSeason = statementYear < now.getFullYear();
@@ -123,6 +123,8 @@ export function GivingOverviewSkeleton({ headerless = false }: { headerless?: bo
       {!headerless && (
         <PageHeader title={GIVING_COPY.overview.title} description={GIVING_COPY.overview.description} />
       )}
+
+      <GivingActions isAdmin={isAdmin} />
 
       {statementSeason && (
         <div className="flex flex-col gap-4 rounded-2xl border border-accent/40 bg-accent/10 p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -157,6 +159,7 @@ export function GivingOverviewSkeleton({ headerless = false }: { headerless?: bo
             </h2>
             <Skeleton className={cn("h-9 w-36", i === 0 && "bg-white/15")} />
             <Skeleton className={cn("h-5 w-28", i === 0 && "bg-white/15")} />
+            <Skeleton className={cn("h-5 w-44", i === 0 && "bg-white/15")} />
           </Card>
         ))}
       </section>
@@ -171,17 +174,6 @@ export function GivingOverviewSkeleton({ headerless = false }: { headerless?: bo
           }
         />
         <RowsSkeleton count={6} />
-      </section>
-
-      <section aria-label="More in Giving">
-        <ActionGrid>
-          <ActionCard href="/dashboard/giving/gifts" icon={Receipt} title="All gifts" description="Search every gift and download a spreadsheet." />
-          <ActionCard href="/dashboard/giving/donors" icon={Users} title="Donors" description="Who gave, and what they gave this year." />
-          <ActionCard href="/dashboard/giving/recurring" icon={Repeat} title="Recurring gifts" description="Gifts that repeat on their own." />
-          <ActionCard href="/dashboard/giving/payouts" icon={Landmark} title="Deposits" description="Money on its way to your church's bank." />
-          <ActionCard href="/dashboard/giving/statements" icon={FileText} title="Year-end statements" description="Email or print each donor's yearly record." />
-          <Skeleton className="min-h-[152px] rounded-2xl" />
-        </ActionGrid>
       </section>
 
       <GivingLinkCardSkeleton />
@@ -320,8 +312,8 @@ export function GiftsSkeleton() {
                 <tr>
                   <th className="px-5 py-4 font-semibold">Date</th>
                   <th className="px-5 py-4 font-semibold">Donor</th>
-                  <th className="px-5 py-4 text-right font-semibold">Amount</th>
-                  <th className="px-5 py-4 text-right font-semibold">After fees</th>
+                  <th className="px-5 py-4 text-right font-semibold">Gross</th>
+                  <th className="px-5 py-4 text-right font-semibold">Net after fees</th>
                   <th className="px-5 py-4 font-semibold">Fund</th>
                   <th className="px-5 py-4 font-semibold">Type</th>
                   <th className="px-5 py-4 font-semibold">Status</th>

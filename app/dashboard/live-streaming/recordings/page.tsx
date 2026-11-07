@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { AutoRefresh } from "@/components/live-streaming/recordings/auto-refresh";
+import { UploadRecording } from "@/components/live-streaming/recordings/upload-recording";
 import { RecordingFilters } from "@/components/live-streaming/recordings/recording-filters";
 import { RecordingList } from "@/components/live-streaming/recordings/recording-list";
 import { RecordingsLoadError } from "@/components/live-streaming/recordings/recordings-load-error";
@@ -41,6 +42,7 @@ export default async function RecordingsPage({
   const query = await searchParams;
   const filter = parseRecordingFilter(query.show);
   const search = (Array.isArray(query.q) ? query.q[0] : query.q)?.trim() ?? "";
+  const upload = auth.isAdmin ? <UploadRecording /> : null;
 
   if (filter === "series") {
     let library: Awaited<ReturnType<typeof loadLibraryBrowse>>;
@@ -53,6 +55,7 @@ export default async function RecordingsPage({
     } catch {
       return (
         <div className="flex w-full flex-col gap-6">
+          {upload}
           <RecordingFilters active="series" />
           <RecordingsLoadError />
         </div>
@@ -60,6 +63,7 @@ export default async function RecordingsPage({
     }
     return (
       <div className="flex w-full flex-col gap-6">
+        {upload}
         <RecordingFilters active="series" />
         <p className="text-base text-muted-foreground">
           Browse by series, topic and speaker. Give a series its artwork once, and every message in it uses it.
@@ -84,6 +88,7 @@ export default async function RecordingsPage({
   } catch {
     return (
       <div className="flex w-full flex-col gap-6">
+        {upload}
         <RecordingFilters active={filter} search={search} />
         <RecordingsLoadError />
       </div>
@@ -100,6 +105,7 @@ export default async function RecordingsPage({
 
   return (
     <div className="flex w-full flex-col gap-6">
+      {upload}
       <AutoRefresh active={recordings.some((recording) => isStillChanging(recording.phase.phase))} />
       <RecordingFilters active={filter} counts={counts} search={search} />
       <RecordingList

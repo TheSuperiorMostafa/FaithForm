@@ -41,7 +41,7 @@ export default function PeopleLoading() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
             {["Everyone", "No phone", "Inactive", "Potential duplicates"].map((label) => (
               <span
@@ -52,6 +52,10 @@ export default function PeopleLoading() {
                 <Skeleton className="h-4 w-5" />
               </span>
             ))}
+          </div>
+          <div className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
+            <span className="shrink-0">Status</span>
+            <div className="flex min-h-11 w-44 items-center rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3 text-[15px] text-foreground shadow-sm">All statuses</div>
           </div>
           <div className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
             <span className="shrink-0">Sort by</span>

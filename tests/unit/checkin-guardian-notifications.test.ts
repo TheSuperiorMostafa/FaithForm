@@ -23,15 +23,16 @@ function database() {
     visitor_device_installations: ["a1", "a2", "outsider"].map(account_id => ({ id: account_id, account_id, provider: "apns", provider_token: account_id, is_enabled: true, invalidated_at: null })),
   };
   const calls: { name: string; args: Row }[] = [];
+  const errors: Record<string, unknown> = {};
   const client = { from(table: string) {
     const filters: ((row: Row) => boolean)[] = [];
-    const run = () => ({ data: (tables[table] ?? []).filter(row => filters.every(f => f(row))), error: null });
+    const run = () => ({ data: (tables[table] ?? []).filter(row => filters.every(f => f(row))), error: errors[table] ?? null });
     const builder = {
       select: () => builder, order: () => builder, limit: () => builder, range: () => builder,
       eq: (key: string, value: unknown) => (filters.push(row => row[key] === value), builder),
       is: (key: string, value: unknown) => (filters.push(row => (row[key] ?? null) === value), builder),
       in: (key: string, values: unknown[]) => (filters.push(row => values.includes(row[key])), builder),
-      maybeSingle: async () => ({ data: run().data[0] ?? null, error: null }),
+      maybeSingle: async () => ({ data: run().data[0] ?? null, error: errors[table] ?? null }),
       insert: async (row: Row) => { tables[table].push(row); return { data: row, error: null }; },
       then: (resolve: (result: unknown) => unknown) => resolve(run()),
     };
@@ -40,7 +41,7 @@ function database() {
     calls.push({ name, args });
     return { data: name === "claim_notification_jobs" ? tables.notification_outbox : true, error: null };
   } };
-  return { tables, calls, client: client as never };
+  return { tables, calls, errors, client: client as never };
 }
 
 function alertJob(overrides: Row = {}): Row {
@@ -123,4 +124,15 @@ test("disabled Kids Check in exposes no household code and resolves no push audi
   db.tables.church_features.push({ church_id: "church", feature_key: "checkin", enabled: false });
   assert.deepEqual(await kidsCheckIn("u1", "grace", db.client), { households: [] });
   assert.deepEqual(await guardianAccountIds("church", "family", db.client), []);
+});
+
+
+test("an unavailable child-session authority retries an alert instead of cancelling it", async () => {
+  const db = database();
+  db.tables.notification_outbox.push(alertJob());
+  db.errors.checkin_sessions = { message: "temporary outage" };
+  const result = await runNotificationWorker({ client: db.client });
+  assert.equal(result.retried, 1);
+  assert.equal(result.cancelled, 0);
+  assert.ok(db.calls.some(call => call.name === "complete_notification_job" && call.args.p_outcome === "retryable" && call.args.p_error_category === "subject_unavailable"));
 });

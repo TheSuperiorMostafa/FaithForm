@@ -42,7 +42,7 @@ export function normalizeAnnouncementEmailTemplate(
 ): AnnouncementEmailTemplate {
   const subject = input?.subject?.trim() || DEFAULT_ANNOUNCEMENT_EMAIL_SUBJECT;
   const body = input?.body?.trim() || DEFAULT_ANNOUNCEMENT_EMAIL_BODY;
-  const to = input?.to?.trim() || null;
+  const to = input?.to?.split(/[;,]/).map((address) => address.trim()).filter(Boolean).join(", ") || null;
 
   return {
     subject,
@@ -75,7 +75,7 @@ export function validateAnnouncementEmailTemplate(
       error: `Body must include ${ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events}.`,
     };
   }
-  if (to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+  if (to && (to.split(/[;,]/).length > 50 || /[\r\n]/.test(to) || to.split(/[;,]/).some((address) => !/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(address.trim())))) {
     return { ok: false, error: "Recipient email address is invalid." };
   }
   return { ok: true };

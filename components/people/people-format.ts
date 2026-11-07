@@ -4,6 +4,7 @@
  * week reads) can be tested directly.
  */
 
+import type { MembershipStatus } from "@/lib/people/membership-status";
 import type { StatusTone } from "@/components/ui/status-badge";
 import { formatPhoneDisplay } from "@/lib/people/validate-member";
 import type { HouseholdRelationship, HouseholdSummary } from "@/types/checkin";
@@ -89,6 +90,7 @@ export type PersonLike = {
   phone: string | null;
   email: string | null;
   is_active: boolean;
+  membership_status?: MembershipStatus;
 };
 
 export type PeopleFilter = "all" | "on-app" | "missing-phone" | "inactive" | "duplicates";
@@ -209,11 +211,13 @@ export function filterPeople<T extends PersonLike>(
     filter,
     sortBy,
     isOnApp,
+    membershipStatus = "all",
   }: {
     search: string;
     filter: PeopleFilter;
     sortBy: PeopleSort;
     isOnApp: (id: string) => boolean;
+    membershipStatus?: MembershipStatus | "all";
   },
 ): T[] {
   const query = search.trim().toLowerCase();
@@ -227,6 +231,10 @@ export function filterPeople<T extends PersonLike>(
     if (filter === "on-app") return isOnApp(member.id);
     return true;
   });
+
+  if (membershipStatus !== "all") {
+    list = list.filter(member => (member.membership_status ?? "unknown") === membershipStatus);
+  }
 
   if (query) {
     // Numbers are stored as +15025551234 and shown as 502-555-1234; compare

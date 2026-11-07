@@ -1,5 +1,6 @@
 "use client";
 
+import { canConfigureService } from "@/lib/attendance/service-controls";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -504,6 +505,7 @@ export function ServiceOccurrencesBoard({
 
   const selectedStatus = selected ? serviceStatus(selected, now) : null;
   const cancelled = selected?.status === "cancelled";
+  const configurable = selected ? canConfigureService(selected, now) : false;
   const selectedSheet = selected ? weeklySheets[selected.localServiceDate] : undefined;
   const selectedIsSunday = selected ? isSundayDate(selected.localServiceDate) : false;
 
@@ -631,7 +633,7 @@ export function ServiceOccurrencesBoard({
                 <UserCheck aria-hidden />
                 Mark everyone here
               </Button>
-              {isAdmin && !cancelled && (
+              {isAdmin && configurable && (
                 <Button
                   variant="outline"
                   className="text-destructive hover:text-destructive"
@@ -648,7 +650,7 @@ export function ServiceOccurrencesBoard({
               </Button>
             </div>
 
-            {!cancelled && (
+            {configurable && (
               <AdvancedSection
                 title={appEnabled ? "Check-in screen and welcome desk" : "Welcome desk"}
                 description={
@@ -657,12 +659,7 @@ export function ServiceOccurrencesBoard({
                     : "Set up a tablet at the door."
                 }
               >
-                <CheckinDisplayPanel
-                  key={selected.id}
-                  occurrenceId={selected.id}
-                  isAdmin={isAdmin}
-                  appEnabled={appEnabled}
-                />
+                <CheckinDisplayPanel occurrenceId={selected.id} isAdmin={isAdmin} appEnabled={appEnabled} />
               </AdvancedSection>
             )}
 

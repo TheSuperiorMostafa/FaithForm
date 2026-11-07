@@ -33,13 +33,13 @@ import { cn } from "@/lib/utils";
 export function AnnouncementsHeaderSkeleton() {
   return (
     <PageHeader
-      title="Announcements"
+      title="Events"
       description="Tell your church what's happening, and share it where they'll see it."
       icon={Megaphone}
       action={
         <Button size="lg" disabled>
           <Megaphone aria-hidden strokeWidth={1.75} />
-          New announcement
+          New event
         </Button>
       }
     />
@@ -138,6 +138,11 @@ export function WeeklyEmailCardSkeleton() {
         <Skeleton className="h-4 w-full" />
         <Skeleton className="h-4 w-3/4" />
       </div>
+      <p className="text-[15px] text-muted-foreground">
+        The full message is attached as a document. Google also gets a Google Docs
+        copy when document access is connected. Changes made later in your mailbox
+        do not update that copy.
+      </p>
       <div className="flex flex-wrap gap-3">
         <Skeleton className="h-11 w-44 rounded-[10px]" />
         <Skeleton className="h-11 w-40 rounded-[10px]" />

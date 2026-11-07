@@ -103,12 +103,12 @@ export function PostedAnnouncements({
           compact
           icon={Megaphone}
           title="Nothing posted right now"
-          description="When you post an announcement, it shows here with where it went."
+          description="When you post an event, it shows here with where it went."
         />
       )}
 
       {earlier.length > 0 && (
-        <Disclosure label={`Earlier announcements (${earlier.length})`}>
+        <Disclosure label={`Earlier events (${earlier.length})`}>
           <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
             {earlier.map((item) => (
               <PostedRow

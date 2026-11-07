@@ -27,6 +27,8 @@ import {
 } from "@/components/people/people-format";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
+import { MEMBERSHIP_STATUSES, type MembershipStatus } from "@/lib/people/membership-status";
+import { Select } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SearchPicker } from "@/components/ui/search-picker";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -38,6 +40,7 @@ import { formatPhoneDisplay } from "@/lib/people/validate-member";
 type MemberFormPanelProps = {
   member?: ChurchMember | null;
   isAdmin: boolean;
+  canEdit?: boolean;
   onClose: () => void;
   onSaved: (member: ChurchMember) => void;
   onDeactivated?: (memberId: string) => void;
@@ -215,6 +218,7 @@ const inputClassName =
 export function MemberFormPanel({
   member,
   isAdmin,
+  canEdit = isAdmin,
   onClose,
   onSaved,
   onDeactivated,
@@ -228,13 +232,14 @@ export function MemberFormPanel({
   onAppConnectionMoved,
 }: MemberFormPanelProps) {
   const isEdit = Boolean(member);
-  const readOnly = !isAdmin;
+  const readOnly = !canEdit;
 
   const [firstName, setFirstName] = useState(member?.first_name ?? "");
   const [lastName, setLastName] = useState(member?.last_name ?? "");
   const [phone, setPhone] = useState(
     member?.phone ? (formatPhoneDisplay(member.phone) ?? member.phone) : "",
   );
+  const [membershipStatus, setMembershipStatus] = useState<MembershipStatus>(member?.membership_status ?? "unknown");
   const [email, setEmail] = useState(member?.email ?? "");
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("details");
@@ -254,6 +259,7 @@ export function MemberFormPanel({
         lastName,
         phone: phone || undefined,
         email: email || undefined,
+        membershipStatus,
       };
 
       const result = isEdit && member
@@ -389,6 +395,13 @@ export function MemberFormPanel({
         />
       </div>
 
+      <div className="flex flex-col gap-2">
+        <label htmlFor="member-status" className="text-base font-semibold">Status</label>
+        <Select id="member-status" value={membershipStatus} onChange={event => setMembershipStatus(event.target.value as MembershipStatus)} disabled={readOnly}>
+          {MEMBERSHIP_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+        </Select>
+      </div>
+
       {error ? (
         <p className="text-base text-destructive" role="alert">
           {error}
@@ -412,7 +425,7 @@ export function MemberFormPanel({
         </div>
       )}
 
-      {!readOnly && isEdit && member ? (
+      {isAdmin && isEdit && member ? (
         <div className="mt-4 flex flex-col gap-3 border-t border-border pt-5">
           {member.is_active ? (
             <>

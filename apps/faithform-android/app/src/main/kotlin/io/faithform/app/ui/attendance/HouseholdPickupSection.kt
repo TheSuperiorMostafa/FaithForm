@@ -24,6 +24,8 @@ import io.faithform.app.network.ApiClient
 import io.faithform.app.network.MobileSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.TimeoutCancellationException
 
 /** Credentials are fetched through guardian authorization and never persisted. */
 @Composable
@@ -51,9 +53,12 @@ fun HouseholdPickupSection(api: ApiClient, churchSlug: String, modifier: Modifie
         while (true) {
             loading = data == null; failed = false
             try {
-                data = api.send("api/mobile/v1/checkin/$churchSlug/household", MobileSuccess.serializer(KidsCheckInData.serializer())).value
+                data = withTimeout(15_000) {
+                    api.send("api/mobile/v1/checkin/$churchSlug/household", MobileSuccess.serializer(KidsCheckInData.serializer())).value
+                }
                 failed = data == null
-            } catch (cancelled: CancellationException) { throw cancelled }
+            } catch (_: TimeoutCancellationException) { data = null; failed = true }
+            catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { data = null; failed = true }
             finally { loading = false }
             delay(30_000)
@@ -66,7 +71,7 @@ fun HouseholdPickupSection(api: ApiClient, churchSlug: String, modifier: Modifie
         Text("Kids check-in", style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
         when {
             loading -> Text("Loading household pickup codes…", Modifier.heightIn(min = 100.dp), color = theme.palette.contentSecondary)
-            failed -> Text("We couldn’t load your pickup codes. Connect to the internet and try again.", color = theme.palette.contentSecondary)
+            failed -> Text("We couldn’t load your pickup codes. Try again in a moment. If this continues, ask the check-in team for help.", color = theme.palette.contentSecondary)
             data?.households?.isEmpty() == true -> Text("No household is linked to your account. Ask the check-in team to confirm your guardian access.", color = theme.palette.contentSecondary)
             else -> data?.households?.forEach { household ->
                 Text(household.label, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)

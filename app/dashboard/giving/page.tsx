@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { HandHeart } from "lucide-react";
@@ -68,7 +70,7 @@ export default async function GivingPage({ searchParams }: PageProps) {
   if (step && !(profile.stripeChargesEnabled && !auth.isAdmin)) {
     return (
       <div className="flex w-full flex-col gap-8">
-        <PageHeader title={GIVING_COPY.setup.title} description={GIVING_COPY.setup.description} />
+        <PageHeader title={GIVING_COPY.setup.title} description={GIVING_COPY.setup.description} secondary={auth.isAdmin ? <Link className={buttonVariants({variant: "outline"})} href="/dashboard/giving/record">Record offline donations</Link> : undefined} />
         {auth.isAdmin ? (
           <Suspense key={step} fallback={<GivingSetupSkeleton step={step} />}>
             <SetupSection churchId={auth.churchId} profile={profile} step={step} />
@@ -87,7 +89,7 @@ export default async function GivingPage({ searchParams }: PageProps) {
   return (
     <div className="flex w-full flex-col gap-8">
       <PageHeader title={GIVING_COPY.overview.title} description={GIVING_COPY.overview.description} />
-      <Suspense fallback={<GivingOverviewSkeleton headerless />}>
+      <Suspense fallback={<GivingOverviewSkeleton headerless isAdmin={auth.isAdmin} />}>
         <GivingOverview
           churchId={auth.churchId}
           isAdmin={auth.isAdmin}

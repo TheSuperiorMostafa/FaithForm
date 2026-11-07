@@ -117,6 +117,8 @@ export async function insertChurchCalendarEvent(
   churchId: string,
   input: {
     title: string;
+    recurrence?: string[];
+    timeZone?: string;
     location?: string;
     description?: string;
     startAt: string;

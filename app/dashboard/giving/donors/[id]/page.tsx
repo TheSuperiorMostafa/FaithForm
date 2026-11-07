@@ -37,7 +37,7 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
   if (!UUID_RE.test(id)) notFound();
 
   const profile = await getChurchGivingProfile(auth.churchId);
-  if (!profile?.stripeChargesEnabled) {
+  if (!profile) {
     return (
       <div className="flex w-full flex-col gap-8">
         <GivingSubpageHeader page="donor" back={BACK} />

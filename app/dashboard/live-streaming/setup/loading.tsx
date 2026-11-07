@@ -6,10 +6,6 @@ const STEPS = [
     description: "Pick the one you use. We'll show just the steps for it.",
   },
   {
-    title: "Check your video",
-    description: "Start streaming in your software. This turns to Connected on its own.",
-  },
-  {
     title: "After the service",
     description: "Every service is recorded automatically. What should happen next?",
   },
@@ -34,7 +30,7 @@ export default function StreamSetupLoading() {
     <SkeletonContainer className="flex w-full flex-col gap-8" label="streaming setup">
       <div className="space-y-1">
         <h2 className="font-heading text-xl font-bold text-foreground">Set up streaming</h2>
-        <p className="text-[15px] text-muted-foreground">Three steps. You only need to do this once.</p>
+        <p className="text-[15px] text-muted-foreground">Two steps. You only need to do this once.</p>
       </div>
 
       <ol className="flex flex-col gap-6">
@@ -68,8 +64,6 @@ export default function StreamSetupLoading() {
                 <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
                   <span className="text-[15px] font-semibold">Technical details</span>
                 </div>
-              </>
-            ) : index === 1 ? (
               <div className="flex flex-col gap-4 rounded-2xl border border-border p-5 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-3">
                   <Skeleton className="size-7 rounded-full" />
@@ -80,6 +74,7 @@ export default function StreamSetupLoading() {
                 </div>
                 <Skeleton className="min-h-11 w-36 rounded-[10px]" />
               </div>
+              </>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 <Skeleton className="min-h-28 rounded-2xl" />

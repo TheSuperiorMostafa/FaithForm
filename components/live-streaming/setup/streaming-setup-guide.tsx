@@ -161,13 +161,10 @@ export function StreamingSetupGuide({
         <AdvancedSection title="Technical details" description="Server address and stream key, one at a time">
           <StreamTechnicalDetails ingestServerUrl={ingestServerUrl} isAdmin={isAdmin} streamKey={streamKey} />
         </AdvancedSection>
-      </Step>
-
-      <Step number={2} title="Check your video" description="Start streaming in your software. This turns to Connected on its own.">
         <VideoCheck />
       </Step>
 
-      <Step number={3} title="After the service" description="Every service is recorded automatically. What should happen next?">
+      <Step number={2} title="After the service" description="Every service is recorded automatically. What should happen next?">
         <RecordingSettingsCard initial={settings} series={series} isAdmin={isAdmin} appEnabled={appEnabled} />
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-lg font-semibold">Also show on YouTube or Facebook</h3>

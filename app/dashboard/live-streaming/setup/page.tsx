@@ -52,7 +52,7 @@ export default async function StreamSetupPage() {
     <div className="flex w-full flex-col gap-8">
       <SectionHeader
         title="Set up streaming"
-        description="Three steps. You only need to do this once."
+        description="Two steps. You only need to do this once."
       />
 
       <StreamingSetupGuide

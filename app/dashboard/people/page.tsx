@@ -73,6 +73,7 @@ export default async function PeoplePage() {
     <PeopleManager
       initialMembers={members}
       isAdmin={auth.isAdmin}
+      canEdit={true}
       showAppStatus={showAppStatus}
       appConnections={Object.fromEntries(connections)}
       appPhotos={Object.fromEntries(photos)}

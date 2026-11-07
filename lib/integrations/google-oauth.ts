@@ -19,6 +19,7 @@ import { absoluteAppPath } from "@/lib/site-url";
 export const REFRESH_SKEW_MS = 5 * 60_000;
 
 const SCOPES = [
+  "https://www.googleapis.com/auth/drive.file",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/gmail.compose",
   "https://www.googleapis.com/auth/userinfo.email",

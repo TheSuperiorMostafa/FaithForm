@@ -1,3 +1,4 @@
+import { readOrSaveAvailability } from "@/lib/groups/availability";
 import { VisitorError } from "@/lib/faithform/errors";
 import { hashInvitationToken } from "@/lib/faithform/invitation-token";
 import {
@@ -499,12 +500,12 @@ export async function listMembers(
 
   const { data } = await ctx.admin
     .from("group_memberships")
-    .select("id, member_id, account_id, group_role, joined_at")
+    .select("id, member_id, account_id, group_role, joined_at, availability")
     .eq("group_id", groupId)
     .eq("church_id", ctx.church.id)
     .eq("status", "active")
     .limit(5000);
-  const rows = (data ?? []) as { id: string; member_id: string | null; account_id: string | null; group_role: GroupRole; joined_at: string }[];
+  const rows = (data ?? []) as { id: string; member_id: string | null; account_id: string | null; group_role: GroupRole; joined_at: string; availability?: string }[];
   const labels = await labelMemberships(ctx.admin, rows);
 
   const needle = input.query?.trim().toLowerCase() ?? "";
@@ -518,6 +519,7 @@ export async function listMembers(
   return {
     items: page.map(({ row, label }) => ({
       membershipId: row.id,
+      availability: capabilities(access).canManageMembers || row.id === access.membership?.id ? row.availability ?? "" : null,
       name: label.name,
       avatarUrl: label.avatarUrl,
       groupRole: row.group_role,
@@ -882,4 +884,14 @@ export async function setGroupNotificationLevel(
     .eq("church_id", ctx.church.id);
   if (error) throw new VisitorError("unavailable", "Could not save that preference.");
   return messagingPreferences(userId, churchSlug);
+}
+
+
+/** Every active member, including ordinary volunteer team members, sets only their own availability. */
+export async function memberAvailability(userId: string, churchSlug: string, groupId: string, value?: string) {
+  const { ctx, access } = await memberAccess(userId, churchSlug, groupId);
+  return readOrSaveAvailability(ctx.admin, {
+    churchId: ctx.church.id, groupId, membershipId: access.membership?.id ?? null,
+    groupStatus: access.group.status,
+  }, value);
 }

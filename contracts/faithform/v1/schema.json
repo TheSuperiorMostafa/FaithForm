@@ -10007,10 +10007,35 @@
         }
       }
     },
+    "GroupAvailability": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "availability": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "availability"
+      ],
+      "additionalProperties": false
+    },
     "GroupMember": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "availability": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "membershipId": {
           "type": "string"
         },
@@ -10099,6 +10124,17 @@
         "GroupMember": {
           "type": "object",
           "properties": {
+            "availability": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "membershipId": {
               "type": "string"
             },

@@ -2430,7 +2430,17 @@ data class GroupJoinResult(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class GroupAvailability(
+    val availability: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class GroupMember(
+    val availability: String? = null,
     val membershipId: String,
     val name: String,
     val avatarUrl: String? = null,

@@ -586,6 +586,8 @@ function foldLine(line: string): string {
 
 export function buildEventIcs(input: {
   uid: string;
+  recurrence?: string[];
+  timeZone?: string;
   title: string;
   location?: string;
   description?: string;
@@ -614,7 +616,18 @@ export function buildEventIcs(input: {
     const end = input.endAt
       ? new Date(input.endAt)
       : new Date(start.getTime() + 60 * 60 * 1000);
-    when = [`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`];
+    if (input.recurrence?.length && input.timeZone) {
+      const zone = input.timeZone;
+      if (!/^[A-Za-z0-9_+/-]+$/.test(zone)) throw new Error("Invalid calendar timezone.");
+      const stamp = (date: Date) => {
+        const parts = new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+        const part = (name: string) => parts.find((value) => value.type === name)?.value || "00";
+        return `${part("year")}${part("month")}${part("day")}T${part("hour")}${part("minute")}${part("second")}`;
+      };
+      when = [`DTSTART;TZID=${zone}:${stamp(start)}`, `DTEND;TZID=${zone}:${stamp(end)}`];
+    } else {
+      when = [`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`];
+    }
   }
 
   const lines = [
@@ -626,6 +639,7 @@ export function buildEventIcs(input: {
     `UID:${input.uid}`,
     `DTSTAMP:${icsStamp(input.now ?? new Date())}`,
     ...when,
+    ...(input.recurrence ?? []),
     ...(input.sequence ? [`SEQUENCE:${input.sequence}`] : []),
     `SUMMARY:${icsEscape(input.title)}`,
     ...(input.location?.trim()
@@ -645,6 +659,8 @@ export async function insertAppleCalendarEvent(
   churchId: string,
   input: {
     title: string;
+    recurrence?: string[];
+    timeZone?: string;
     location?: string;
     description?: string;
     startAt: string;
@@ -684,6 +700,7 @@ export async function insertAppleCalendarEvent(
     endAt: input.endAt,
     description: calendarDescriptionText(input.description),
     source: "apple",
+    recurring: Boolean(input.recurrence?.length),
   };
 }
 

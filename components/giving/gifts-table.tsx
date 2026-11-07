@@ -46,8 +46,8 @@ export function GiftsTable({
           <tr>
             <th scope="col" className="px-5 py-4 font-semibold">Date</th>
             <th scope="col" className="px-5 py-4 font-semibold">Donor</th>
-            <th scope="col" className="px-5 py-4 text-right font-semibold">Amount</th>
-            <th scope="col" className="px-5 py-4 text-right font-semibold">After fees</th>
+            <th scope="col" className="px-5 py-4 text-right font-semibold">Gross</th>
+            <th scope="col" className="px-5 py-4 text-right font-semibold">Net after fees</th>
             <th scope="col" className="px-5 py-4 font-semibold">Fund</th>
             <th scope="col" className="px-5 py-4 font-semibold">Type</th>
             <th scope="col" className="px-5 py-4 font-semibold">Status</th>

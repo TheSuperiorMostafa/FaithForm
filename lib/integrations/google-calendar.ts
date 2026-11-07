@@ -80,6 +80,8 @@ export async function insertCalendarEvent(
   churchId: string,
   input: {
     title: string;
+    recurrence?: string[];
+    timeZone?: string;
     location?: string;
     startAt: string;
     endAt: string | null;
@@ -92,7 +94,7 @@ export async function insertCalendarEvent(
   const calendar = google.calendar({ version: "v3", auth });
   const calendarId = input.calendarId ?? (await getChurchCalendarId(churchId, supabase));
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = input.timeZone || "America/New_York";
   const endDateTime =
     input.endAt ??
     new Date(new Date(input.startAt).getTime() + 60 * 60 * 1000).toISOString();
@@ -103,6 +105,7 @@ export async function insertCalendarEvent(
       calendarId,
       requestBody: {
         summary: input.title,
+        recurrence: input.recurrence,
         location: input.location || undefined,
         description: input.description || undefined,
         start: { dateTime: input.startAt, timeZone },
@@ -138,6 +141,7 @@ export async function insertCalendarEvent(
     endAt: end ? new Date(end).toISOString() : input.endAt,
     description: calendarDescriptionText(created.description ?? input.description),
     htmlLink: created.htmlLink ?? undefined,
+    recurring: Boolean(input.recurrence?.length),
   };
 }
 

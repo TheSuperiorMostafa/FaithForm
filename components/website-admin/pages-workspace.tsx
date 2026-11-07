@@ -4,6 +4,10 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import { Maximize2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+
 import { LiveEditsNote } from "@/components/website-admin/live-edits-note";
 import type { LinkTarget } from "@/components/website-admin/section-fields-form";
 import {
@@ -49,6 +53,7 @@ export function PagesWorkspace({
   currentPath?: string;
   relatedPages?: PageTab[];
 }) {
+  const [expanded, setExpanded] = useState(false);
   const [savedAt, setSavedAt] = useState(0);
   const router = useRouter();
 
@@ -68,8 +73,9 @@ export function PagesWorkspace({
     pages.find((p) => p.path === currentPath)?.label ??
     (currentPath === "/" ? "Home" : currentPath);
 
-  return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
+  const workspace = (
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky fillHeight={expanded} />
       <div className="flex min-w-0 flex-col gap-4">
         <LiveEditsNote isLive={isLive} />
 
@@ -138,7 +144,22 @@ export function PagesWorkspace({
         )}
       </div>
 
-      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky />
+    </div>
+  );
+
+  return (
+    <div className="flex w-full flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[15px] text-muted-foreground">Preview your page, then choose a section to adjust its words and photos.</p>
+        <Button variant="outline" onClick={() => setExpanded(true)}><Maximize2 className="size-4" aria-hidden />Open full-screen editor</Button>
+      </div>
+      {!expanded ? workspace : null}
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="h-[calc(100dvh-2rem)] max-w-none" aria-labelledby="website-editor-title">
+          <DialogHeader><DialogTitle id="website-editor-title">Edit your website</DialogTitle></DialogHeader>
+          <div className="min-h-0 flex-auto overflow-y-auto p-4 sm:p-6">{expanded ? workspace : null}</div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

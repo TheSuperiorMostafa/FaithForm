@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 
@@ -53,6 +54,7 @@ export function AnnouncementEmailForm({
   isAdmin: boolean;
   availability: WeeklyEmailAvailability;
 }) {
+  const [recipients, setRecipients] = useState(() => template.to?.split(/[;,]/).map((value) => value.trim()).filter(Boolean) || [""]);
   const [weeklyEmailEnabled, setWeeklyEmailEnabled] = useState(template.weeklyEmailEnabled);
   const [state, formAction] = useActionState<SettingsFormState, FormData>(
     updateAnnouncementEmailSettings,
@@ -66,7 +68,8 @@ export function AnnouncementEmailForm({
   // A reset turns the Monday draft back on; keep the switch in step.
   useEffect(() => {
     setWeeklyEmailEnabled(template.weeklyEmailEnabled);
-  }, [template.weeklyEmailEnabled]);
+    setRecipients(template.to?.split(/[;,]/).map((value) => value.trim()).filter(Boolean) || [""]);
+  }, [template.weeklyEmailEnabled, template.to]);
 
   if (!isAdmin) return null;
 
@@ -76,7 +79,7 @@ export function AnnouncementEmailForm({
         <CardTitle>Weekly announcement email</CardTitle>
         <CardDescription className="text-[15px]">
           Every Monday, FaithForm writes a draft email listing this week&apos;s events. It waits
-          in your email&apos;s Drafts folder, so nothing is sent until you send it.
+          in your email&apos;s Drafts folder with a document copy of the complete message, so nothing is sent until you send it.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -131,13 +134,21 @@ export function AnnouncementEmailForm({
             <Label htmlFor="announcement_email_to" className="text-[15px]">
               Address the draft to <span className="font-normal text-muted-foreground">(optional)</span>
             </Label>
-            <Input
-              id="announcement_email_to"
-              name="announcement_email_to"
-              type="email"
-              defaultValue={template.to ?? ""}
-              placeholder="team@yourchurch.org"
-            />
+            <input type="hidden" name="announcement_email_to" value={recipients.map((value) => value.trim()).filter(Boolean).join(", ")} />
+            {recipients.map((recipient, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <Input
+                  id={index === 0 ? "announcement_email_to" : `announcement_email_to_${index}`}
+                  aria-label={`Recipient ${index + 1}`}
+                  type="email"
+                  value={recipient}
+                  onChange={(event) => setRecipients((current) => current.map((value, i) => i === index ? event.target.value : value))}
+                  placeholder="team@yourchurch.org"
+                />
+                {recipients.length > 1 && <Button type="button" variant="outline" onClick={() => setRecipients((current) => current.filter((_, i) => i !== index))}><Trash2 className="size-4" aria-hidden />Remove</Button>}
+              </div>
+            ))}
+            <Button type="button" variant="outline" className="self-start" disabled={recipients.length >= 50} onClick={() => setRecipients((current) => [...current, ""])}><Plus className="size-4" aria-hidden />Add recipient</Button>
             <p className="text-sm text-muted-foreground">
               Leave empty to choose who gets it each week.
             </p>

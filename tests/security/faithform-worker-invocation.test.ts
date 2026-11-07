@@ -172,7 +172,9 @@ test("a re-run cannot duplicate a logical notification", () => {
 });
 
 test("a claimed job re-checks its subject before sending", () => {
-  assert.match(outbox, /if \(!\(await subjectIsStillCurrent\(admin, raw\)\)\)/);
+  assert.match(outbox, /current = await subjectIsStillCurrent\(admin, raw\)/);
+  assert.match(outbox, /if \(!current\)/);
+  assert.match(outbox, /p_error_category: "subject_unavailable"/);
   assert.match(outbox, /p_outcome: "cancelled"/);
 });
 

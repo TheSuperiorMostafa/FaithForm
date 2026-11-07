@@ -11,6 +11,9 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { EventLocationField } from "@/components/announcements/event-location-field";
+import { EventRepeatFields } from "@/components/announcements/event-repeat-fields";
+import type { EventRepeat } from "@/lib/announcements/recurrence";
 import {
   Bell,
   CalendarPlus,
@@ -446,6 +449,8 @@ export function AnnouncementComposer({
 }) {
   // Frozen at open: a page refresh behind the composer must not move it.
   const [initial] = useState(() => initialState(mode, settings));
+  const [repeat, setRepeat] = useState<EventRepeat>("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [values, setValues] = useState<Values>(initial.values);
   const [graphic, dispatchGraphic] = useReducer(graphicReducer, initial.graphic);
   const calendar = initial.calendar;
@@ -611,9 +616,9 @@ export function AnnouncementComposer({
     if (pending) return;
     if (dirty) {
       const discard = await confirmAction({
-        title: "Discard this announcement?",
+        title: "Discard this event?",
         description: "What you've written so far will be lost.",
-        confirmLabel: "Discard announcement",
+        confirmLabel: "Discard event",
         cancelLabel: "Keep editing",
         destructive: true,
       });
@@ -737,7 +742,7 @@ export function AnnouncementComposer({
   // ---- posting --------------------------------------------------------------
 
   const validate = (): string | null => {
-    if (!values.title.trim()) return "Give the announcement a title.";
+    if (!values.title.trim()) return "Give the event a title.";
     if ("error" in when) return when.error;
     if (calendar && !calendar.allDay && !values.startTime.trim()) {
       return "Choose a start time for this event.";
@@ -785,6 +790,8 @@ export function AnnouncementComposer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: values.title.trim(),
+        repeat,
+        repeatUntil,
         location: values.location.trim() || undefined,
         startAt: whenOk.startAt,
         endAt: whenOk.endAt,
@@ -843,7 +850,7 @@ export function AnnouncementComposer({
             return;
           }
           finish({
-            title: "Announcement updated",
+            title: "Event updated",
             lines: describePostOutcome({
               inApp: addApp && (result.announcement?.mobile_visibility ?? "none") !== "none",
               notified: Boolean(result.notified),
@@ -914,11 +921,11 @@ export function AnnouncementComposer({
 
         const result = await publishAnnouncement(form);
         if (!result.ok) {
-          setError(result.errors[0] ?? "We couldn't post this announcement. Please try again.");
+          setError(result.errors[0] ?? "We couldn't post this event. Please try again.");
           return;
         }
         finish({
-          title: changing ? "Announcement updated" : "Announcement posted",
+          title: changing ? "Event updated" : "Event posted",
           lines: describePostOutcome({
             inApp: Boolean(result.inApp),
             notified: Boolean(result.notified),
@@ -950,14 +957,14 @@ export function AnnouncementComposer({
 
   const heading =
     mode.kind === "change"
-      ? "Change announcement"
+      ? "Change event"
       : mode.kind === "calendar"
         ? "Announce this event"
         : mode.kind === "repost"
           ? "Post it again"
-          : "New announcement";
+          : "New event";
 
-  const submitLabel = changing ? "Update announcement" : "Post announcement";
+  const submitLabel = changing ? "Update event" : "Post event";
   const busy = pending || uploading || pictureLoading || captionLoading;
 
   const whatHappens: string[] = [];
@@ -1070,7 +1077,7 @@ export function AnnouncementComposer({
                 <div className="flex min-w-0 flex-col gap-8">
                   {restoredDraft && (
                     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-muted/40 px-4 py-3 text-[15px]">
-                      <span>We kept the announcement you were writing.</span>
+                      <span>We kept the event you were writing.</span>
                       <Button type="button" variant="ghost" onClick={startOver}>
                         Start over
                       </Button>
@@ -1094,7 +1101,7 @@ export function AnnouncementComposer({
                     </div>
                     <div className="flex flex-col gap-2">
                       <Label htmlFor="composer-details" className="text-[15px]">
-                        Message <span className="font-normal text-muted-foreground">(optional)</span>
+                        Event Description <span className="font-normal text-muted-foreground">(optional)</span>
                       </Label>
                       <Textarea
                         id="composer-details"
@@ -1187,16 +1194,10 @@ export function AnnouncementComposer({
                         )}
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="composer-location" className="text-[15px]">
-                            Where <span className="font-normal text-muted-foreground">(optional)</span>
+                            Location <span className="font-normal text-muted-foreground">(optional)</span>
                           </Label>
                           <div className="flex items-center gap-2">
-                            <Input
-                              id="composer-location"
-                              value={values.location}
-                              onChange={(e) => setDetail("location", e.target.value)}
-                              placeholder="e.g. Fellowship Hall"
-                              className="min-w-0 flex-1"
-                            />
+                            <EventLocationField id="composer-location" value={values.location} onChange={(value) => setDetail("location", value)} />
                             <Button
                               type="button"
                               variant="outline"
@@ -1212,6 +1213,7 @@ export function AnnouncementComposer({
                             </Button>
                           </div>
                         </div>
+                        {mode.kind === "new" && values.addToCalendar && hasTime && settings.canCreateEvents && settings.isAdmin && <EventRepeatFields id="composer-event" repeat={repeat} until={repeatUntil} onRepeat={setRepeat} onUntil={setRepeatUntil} />}
                         {mode.kind === "new" && settings.canCreateEvents && settings.isAdmin && (
                           <CheckRow
                             id="composer-calendar"
@@ -1241,7 +1243,7 @@ export function AnnouncementComposer({
                       uploading={uploading}
                       error={pictureError}
                       note={pictureNote}
-                      alt={posterAltText || "Announcement picture"}
+                      alt={posterAltText || "Event picture"}
                       onMake={() => void askForPicture("full", !values.caption.trim())}
                       onUpload={() => fileInputRef.current?.click()}
                       onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
@@ -1411,7 +1413,7 @@ export function AnnouncementComposer({
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={currentGraphic.url}
-                        alt={posterAltText || "Announcement picture"}
+                        alt={posterAltText || "Event picture"}
                         className="aspect-[1200/630] w-full object-cover"
                       />
                     ) : (

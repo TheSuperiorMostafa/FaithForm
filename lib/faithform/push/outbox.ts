@@ -369,14 +369,17 @@ async function subjectIsStillCurrent(
   if (job.topic === "checkin") {
     if (job.subject_type === "checkin_session" && job.kind === "checkin_guardian_alert") {
       const { data, error } = await admin.from("checkin_sessions").select("id").eq("id", job.subject_id).eq("church_id", job.church_id).eq("status", "checked_in").maybeSingle();
-      return !error && Boolean(data);
+      if (error) throw new Error("push_subject_unavailable");
+      return Boolean(data);
     }
     if (job.subject_type === "household" && job.kind === "household_code_ready") {
-      const { data: household } = await admin.from("households").select("code_rotation").eq("id", job.subject_id).eq("church_id", job.church_id).maybeSingle();
-      const { data: church } = await admin.from("churches").select("timezone").eq("id", job.church_id).maybeSingle();
+      const { data: household, error: householdError } = await admin.from("households").select("code_rotation").eq("id", job.subject_id).eq("church_id", job.church_id).maybeSingle();
+      const { data: church, error: churchError } = await admin.from("churches").select("timezone").eq("id", job.church_id).maybeSingle();
+      if (householdError || churchError) throw new Error("push_subject_unavailable");
       if (!household || !church || Number(household.code_rotation ?? 0) !== job.subject_version) return false;
       if (!job.created_at || serviceWeekStart(church.timezone ?? "America/New_York", new Date(job.created_at)) !== serviceWeekStart(church.timezone ?? "America/New_York")) return false;
-      const { data: code } = await admin.from("household_checkout_codes").select("id").eq("church_id", job.church_id).eq("household_id", job.subject_id).eq("week_start", serviceWeekStart(church.timezone ?? "America/New_York")).is("revoked_at", null).maybeSingle();
+      const { data: code, error: codeError } = await admin.from("household_checkout_codes").select("id").eq("church_id", job.church_id).eq("household_id", job.subject_id).eq("week_start", serviceWeekStart(church.timezone ?? "America/New_York")).is("revoked_at", null).maybeSingle();
+      if (codeError) throw new Error("push_subject_unavailable");
       return Boolean(code);
     }
     return false;
@@ -535,7 +538,22 @@ export async function runNotificationWorker(options?: {
       continue;
     }
 
-    if (!(await subjectIsStillCurrent(admin, raw))) {
+    let current: boolean;
+    try {
+      current = await subjectIsStillCurrent(admin, raw);
+    } catch {
+      // An unavailable authority is not evidence that a child was picked up.
+      // Retain the job so the next worker can recheck before delivery.
+      await admin.rpc("complete_notification_job", {
+        p_id: raw.id,
+        p_lease_token: leaseToken,
+        p_outcome: "retryable",
+        p_error_category: "subject_unavailable",
+      });
+      result.retried += 1;
+      continue;
+    }
+    if (!current) {
       await admin.rpc("complete_notification_job", {
         p_id: raw.id,
         p_lease_token: leaseToken,

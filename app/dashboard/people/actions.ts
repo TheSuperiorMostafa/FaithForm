@@ -9,6 +9,8 @@ import type { ChurchMember } from "@/lib/queries/members";
 import { validateMemberInput } from "@/lib/people/validate-member";
 import { toUserError } from "@/lib/errors/user-error";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { isMembershipStatus, type MembershipStatus } from "@/lib/people/membership-status";
 
 export type MemberActionResult =
   | { ok: true; member: ChurchMember }
@@ -27,6 +29,7 @@ function mapMemberRow(row: {
   email: string | null;
   photo_url: string | null;
   is_active: boolean;
+  membership_status?: MembershipStatus;
 }): ChurchMember {
   return {
     ...row,
@@ -44,8 +47,9 @@ type MemberContext =
  * new came today". It is never taken from the caller — each exported action
  * hard-codes its own, so a client cannot name a feature it happens to hold.
  */
-async function requireAdminMemberAction(
+async function requireMemberAction(
   feature: FeatureKey,
+  adminOnly = true,
 ): Promise<MemberContext> {
   const auth = await getChurchAuth();
   if (!auth) {
@@ -60,19 +64,25 @@ async function requireAdminMemberAction(
     return { ok: false, error: featureError };
   }
 
-  if (!auth.isAdmin) {
+  if (adminOnly && !auth.isAdmin) {
     return { ok: false, error: "Only church admins can edit people." };
   }
 
-  const supabase = createClient();
+  // Basic People edits are permitted by the feature grant. Direct table
+  // writes remain admin-only in RLS, so use the server client after this guard
+  // and constrain every mutation below to the authenticated church and fields.
+  const supabase = adminOnly ? createClient() : createAdminClient();
   return { ok: true, churchId: auth.churchId, supabase };
 }
 
 /** Shared body. Callers do their own gating before reaching this. */
 async function insertMember(
   context: Extract<MemberContext, { ok: true }>,
-  input: { firstName: string; lastName: string; phone?: string; email?: string },
+  input: { firstName: string; lastName: string; phone?: string; email?: string; membershipStatus?: MembershipStatus },
 ): Promise<MemberActionResult> {
+  if (input.membershipStatus !== undefined && !isMembershipStatus(input.membershipStatus)) {
+    return { ok: false, error: "Choose a valid church status." };
+  }
   const validated = validateMemberInput(input);
   if (!validated.ok) {
     return { ok: false, error: validated.error };
@@ -88,9 +98,10 @@ async function insertMember(
       last_name: lastName,
       phone,
       email,
+      ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
       is_active: true,
     })
-    .select("id, first_name, last_name, phone, email, photo_url, is_active")
+    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
     .single();
 
   if (error || !data) {
@@ -106,8 +117,9 @@ export async function createMember(input: {
   lastName: string;
   phone?: string;
   email?: string;
+  membershipStatus?: MembershipStatus;
 }): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction("people");
+  const context = await requireMemberAction("people", false);
   if (!context.ok) {
     return context;
   }
@@ -127,8 +139,9 @@ export async function createMemberDuringAttendance(input: {
   lastName: string;
   phone?: string;
   email?: string;
+  membershipStatus?: MembershipStatus;
 }): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction("attendance");
+  const context = await requireMemberAction("attendance");
   if (!context.ok) {
     return context;
   }
@@ -142,12 +155,16 @@ export async function updateMember(input: {
   lastName: string;
   phone?: string;
   email?: string;
+  membershipStatus?: MembershipStatus;
 }): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction("people");
+  const context = await requireMemberAction("people", false);
   if (!context.ok) {
     return context;
   }
 
+  if (input.membershipStatus !== undefined && !isMembershipStatus(input.membershipStatus)) {
+    return { ok: false, error: "Choose a valid church status." };
+  }
   const validated = validateMemberInput(input);
   if (!validated.ok) {
     return { ok: false, error: validated.error };
@@ -162,10 +179,11 @@ export async function updateMember(input: {
       last_name: lastName,
       phone,
       email,
+      ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
     })
     .eq("id", input.memberId)
     .eq("church_id", context.churchId)
-    .select("id, first_name, last_name, phone, email, photo_url, is_active")
+    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
     .single();
 
   if (error || !data) {
@@ -177,7 +195,7 @@ export async function updateMember(input: {
 }
 
 export async function deactivateMember(memberId: string): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction("people");
+  const context = await requireMemberAction("people");
   if (!context.ok) {
     return context;
   }
@@ -187,7 +205,7 @@ export async function deactivateMember(memberId: string): Promise<MemberActionRe
     .update({ is_active: false })
     .eq("id", memberId)
     .eq("church_id", context.churchId)
-    .select("id, first_name, last_name, phone, email, photo_url, is_active")
+    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
     .single();
 
   if (error || !data) {
@@ -199,7 +217,7 @@ export async function deactivateMember(memberId: string): Promise<MemberActionRe
 }
 
 export async function reactivateMember(memberId: string): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction("people");
+  const context = await requireMemberAction("people");
   if (!context.ok) {
     return context;
   }
@@ -209,7 +227,7 @@ export async function reactivateMember(memberId: string): Promise<MemberActionRe
     .update({ is_active: true })
     .eq("id", memberId)
     .eq("church_id", context.churchId)
-    .select("id, first_name, last_name, phone, email, photo_url, is_active")
+    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
     .single();
 
   if (error || !data) {

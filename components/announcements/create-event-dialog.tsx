@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { EventLocationField } from "@/components/announcements/event-location-field";
+import { EventRepeatFields } from "@/components/announcements/event-repeat-fields";
+import type { EventRepeat } from "@/lib/announcements/recurrence";
 import { CalendarPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -52,6 +55,8 @@ export function CreateEventDialog({
   attendancePolicy,
   onCreated,
 }: CreateEventDialogProps) {
+  const [repeat, setRepeat] = useState<EventRepeat>("none");
+  const [repeatUntil, setRepeatUntil] = useState("");
   const [title, setTitle] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
@@ -67,6 +72,8 @@ export function CreateEventDialog({
   useEffect(() => {
     if (open) {
       setTitle("");
+      setRepeat("none");
+      setRepeatUntil("");
       setStartAt(datetimeLocalAt(defaultDate, 9));
       setEndAt(datetimeLocalAt(defaultDate, 10));
       setLocation("");
@@ -113,6 +120,8 @@ export function CreateEventDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: trimmedTitle,
+          repeat,
+          repeatUntil,
           location: location.trim() || undefined,
           startAt: startIso,
           endAt: endIso,
@@ -199,12 +208,7 @@ export function CreateEventDialog({
 
           <div className="space-y-2">
             <Label htmlFor="event-location">Location</Label>
-            <Input
-              id="event-location"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              placeholder="e.g. Main Sanctuary"
-            />
+            <EventLocationField id="event-location" value={location} onChange={setLocation} />
           </div>
 
           <div className="space-y-2">
@@ -216,6 +220,8 @@ export function CreateEventDialog({
               placeholder="Optional details saved to the calendar event."
             />
           </div>
+
+          <EventRepeatFields id="new-event" repeat={repeat} until={repeatUntil} onRepeat={setRepeat} onUntil={setRepeatUntil} />
 
           <EventAttendanceFields
             value={attendance}

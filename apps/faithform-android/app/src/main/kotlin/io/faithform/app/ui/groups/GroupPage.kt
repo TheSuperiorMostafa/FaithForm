@@ -175,6 +175,7 @@ import kotlinx.serialization.json.*
                 d.location?.let { location -> location.name?.let { Text(it) }; location.address?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }; if (location.membersOnly && location.address == null) Text("The meeting address is shared with members.", style = MaterialTheme.typography.bodySmall); location.onlineMeetingUrl?.let { link -> TextButton(onClick = { uri.openUri(link) }) { Text("Join online meeting") } } } ?: if (d.schedules.isEmpty()) Text("Details will be shared soon.", style = MaterialTheme.typography.bodyMedium) else Unit
             } } }
             if (d.leaders.isNotEmpty()) item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("Here to welcome you") { d.leaders.forEach { leader -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) { GroupAvatar(leader.avatarUrl, leader.name, 40.dp); Column(Modifier.weight(1f)) { Text(leader.name, fontWeight = FontWeight.SemiBold); Text(leader.groupRole.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary) } } } } } }
+            if (d.group.membershipState == "member" && !d.isArchived) item { Box(Modifier.padding(horizontal = 20.dp)) { GroupAvailabilitySection(store, groupId) } }
             val canManage = d.capabilities.canEditDetails || d.capabilities.canManageRequests || d.capabilities.canInvite
             if (canManage) item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("Leader tools") {
                 if (d.capabilities.canEditDetails) GroupActionRow(Icons.Outlined.Edit, "Edit group details") { editing = true }
@@ -217,7 +218,7 @@ import kotlinx.serialization.json.*
         items(members.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }, key = { it.membershipId }) { member ->
             Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.AccountCircle, null, Modifier.size(36.dp)); Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) { Text(member.name, fontWeight = FontWeight.SemiBold); Text((if (member.isYou) "You · " else "") + member.groupRole.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall) }
+                Column(Modifier.weight(1f)) { Text(member.name, fontWeight = FontWeight.SemiBold); member.availability?.takeIf { it.isNotBlank() }?.let { Text("Availability: $it", style = MaterialTheme.typography.bodySmall) }; Text((if (member.isYou) "You · " else "") + member.groupRole.replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.bodySmall) }
                 if (!member.isYou) Box {
                     IconButton(onClick = { selected = member }) { Icon(Icons.Outlined.MoreHoriz, "Actions for ${member.name}") }
                     DropdownMenu(expanded = selected?.membershipId == member.membershipId, onDismissRequest = { selected = null }) {

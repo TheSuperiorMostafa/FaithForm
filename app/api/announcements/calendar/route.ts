@@ -1,3 +1,4 @@
+import { eventRecurrenceRule } from "@/lib/announcements/recurrence";
 import { NextResponse } from "next/server";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -33,6 +34,8 @@ type CreateEventBody = {
   endAt?: string | null;
   description?: string;
   attendance?: Record<string, unknown>;
+  repeat?: unknown;
+  repeatUntil?: unknown;
 };
 
 function isValidIso(value: string | null | undefined): value is string {
@@ -190,10 +193,17 @@ export async function POST(request: Request) {
     );
   }
 
+  let recurrence: string | null;
+  try {
+    recurrence = eventRecurrenceRule(body.repeat, body.repeatUntil, startAt, auth.churchTimezone);
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Check the repeat dates." }, { status: 400 });
+  }
+
   try {
     const event = await insertChurchCalendarEvent(
       auth.churchId,
-      { title, location, startAt, endAt, description },
+      { title, location, startAt, endAt, description, recurrence: recurrence ? [recurrence] : undefined, timeZone: auth.churchTimezone || "America/New_York" },
       supabase,
     );
     let attendance = null;

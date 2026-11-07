@@ -258,15 +258,15 @@ test("decision text is never smaller than 12px, and Facebook links use the helpe
 
 test("the page has one primary action and the composer guards unsent work", () => {
   const page = read("app/dashboard/announcements/page.tsx");
-  assert.match(page, /title="Announcements"/);
+  assert.match(page, /title="Events"/);
   assert.match(page, /Tell your church what's happening, and share it where they'll see it\./);
   assert.match(page, /action=\{<NewAnnouncementButton \/>\}/);
   assert.doesNotMatch(page, /max-w-/);
 
   const composer = read("components/announcements/announcement-composer.tsx");
-  assert.match(composer, /title: "Discard this announcement\?"/);
+  assert.match(composer, /title: "Discard this event\?"/);
   assert.match(composer, /onRequestClose=\{/);
-  assert.match(composer, /Post announcement/);
+  assert.match(composer, /Post event/);
   // The attendance block belongs to the calendar event, not the composer.
   assert.doesNotMatch(composer, /EventAttendance/);
 

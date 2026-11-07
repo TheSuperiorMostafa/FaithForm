@@ -61,7 +61,7 @@ export function Members({ groupId, groupName, capacity, memberCount, members, ar
     {filtered.length ? <div className="g-panel g-table-wrap"><table className="g-table">
       <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Recent meetings</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
       <tbody>{filtered.map(m => <tr key={m.membershipId}>
-        <td><div className="flex items-center gap-3"><Avatar name={m.name} /><div><div className="g-row-title">{m.name}</div><p className="g-row-sub">Joined {date(m.joinedAt)} · {m.hasApp ? "On the app" : "Not on the app yet"}</p></div></div></td>
+        <td><div className="flex items-center gap-3"><Avatar name={m.name} /><div><div className="g-row-title">{m.name}</div><p className="g-row-sub">Joined {date(m.joinedAt)} · {m.hasApp ? "On the app" : "Not on the app yet"}</p>{m.availability && <p className="g-row-sub whitespace-pre-wrap">Availability: {m.availability}</p>}</div></div></td>
         <td><select aria-label={`Role for ${m.name}`} title={ROLE_HINTS[m.role]} value={m.role} disabled={pending || archived} onChange={e => void changeRole(m, e.target.value as GroupRole)} className="g-role-select"><option value="member">Member</option><option value={m.role === "manager" ? "manager" : "leader"}>Leader</option></select></td>
         <td className="whitespace-nowrap text-muted-foreground">{m.recentGatherings ? `Came to ${m.attendedRecent} of ${m.recentGatherings}` : "No attendance yet"}</td>
         <td className="text-right">{!archived && <Button variant="ghost" disabled={pending} onClick={() => setRemoving(m)} aria-label={`Remove ${m.name} from ${groupName}`}><X className="size-5" aria-hidden />Remove</Button>}</td>

@@ -40,7 +40,7 @@ export default async function StatementsPage({
   if (!auth) redirect("/login");
 
   const profile = await getChurchGivingProfile(auth.churchId);
-  if (!profile?.stripeChargesEnabled) {
+  if (!profile) {
     return (
       <div className="flex w-full flex-col gap-8">
         <GivingSubpageHeader page="statements" />

@@ -1764,8 +1764,13 @@ export const groupJoinResultSchema = z
   })
   .meta({ id: "GroupJoinResult" });
 
+export const groupAvailabilitySchema = z.object({
+  availability: z.string().trim().max(500),
+}).meta({ id: "GroupAvailability" });
+
 export const groupMemberSchema = z
   .object({
+    availability: z.string().max(500).nullable().optional(),
     membershipId: z.string(),
     name: z.string().max(120),
     avatarUrl: url.nullable(),
@@ -2203,6 +2208,7 @@ export const CONTRACT_SCHEMAS = {
   JoinGroupRequest: joinGroupRequestSchema,
   UpdateGroupDetailsRequest: updateGroupDetailsRequestSchema,
   GroupJoinResult: groupJoinResultSchema,
+  GroupAvailability: groupAvailabilitySchema,
   GroupMember: groupMemberSchema,
   GroupMemberPage: groupMemberPageSchema,
   GroupJoinRequestItem: groupJoinRequestItemSchema,

@@ -153,7 +153,7 @@ function TakeDownDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Take down this announcement?</DialogTitle>
+          <DialogTitle>Take down this event?</DialogTitle>
           <DialogDescription className="text-base">
             <span className="font-semibold text-foreground">{title}</span> comes
             down and goes back to your list, so you can change it and post it

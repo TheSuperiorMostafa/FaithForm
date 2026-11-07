@@ -258,23 +258,22 @@ struct HouseholdPickupSection: View {
     @Environment(\.scenePhase) private var scenePhase
     let api: APIClient
     let churchSlug: String
-    @State private var data: KidsCheckInData?
-    @State private var loading = true
-    @State private var failed = false
+    @State private var pickup = HouseholdPickupModel()
+    @State private var refreshID = 0
 
     var body: some View {
         GroupPanelView("Kids check-in") {
             VStack(alignment: .leading, spacing: 16) {
-                if loading {
+                if pickup.isLoading && pickup.data == nil && pickup.errorMessage == nil {
                     ProgressView("Loading household pickup codes…")
                         .frame(maxWidth: .infinity, minHeight: 100)
-                } else if failed {
-                    Text("We couldn’t load your pickup codes. Connect to the internet and try again.")
+                } else if let message = pickup.errorMessage {
+                    Text(message)
                         .foregroundStyle(theme.palette.contentSecondary)
-                } else if let data, data.households.isEmpty {
+                } else if let data = pickup.data, data.households.isEmpty {
                     Text("No household is linked to your account. Ask the check-in team to confirm your guardian access.")
                         .foregroundStyle(theme.palette.contentSecondary)
-                } else if let data {
+                } else if let data = pickup.data {
                     ForEach(data.households, id: \.id) { household in
                         VStack(alignment: .leading, spacing: 12) {
                             Text(household.label).font(.headline)
@@ -297,33 +296,28 @@ struct HouseholdPickupSection: View {
                         }
                     }
                 }
-                Button("Refresh pickup codes", systemImage: "arrow.clockwise") { Task { await load() } }
+                Button("Refresh pickup codes", systemImage: "arrow.clockwise") { refreshID &+= 1 }
                     .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                    .disabled(loading)
+                    .disabled(pickup.isLoading)
             }
         }
-        .task(id: "\(churchSlug)-\(scenePhase)") {
-            guard scenePhase == .active else { data = nil; return }
+        .task(id: "\(churchSlug)-\(scenePhase)-\(refreshID)") {
+            guard scenePhase == .active else { return }
             while !Task.isCancelled {
-                await load()
+                await pickup.load(api: api, churchSlug: churchSlug)
+                // Keep a failure visible and retryable instead of replacing it
+                // with another spinner every 30 seconds.
+                guard !Task.isCancelled, pickup.errorMessage == nil else { return }
                 do { try await Task.sleep(for: .seconds(30)) } catch { return }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .faithformDeepLink)) { _ in
-            guard scenePhase == .active else { return }
-            Task { await load() }
+            guard scenePhase == .active, !pickup.isLoading else { return }
+            refreshID &+= 1
         }
-        .onDisappear { data = nil }
-    }
-
-    @MainActor private func load() async {
-        loading = data == nil; failed = false
-        defer { loading = false }
-        do {
-            let response = try await api.send("api/mobile/v1/checkin/\(churchSlug)/household", as: KidsCheckInData.self)
-            guard !Task.isCancelled, scenePhase == .active else { return }
-            guard let value = response.value else { failed = true; return }
-            data = value
-        } catch is CancellationError {} catch { data = nil; failed = true }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { pickup.clear() }
+        }
+        .onDisappear { pickup.clear() }
     }
 }

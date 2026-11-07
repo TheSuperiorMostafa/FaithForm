@@ -84,7 +84,7 @@ export default async function AnnouncementsPage() {
   if (!churchId) {
     return (
       <div className="flex w-full flex-col gap-8">
-        <PageHeader title="Announcements" icon={Megaphone} />
+        <PageHeader title="Events" icon={Megaphone} />
         <EmptyState
           icon={Megaphone}
           title="Your account isn't connected to a church yet"
@@ -154,7 +154,7 @@ export default async function AnnouncementsPage() {
     <AnnouncementsComposerProvider settings={settings}>
       <div className="flex w-full flex-col gap-8">
         <PageHeader
-          title="Announcements"
+          title="Events"
           description="Tell your church what's happening, and share it where they'll see it."
           icon={Megaphone}
           action={<NewAnnouncementButton />}

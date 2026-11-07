@@ -4262,7 +4262,20 @@ public struct GroupJoinResult: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct GroupAvailability: Codable, Hashable, Sendable {
+    public let availability: String
+
+    public init(
+        availability: String
+    ) {
+        self.availability = availability
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct GroupMember: Codable, Hashable, Sendable {
+    public let availability: String?
     public let membershipId: String
     public let name: String
     public let avatarUrl: String?
@@ -4272,6 +4285,7 @@ public struct GroupMember: Codable, Hashable, Sendable {
     public let isYou: Bool
 
     public init(
+        availability: String? = nil,
         membershipId: String,
         name: String,
         avatarUrl: String? = nil,
@@ -4280,6 +4294,7 @@ public struct GroupMember: Codable, Hashable, Sendable {
         chatUserId: String? = nil,
         isYou: Bool
     ) {
+        self.availability = availability
         self.membershipId = membershipId
         self.name = name
         self.avatarUrl = avatarUrl

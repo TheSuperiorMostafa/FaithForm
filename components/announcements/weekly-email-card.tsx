@@ -73,7 +73,7 @@ export function WeeklyEmailCard({
         const text = `Monday's email is ready in ${mailbox} with ${countLabel(
           result.eventCount ?? 0,
           "announcement",
-        )}. Open it to check it and send it.`;
+        )}. The complete message is attached as a document.${result.documentWarning ? ` ${result.documentWarning}` : ""} Open it to check it and send it.`;
         setMessage({ tone: "done", text });
         toast.success(text);
         router.refresh();
@@ -172,6 +172,11 @@ export function WeeklyEmailCard({
           <p className="text-[15px] text-muted-foreground">
             Every Monday FaithForm puts these into one email draft in {mailbox} for you
             to check and send.
+          </p>
+          <p className="text-[15px] text-muted-foreground">
+            The full message is attached as a document. Google also gets a Google Docs
+            copy when document access is connected. Changes made later in your mailbox
+            do not update that copy.
           </p>
 
           {message && (

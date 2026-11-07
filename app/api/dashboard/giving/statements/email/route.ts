@@ -87,7 +87,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, slug, ein, statement_address, timezone, logo_url, giving_primary_color, giving_accent_color")
+    .select("name, slug, ein, statement_address, phone, email, timezone, logo_url, giving_primary_color, giving_accent_color")
     .eq("id", auth.churchId)
     .single();
 
@@ -142,7 +142,9 @@ export async function POST(request: Request) {
         churchName: church.name as string,
         ein: church.ein as string,
         statementAddress: (church.statement_address as string | null) ?? null,
-        donorName: donorName ?? email,
+        churchPhone: (church.phone as string | null) ?? null,
+        churchEmail: (church.email as string | null) ?? null,
+        donorName: donorName || "Donor",
         donorEmail: email,
         year,
         gifts,

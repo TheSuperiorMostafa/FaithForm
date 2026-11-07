@@ -292,8 +292,15 @@ function startOfWeekIso(d: Date): string {
   return startOfWeek(d).toISOString();
 }
 
+function netGivingTotal(rows: { net_amount_cents: number | null }[]): number | null {
+  return rows.some(row => row.net_amount_cents == null) ? null : rows.reduce((sum, row) => sum + row.net_amount_cents!, 0);
+}
+
 export type GivingPeriodTotals = {
   weekCents: number;
+  weekNetCents: number | null;
+  monthNetCents: number | null;
+  yearNetCents: number | null;
   weekGifts: number;
   weekGivers: number;
   monthGifts: number;
@@ -314,13 +321,14 @@ export async function getGivingKpis(
 
   const rows = await readAllRows<{
     amount_cents: number;
+    net_amount_cents: number | null;
     donor_id: string | null;
     donor_email: string | null;
     created_at: string;
   }>((from, to) =>
     supabase
       .from("giving_donations")
-      .select("amount_cents, donor_id, donor_email, created_at")
+      .select("amount_cents, net_amount_cents, donor_id, donor_email, created_at")
       .eq("church_id", churchId)
       .eq("status", "succeeded")
       .gte("created_at", since)
@@ -339,6 +347,9 @@ export async function getGivingKpis(
     monthGivers: countUniqueGivers(rows, monthStart),
     yearGivers: countUniqueGivers(rows, yearStart),
     weekCents: sum(inRange(weekStart)),
+    weekNetCents: netGivingTotal(inRange(weekStart)),
+    monthNetCents: netGivingTotal(inRange(monthStart)),
+    yearNetCents: netGivingTotal(inRange(yearStart)),
     weekGifts: inRange(weekStart).length,
     weekGivers: countUniqueGivers(rows, weekStart),
     monthGifts: inRange(monthStart).length,

@@ -117,8 +117,8 @@ export const navItems: NavItem[] = [
     group: "weekly",
   },
   {
-    label: "Announcements",
-    shortLabel: "News",
+    label: "Events",
+    shortLabel: "Events",
     href: "/dashboard/announcements",
     icon: Megaphone,
     features: ["announcements"],

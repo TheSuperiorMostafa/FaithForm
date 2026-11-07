@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isMembershipStatus, type MembershipStatus } from "@/lib/people/membership-status";
+
 import { getDaysPresentByMember } from "@/lib/attendance/presence";
 
 export type ChurchMember = {
@@ -10,6 +12,7 @@ export type ChurchMember = {
   email: string | null;
   photo_url: string | null;
   is_active: boolean;
+  membership_status?: MembershipStatus;
   /** Days at church by any method: the weekly sheet, the app, a code, the kiosk or a room. */
   attendance_count: number;
   /** The most recent of those days, as a local `YYYY-MM-DD`. */
@@ -53,8 +56,16 @@ export async function getMembersForChurch(
 
   // `source` arrived with migration 0083. A database without it must still
   // list everyone, so the directory never goes blank during a deploy.
-  let { data, error } = await load(`${MEMBER_COLUMNS}, source`);
-  if (error && /source/i.test(error.message)) {
+  let columns = `${MEMBER_COLUMNS}, source, membership_status`;
+  let { data, error } = await load(columns);
+  // Rolling deploys may be missing either optional directory column.
+  for (const column of ["membership_status", "source"]) {
+    if (error && error.message.includes(column)) {
+      columns = columns.replace(`, ${column}`, "");
+      ({ data, error } = await load(columns));
+    }
+  }
+  if (error && /membership_status|source/.test(error.message)) {
     ({ data, error } = await load(MEMBER_COLUMNS));
   }
 
@@ -78,6 +89,7 @@ export async function getMembersForChurch(
     photo_url: string | null;
     is_active: boolean;
     source?: string | null;
+    membership_status?: string | null;
     attendance_entries: { count: number }[] | null;
   };
 
@@ -92,6 +104,7 @@ export async function getMembersForChurch(
       email: member.email,
       photo_url: member.photo_url,
       is_active: member.is_active,
+      membership_status: isMembershipStatus(member.membership_status) ? member.membership_status : "unknown",
       attendance_count: days ? (presence?.days ?? 0) : sheetCount,
       last_attended: presence?.last ?? null,
       source: member.source === "app" ? "app" : "dashboard",

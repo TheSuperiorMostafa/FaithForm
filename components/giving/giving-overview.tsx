@@ -3,16 +3,11 @@ import {
   AlertTriangle,
   FileText,
   HandCoins,
-  Landmark,
-  Receipt,
-  Repeat,
-  Settings,
-  Users,
 } from "lucide-react";
 
+import { GivingActions } from "@/components/giving/giving-actions";
 import { GivingLinkCard } from "@/components/giving/giving-link-card";
 import { formatGiftDate, plural } from "@/components/giving/giving-page-parts";
-import { ActionCard, ActionGrid } from "@/components/ui/action-card";
 import { buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -64,6 +59,7 @@ export async function GivingOverview({
 
   return (
     <>
+      <GivingActions isAdmin={isAdmin} />
       {summary.failedSubscriptionCount > 0 && (
         <div
           role="status"
@@ -109,9 +105,10 @@ export async function GivingOverview({
           label="This week"
           cents={summary.weekCents}
           gifts={summary.weekGifts}
+          netCents={summary.weekNetCents}
         />
-        <TotalCard label="This month" cents={summary.monthCents} gifts={summary.monthGifts} />
-        <TotalCard label="This year" cents={summary.yearCents} gifts={summary.yearGifts} />
+        <TotalCard label="This month" cents={summary.monthCents} gifts={summary.monthGifts} netCents={summary.monthNetCents} />
+        <TotalCard label="This year" cents={summary.yearCents} gifts={summary.yearGifts} netCents={summary.yearNetCents} />
       </section>
 
       <section aria-labelledby="recent-gifts" className="flex flex-col gap-4">
@@ -130,56 +127,6 @@ export async function GivingOverview({
         <RecentGifts gifts={summary.recentDonations} />
       </section>
 
-      <section aria-label="More in Giving">
-        <ActionGrid>
-          <ActionCard
-            href="/dashboard/giving/gifts"
-            icon={Receipt}
-            title="All gifts"
-            description="Search every gift and download a spreadsheet."
-          />
-          <ActionCard
-            href="/dashboard/giving/donors"
-            icon={Users}
-            title="Donors"
-            description="Who gave, and what they gave this year."
-          />
-          <ActionCard
-            href="/dashboard/giving/recurring"
-            icon={Repeat}
-            title="Recurring gifts"
-            description="Gifts that repeat on their own."
-            badge={
-              summary.failedSubscriptionCount > 0 ? (
-                <StatusBadge tone="attention">
-                  {summary.failedSubscriptionCount} failed
-                </StatusBadge>
-              ) : undefined
-            }
-          />
-          <ActionCard
-            href="/dashboard/giving/payouts"
-            icon={Landmark}
-            title="Deposits"
-            description="Money on its way to your church's bank."
-          />
-          <ActionCard
-            href="/dashboard/giving/statements"
-            icon={FileText}
-            title="Year-end statements"
-            description="Email or print each donor's yearly record."
-          />
-          {isAdmin && (
-            <ActionCard
-              href="/dashboard/giving/settings"
-              icon={Settings}
-              title="Giving settings"
-              description="Funds, statement details, giving page and the app."
-            />
-          )}
-        </ActionGrid>
-      </section>
-
       <GivingLinkCard givePageUrl={givePageUrl} />
 
       <FundTotals month={funds.month} year={funds.ytd} />
@@ -192,11 +139,13 @@ function TotalCard({
   cents,
   gifts,
   highlight = false,
+  netCents,
 }: {
   label: string;
   cents: number;
   gifts: number;
   highlight?: boolean;
+  netCents: number | null;
 }) {
   return (
     <Card
@@ -223,7 +172,8 @@ function TotalCard({
           highlight ? "text-primary-foreground/85 dark:text-muted-foreground" : "text-muted-foreground",
         )}
       >
-        from {plural(gifts, "gift")}
+        Gross · {plural(gifts, "gift")}
+        <span className="mt-2 block">Net after fees: {netCents === null ? "Waiting for fees" : formatCents(netCents)}</span>
       </p>
     </Card>
   );

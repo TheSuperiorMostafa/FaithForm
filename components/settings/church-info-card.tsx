@@ -15,6 +15,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
@@ -379,14 +380,11 @@ export function ChurchDetailsForm({
           </Field>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field id="church_phone" label="Phone" error={errorFor("phone")}>
-              <Input
+              <PhoneInput
                 id="church_phone"
-                type="tel"
-                autoComplete="tel"
                 value={form.phone}
                 maxLength={40}
-                placeholder="(555) 123-4567"
-                onChange={(event) => set("phone", event.target.value)}
+                onValueChange={(value) => set("phone", value)}
               />
             </Field>
             <Field id="church_email" label="Email" error={errorFor("email")}>
