@@ -1,13 +1,14 @@
-# Security Policy Tests - Environment Blocker
+# Security Policy Tests - Partial Runtime Available
 
-## Status: Cannot Execute in Current Environment
+## Status: Local PostgreSQL Available, Full Supabase API Unavailable
 
-The security policy tests in this directory require a live PostgreSQL/Supabase database to validate RLS policies, storage access controls, and constraints.
+The security policy tests require a database to validate RLS policies, storage access controls, and constraints. Local PostgreSQL is now installed and running, but full Supabase API/storage emulation is not available.
 
 ### Environment Check Results
 
 **Docker:** ❌ Not available  
-**PostgreSQL client:** ❌ Not available  
+**PostgreSQL server:** ✅ Installed and running (v16)
+**PostgreSQL client:** ✅ Available (`psql`)
 **Supabase CLI:** ❌ Not available
 
 ### What This Means
