@@ -174,42 +174,61 @@ create policy "group_event_responses_select"
   using (public.has_groups_access(church_id));
 
 -- Members can update their own responses
+-- Security: verify active church relationship to prevent TOCTOU cross-church writes
 create policy "group_event_responses_update_own"
   on public.group_event_responses
   for update
   to authenticated
   using (
     -- Member owns this response through their membership's visitor account
+    -- AND has active relationship with the same church
     exists (
       select 1 
       from public.group_memberships gm
       join public.visitor_accounts va on va.id = gm.account_id
+      join public.visitor_church_relationships vcr
+        on vcr.account_id = va.id
+        and vcr.church_id = gm.church_id
+        and vcr.church_id = group_event_responses.church_id
+        and vcr.status = 'active'
       where gm.id = group_event_responses.membership_id
       and va.user_id = auth.uid()
     )
   )
   with check (
-    -- Same ownership check
+    -- Same ownership and church verification for updates
     exists (
       select 1 
       from public.group_memberships gm
       join public.visitor_accounts va on va.id = gm.account_id
+      join public.visitor_church_relationships vcr
+        on vcr.account_id = va.id
+        and vcr.church_id = gm.church_id
+        and vcr.church_id = group_event_responses.church_id
+        and vcr.status = 'active'
       where gm.id = group_event_responses.membership_id
       and va.user_id = auth.uid()
     )
   );
 
 -- Managers can assign volunteers
+-- Security: verify active church relationship for manager
 create policy "group_event_responses_insert_managers"
   on public.group_event_responses
   for insert
   to authenticated
   with check (
     -- Must be a manager or leader of the group
+    -- AND have active relationship with the church
     exists (
       select 1
       from public.group_memberships gm
       join public.visitor_accounts va on va.id = gm.account_id
+      join public.visitor_church_relationships vcr
+        on vcr.account_id = va.id
+        and vcr.church_id = gm.church_id
+        and vcr.church_id = group_event_responses.church_id
+        and vcr.status = 'active'
       where gm.group_id = group_event_responses.group_id
       and gm.church_id = group_event_responses.church_id
       and va.user_id = auth.uid()

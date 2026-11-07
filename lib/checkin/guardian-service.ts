@@ -99,7 +99,7 @@ export async function queueGuardianAlert(churchId: string, sessionId: string, ac
   const accountIds = await guardianAccountIds(churchId, session.household_id, admin);
   if (!accountIds.length) return { queued: false, guardianCount: 0 };
   const church = checked(await admin.from("churches").select("slug").eq("id", churchId).maybeSingle());
-  if (!church?.slug) throw new Error("church_not_found");
+  if (!church?.slug) return { queued: false, guardianCount: 0 };
   const id = randomUUID();
   // A short per-child bucket makes simultaneous/double clicks one alert.
   const bucket = Math.floor(Date.now() / 60_000);
