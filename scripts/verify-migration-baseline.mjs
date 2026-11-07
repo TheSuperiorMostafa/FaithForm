@@ -129,6 +129,14 @@ else {
       "0126_support_email_review.sql",
       "752e1fc7a3a3dcc0c8ec0c355a4471b59ffae29b05e06c1d3c2f390647c58dca",
     ],
+    // Member self-service availability updates with active church relationship
+    // verification. Narrow UPDATE grant (availability only) on group_memberships
+    // with same-church + active relationship enforcement. Security review: requires
+    // independent verification of RLS policy correctness before production.
+    [
+      "0148_member_self_service_rls.sql",
+      "8baa38618f489c61db0ca344211d1e4aac65f677e34d5fd48f568e5104c98a15",
+    ],
   ]);
 
   for (const later of files.filter((file) => file > securityFile)) {
