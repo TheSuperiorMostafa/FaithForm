@@ -768,11 +768,13 @@ export async function alertGuardians(sessionId: string): Promise<ActionResult<{ 
   if (typeof sessionId !== "string" || !sessionId) return fail("Choose a child to alert their guardians.");
   try {
     const data = await queueGuardianAlert(context.auth.churchId, sessionId, context.auth.userId);
-    if (data.queued) await tryQueueStaffNotification({ churchId: context.auth.churchId, event: "kids_alerts", eventKey: `${sessionId}:${Math.floor(Date.now() / 60_000)}`, href: "/dashboard/checkin" });
+    if (data.queued) {
+      await tryQueueStaffNotification({ churchId: context.auth.churchId, event: "kids_alerts", eventKey: `${sessionId}:${Math.floor(Date.now() / 60_000)}`, href: "/dashboard/checkin" });
+    }
     revalidateCheckin();
     return { ok: true, data };
   } catch (error) {
-    return fail(toUserError(error, "We couldn't queue the guardian alert. Please try again."));
+    return fail(toUserError(error, "We couldn't queue the guardian alert."));
   }
 }
 

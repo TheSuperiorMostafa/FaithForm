@@ -125,6 +125,7 @@ type OutboxJob = {
     | "stream_recording"
     | "group_join_request"
     | "group_event"
+    | "group"
     | "household"
     | "checkin_session";
   kind?: string;
@@ -213,6 +214,16 @@ async function resolveRecipients(
   // Private child notifications must never fall through to a church broadcast.
   if (job.topic === "checkin" || job.subject_type === "household" || job.subject_type === "checkin_session") {
     return { recipients: await resolveGuardianRecipients(admin, job), nextCursor: null, hasMore: false };
+  }
+  if (job.kind === "group_announcement") {
+    const accountIds = job.target_account_ids ?? [];
+    if (!accountIds.length) return { recipients: [], nextCursor: null, hasMore: false };
+    const { data, error } = await admin.from("group_memberships").select("account_id")
+      .eq("church_id", job.church_id).eq("group_id", job.subject_id)
+      .eq("status", "active").neq("notification_level", "muted").in("account_id", accountIds);
+    if (error) throw new Error("push_audience_unavailable");
+    const current = (data ?? []).map((row) => row.account_id as string);
+    return { recipients: current.length ? await resolveTargetedRecipients(admin, job, current) : [], nextCursor: null, hasMore: false };
   }
   if (job.target_account_ids && job.target_account_ids.length > 0) {
     return { recipients: await resolveTargetedRecipients(admin, job, job.target_account_ids), nextCursor: null, hasMore: false };
@@ -383,6 +394,12 @@ async function subjectIsStillCurrent(
       return Boolean(code);
     }
     return false;
+  }
+  if (job.kind === "group_announcement" && job.subject_type === "group") {
+    const { data, error } = await admin.from("groups").select("id")
+      .eq("id", job.subject_id).eq("church_id", job.church_id).eq("status", "active").maybeSingle();
+    if (error) throw new Error("push_subject_unavailable");
+    return Boolean(data);
   }
   // "Maria asked to join…" only while the request is still waiting; "you're
   // in" only once it was approved.

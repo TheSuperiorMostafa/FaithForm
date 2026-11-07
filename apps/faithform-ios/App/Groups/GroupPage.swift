@@ -85,6 +85,7 @@ struct GroupInfoScreen: View {
     @State private var invite: String?
     @State private var preferences = false
     @State private var editing = false
+    @State private var announcing = false
     @State private var joinedRecently = false
     @State private var leaving = false
 
@@ -167,6 +168,9 @@ struct GroupInfoScreen: View {
                         .accessibilityLabel("Group notifications")
                 }
             }
+        }
+        .sheet(isPresented: $announcing) {
+            if let detail { GroupAnnouncementView(model: model, groupId: groupId, groupName: detail.group.name).faithformTheme() }
         }
         .sheet(isPresented: $editing) { if let detail { GroupEditView(model: model, detail: detail) { Task { await load() } } } }
         .sheet(isPresented: $preferences) { GroupPreferencesView(model: model, groupId: groupId) }
@@ -282,6 +286,11 @@ struct GroupInfoScreen: View {
         if canManage {
             GroupPanelView("Leader tools") {
                 VStack(spacing: 4) {
+                    if detail.group.membershipState == "member", !detail.isArchived,
+                       let role = detail.group.groupRole, ["leader", "manager"].contains(role) {
+                        Button { announcing = true } label: { GroupActionRow(symbol: "megaphone", title: "Send announcement") }
+                            .buttonStyle(GroupPressStyle())
+                    }
                     if detail.capabilities.canEditDetails {
                         Button { editing = true } label: { GroupActionRow(symbol: "pencil", title: "Edit group details") }
                             .buttonStyle(GroupPressStyle())

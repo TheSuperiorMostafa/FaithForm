@@ -117,6 +117,12 @@ else {
   // additive correction closes direct staff reads that its original policies
   // left open. Pin the exact file so later edits cannot silently widen access.
   const reviewedCorrections = new Map([
+    // 0142's new directory classification needs the same read access as the
+    // named basic columns in 0110. No table-wide or sensitive-column grant.
+    [
+      "0146_people_membership_status_read_grant.sql",
+      "e7f7a0e52126fcdce6644026a62f7b110391d1446cf9363430e0a4b934dbbb01",
+    ],
     [
       "0110_feature_scoped_sensitive_reads.sql",
       "68f5877a17de0eab91025e57cf719c2cec645909213cf65f302d4328d8049863",
@@ -128,6 +134,29 @@ else {
     [
       "0126_support_email_review.sql",
       "752e1fc7a3a3dcc0c8ec0c355a4471b59ffae29b05e06c1d3c2f390647c58dca",
+    ],
+    // New private storage bucket for stream recordings. No storage.objects policies
+    // = default-deny for authenticated/anon (intentional). All access via signed URLs
+    // authenticated as service_role. Narrow scope: creates one new private bucket only,
+    // does not modify existing baseline-secured storage.objects policies.
+    [
+      "0148_stream_recordings_bucket.sql",
+      "4d600d9f76d57a9cea0ad9f7434e63e4ea062393a578a064342ed337f806eb23",
+    ],
+    // Recurring events (announcement_occurrences) + group announcements (notification_outbox).
+    // Removed unused parallel RSVP system (group_event_responses) conflicting with existing
+    // working group_event_rsvps. Kept recurrence tables + saved_event_locations. Reviewed.
+    [
+      "0147_recurring_events_and_group_announcements.sql",
+      "813d27051905ac9960c4776927b1db1554d36729d517468b9c84708e74ba5b33",
+    ],
+    // Wire announcement_occurrences into mobile feed/calendar SQL functions for
+    // recurring event support. Updates mobile_announcement_feed and mobile_announcement_schedule
+    // to expand recurring events into individual occurrences, hide cancelled ones, and apply
+    // occurrence-specific overrides. Maintains backward compatibility with non-recurring events.
+    [
+      "0150_wire_occurrences_into_mobile_feed.sql",
+      "001ab246d648558f4c6ff6ae38e0737328167f159b56805fa137613a528b3e71",
     ],
   ]);
 

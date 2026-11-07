@@ -37,6 +37,9 @@ export type AnnouncementRow = {
   created_at: string;
   updated_at: string;
   computed_status?: AnnouncementStatus;
+  /** Recurring event flag (migration 0147). */
+  is_recurring?: boolean;
+  recurrence_rule?: string | null;
 };
 
 export type MobileVisibility = "none" | "public" | "followers" | "members";
@@ -58,7 +61,7 @@ export type CalendarQueueItem = CalendarEventPreview & {
  * `mapAnnouncementRow` already defaults every one of them.
  */
 const ANNOUNCEMENT_COLUMNS =
-  "id, church_id, title, body, start_at, end_at, all_day, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, social_graphic_url, social_graphic_path, mobile_visibility, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
+  "id, church_id, title, body, start_at, end_at, all_day, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, social_graphic_url, social_graphic_path, mobile_visibility, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes, is_recurring, recurrence_rule";
 
 const OPTIONAL_ANNOUNCEMENT_COLUMNS = [
   "facebook_scheduled_publish_time",
@@ -66,6 +69,8 @@ const OPTIONAL_ANNOUNCEMENT_COLUMNS = [
   "social_graphic_path",
   "mobile_visibility",
   "all_day",
+  "is_recurring",
+  "recurrence_rule",
 ] as const;
 
 export function isMissingFacebookScheduleColumn(message: string): boolean {

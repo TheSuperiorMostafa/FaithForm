@@ -71,7 +71,7 @@ export async function getMembersForChurch(
 
   if (error) {
     console.error("getMembersForChurch:", error.message);
-    return [];
+    throw new Error("We couldn't load your church's people. Please try again.");
   }
 
   // Every way someone can be recorded, counted once a day. Without 0083 the

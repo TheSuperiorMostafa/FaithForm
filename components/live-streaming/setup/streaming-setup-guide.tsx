@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Camera,
-  CheckCircle2,
   Clapperboard,
-  Loader2,
+  CheckCircle2,
   MonitorPlay,
-  RefreshCw,
   SlidersHorizontal,
   Users,
 } from "lucide-react";
@@ -26,7 +24,7 @@ import {
 } from "@/components/live-streaming/platforms-card";
 import { RecordingSettingsCard } from "@/components/live-streaming/setup/recording-settings-card";
 import { AdvancedSection } from "@/components/ui/advanced-section";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import { GO_LIVE_HREF } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
@@ -38,8 +36,6 @@ const TOOL_ICONS: Record<StreamingToolId, React.ComponentType<{ className?: stri
   browser: Camera,
   someone_else: Users,
 };
-
-const CHECK_EVERY_MS = 5000;
 
 type Props = {
   ingestServerUrl: string;
@@ -161,7 +157,6 @@ export function StreamingSetupGuide({
         <AdvancedSection title="Technical details" description="Server address and stream key, one at a time">
           <StreamTechnicalDetails ingestServerUrl={ingestServerUrl} isAdmin={isAdmin} streamKey={streamKey} />
         </AdvancedSection>
-        <VideoCheck />
       </Step>
 
       <Step number={2} title="After the service" description="Every service is recorded automatically. What should happen next?">
@@ -216,73 +211,5 @@ function Step({
       </div>
       {children}
     </li>
-  );
-}
-
-/** Asks the same status endpoint the Go live tab uses, every few seconds. */
-function VideoCheck() {
-  const [state, setState] = useState<"checking" | "waiting" | "connected" | "unknown">("checking");
-  const [busy, setBusy] = useState(false);
-
-  const check = useCallback(async () => {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/stream/status", { cache: "no-store" });
-      if (!res.ok) {
-        setState("unknown");
-        return;
-      }
-      const data = (await res.json()) as { overview?: { video?: { arriving?: boolean } } };
-      setState(data.overview?.video?.arriving ? "connected" : "waiting");
-    } catch {
-      setState("unknown");
-    } finally {
-      setBusy(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void check();
-    const id = setInterval(() => {
-      if (document.visibilityState === "visible") void check();
-    }, CHECK_EVERY_MS);
-    return () => clearInterval(id);
-  }, [check]);
-
-  return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border p-5 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3" role="status" aria-live="polite">
-        {state === "connected" ? (
-          <>
-            <CheckCircle2 className="size-7 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden />
-            <span className="flex flex-col">
-              <span className="text-lg font-semibold text-emerald-700 dark:text-emerald-300">Connected ✓</span>
-              <span className="text-[15px] text-muted-foreground">
-                FaithForm is receiving your video. You&apos;re ready for Sunday.
-              </span>
-            </span>
-          </>
-        ) : state === "unknown" ? (
-          <span className="flex flex-col">
-            <span className="text-lg font-semibold">We couldn&apos;t check just now</span>
-            <span className="text-[15px] text-muted-foreground">Check your internet connection, then try again.</span>
-          </span>
-        ) : (
-          <>
-            <Loader2 className="size-7 shrink-0 text-amber-600 motion-safe:animate-spin dark:text-amber-300" aria-hidden />
-            <span className="flex flex-col">
-              <span className="text-lg font-semibold">Waiting for your video…</span>
-              <span className="text-[15px] text-muted-foreground">
-                Press Start streaming in your software. This can take up to half a minute.
-              </span>
-            </span>
-          </>
-        )}
-      </div>
-      <Button type="button" variant="outline" onClick={() => void check()} disabled={busy} className="shrink-0 gap-2">
-        <RefreshCw className={cn("size-4", busy && "motion-safe:animate-spin")} aria-hidden />
-        Check again
-      </Button>
-    </div>
   );
 }

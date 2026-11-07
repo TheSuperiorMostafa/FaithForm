@@ -67,7 +67,11 @@ struct GroupsScreensTests {
             for section in ["Info", "Events", "Members"] {
                 let body = try section == "Info" ? JSONEncoder().encode(detail) : section == "Events" ? JSONEncoder().encode(events) : JSONEncoder().encode(members)
                 let envelope = Data("{\"ok\":true,\"data\":\(String(decoding: body, as: UTF8.self)),\"meta\":{\"apiVersion\":\"2026-08-24\",\"apiMajor\":1,\"requestId\":\"design-test\",\"minimumSupportedClientBuild\":1}}".utf8)
-                let transport = StubTransport([.init(status: 200, body: envelope)])
+                let availability = Data("{\"ok\":true,\"data\":{\"availability\":\"\"},\"meta\":{\"apiVersion\":\"2026-08-24\",\"apiMajor\":1,\"requestId\":\"design-test\",\"minimumSupportedClientBuild\":1}}".utf8)
+                let expectedRequests = section == "Info" ? 2 : 1
+                let transport = StubTransport(section == "Info"
+                    ? [.init(status: 200, body: envelope), .init(status: 200, body: availability)]
+                    : [.init(status: 200, body: envelope)])
                 let api = APIClient(configuration: .init(environment: APIEnvironment(key: "design-test", baseURL: URL(string: "https://example.invalid")!), clientBuild: 1), transport: transport, tokens: GroupTestTokens())
                 let model = GroupsModel(api: api, churchSlug: "grace")
                 let window = UIWindow(windowScene: scene); window.frame = scene.screen.bounds
@@ -81,9 +85,11 @@ struct GroupsScreensTests {
                 }.faithformTheme().environment(\.colorScheme, scheme))
                 window.makeKeyAndVisible()
                 let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-                while await transport.requestCount() == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
+                while await transport.requestCount() < expectedRequests && ContinuousClock.now < deadline {
+                    try await Task.sleep(for: .milliseconds(50))
+                }
                 try await Task.sleep(for: .milliseconds(500))
-                #expect(await transport.requestCount() == 1)
+                #expect(await transport.requestCount() == expectedRequests)
                 #expect(model.error == nil)
                 let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
                 let output = directory.appendingPathComponent("\(section.lowercased())-\(scheme == .dark ? "dark" : "light").png")
