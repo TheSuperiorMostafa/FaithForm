@@ -144,9 +144,9 @@ export async function cancelRecurringOccurrence(
 export async function editRecurringOccurrence(
   occurrenceId: string,
   overrides: {
-    title?: string;
-    description?: string;
-    location?: string;
+    title?: string | null;
+    description?: string | null;
+    location?: string | null;
     startAt?: string;
     endAt?: string | null;
   }
@@ -227,8 +227,9 @@ export async function listAnnouncementOccurrences(
     
     const { data: occurrences, error } = await admin
       .from("announcement_occurrences")
-      .select("id, occurrence_date, start_at, end_at, override_title, override_description, override_location, cancelled_at, cancelled_by, cancel_reason")
+      .select("id, occurrence_date, start_at, end_at, override_title:title, override_description:description, override_location:event_location, cancelled_at, cancelled_by, cancel_reason:cancellation_reason")
       .eq("announcement_id", announcementId)
+      .eq("church_id", auth.churchId)
       .order("occurrence_date", { ascending: true });
     
     if (error) {

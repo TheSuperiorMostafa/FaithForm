@@ -99,6 +99,8 @@ try {
       "tests/database/messaging-sync-claim.test.ts",
       "tests/database/recurring-cancellation-jobs.test.ts",
       "tests/database/announcement-takedown-atomic.test.ts",
+      "tests/database/mobile-recurring-announcements.test.ts",
+      "tests/database/people-membership-status.test.ts",
     ],
     {
       stdio: "inherit",

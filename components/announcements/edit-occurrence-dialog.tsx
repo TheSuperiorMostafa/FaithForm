@@ -46,26 +46,11 @@ export function EditOccurrenceDialog({
   async function handleSave() {
     setSaving(true);
 
-    const overrides: Record<string, string | null> = {};
-    
-    if (title.trim()) {
-      overrides.title = title.trim();
-    }
-    if (description.trim()) {
-      overrides.description = description.trim();
-    }
-    if (location.trim()) {
-      overrides.location = location.trim();
-    }
-
-    // If all fields are empty, we're clearing overrides
-    if (!title.trim() && !description.trim() && !location.trim()) {
-      overrides.title = null;
-      overrides.description = null;
-      overrides.location = null;
-    }
-
-    const result = await editRecurringOccurrence(occurrence.id, overrides as any);
+    const result = await editRecurringOccurrence(occurrence.id, {
+      title: title.trim() || null,
+      description: description.trim() || null,
+      location: location.trim() || null,
+    });
 
     setSaving(false);
 
@@ -98,7 +83,7 @@ export function EditOccurrenceDialog({
           <DialogTitle>Edit Occurrence</DialogTitle>
           <DialogDescription>
             Customize this specific occurrence on {dateLabel}. Leave fields empty to use the default values from
-            "{baseTitle}".
+            &ldquo;{baseTitle}&rdquo;.
           </DialogDescription>
         </DialogHeader>
 

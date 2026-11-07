@@ -15,25 +15,25 @@ create table if not exists public.announcement_occurrences (
   id uuid primary key default gen_random_uuid(),
   church_id uuid not null references public.churches (id) on delete cascade,
   announcement_id uuid not null references public.announcements (id) on delete cascade,
-  
+
   -- Instance-specific overrides (null = use parent announcement values)
   occurrence_date date not null, -- The date this occurrence happens (church timezone)
   start_at timestamptz not null,
   end_at timestamptz,
   all_day boolean not null default false,
-  
+
   -- Allow individual occurrence edits
   title text, -- null = use parent title
   description text, -- null = use parent description
   event_location text, -- null = use parent location
-  
+
   -- Status of this specific occurrence
-  status text not null default 'active' 
+  status text not null default 'active'
     check (status in ('active', 'cancelled', 'rescheduled')),
   cancelled_at timestamptz,
   cancelled_by uuid references auth.users (id) on delete set null,
   cancellation_reason text,
-  
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -99,8 +99,8 @@ alter table public.notification_outbox
 alter table public.notification_outbox
   add constraint notification_outbox_subject_type_check
   check (subject_type in (
-    'announcement', 'stream_event', 'stream_recording', 
-    'group_join_request', 'group_event', 'group_message', 
+    'announcement', 'stream_event', 'stream_recording',
+    'group_join_request', 'group_event', 'group_message',
     'household', 'checkin_session',
     'group' -- NEW for group_announcement
   ));
@@ -131,20 +131,20 @@ alter table public.notification_outbox
 create table if not exists public.saved_event_locations (
   id uuid primary key default gen_random_uuid(),
   church_id uuid not null references public.churches (id) on delete cascade,
-  
+
   name text not null, -- e.g., "Main Sanctuary", "Community Center"
   full_address text not null, -- Complete formatted address
-  
+
   -- Structured address components for matching
   street_address text,
   city text,
   state text,
   postal_code text,
-  
+
   -- Usage tracking
   use_count integer not null default 0,
   last_used_at timestamptz,
-  
+
   created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -185,14 +185,14 @@ begin
   if p_location is null or length(btrim(p_location)) < 5 then
     return;
   end if;
-  
+
   -- Check if this exact location already exists
   select id into v_existing
   from public.saved_event_locations
   where church_id = p_church_id
     and lower(full_address) = lower(btrim(p_location))
   limit 1;
-  
+
   if v_existing is not null then
     -- Increment use count
     update public.saved_event_locations

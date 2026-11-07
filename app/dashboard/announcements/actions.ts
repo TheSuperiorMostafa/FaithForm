@@ -14,6 +14,7 @@ import {
   addToEmailQueue,
   removeFromEmailQueue,
 } from "@/lib/announcements/email-queue";
+import { toZonedInputValue } from "@/lib/announcements/facebook-schedule";
 import { createRecurringOccurrences } from "@/lib/announcements/recurring-events";
 import { facebookPostUrl } from "@/lib/announcements/published-channels";
 import {
@@ -213,7 +214,11 @@ function parsePublishForm(formData: FormData) {
   const repeat = (["none", "daily", "weekly", "monthly"] as const).includes(repeatRaw as never)
     ? (repeatRaw as "none" | "daily" | "weekly" | "monthly")
     : "none";
-  const repeatUntil = String(formData.get("repeat_until") ?? "").trim() || null;
+  const repeatUntil = repeat === "none" ? null : String(formData.get("repeat_until") ?? "").trim();
+  if (repeat !== "none" && (!repeatUntil || !/^\d{4}-\d{2}-\d{2}$/.test(repeatUntil) ||
+      Number.isNaN(Date.parse(repeatUntil)) || new Date(repeatUntil).toISOString().slice(0, 10) !== repeatUntil)) {
+    return { ok: false as const, error: "Choose a valid date to stop repeating." };
+  }
 
   if (!title) return { ok: false as const, error: "Give the announcement a title." };
   if (!startAt || Number.isNaN(Date.parse(startAt))) {
@@ -467,11 +472,11 @@ export async function publishAnnouncement(
     published_by: ctx.user.id,
     last_publish_error: null,
     // Recurring event fields (E4)
-    is_recurring: payload.repeat !== "none" && Boolean(payload.repeatUntil),
-    recurrence_rule: payload.repeat !== "none" && payload.repeatUntil 
-      ? `FREQ=${payload.repeat.toUpperCase()};UNTIL=${payload.repeatUntil}`
-      : null,
-    recurrence_until: payload.repeatUntil || null,
+    ...(!payload.announcementId || payload.repeatUntil ? {
+      is_recurring: payload.repeat !== "none" && Boolean(payload.repeatUntil),
+      recurrence_rule: payload.repeatUntil ? `FREQ=${payload.repeat.toUpperCase()};UNTIL=${payload.repeatUntil}` : null,
+      recurrence_until: payload.repeatUntil,
+    } : {}),
     ...socialFields,
   };
 
@@ -590,16 +595,19 @@ export async function publishAnnouncement(
   announcementId = saved.id;
 
   // Generate recurring occurrences if this is a recurring event (E4)
-  if (payload.repeat !== "none" && payload.repeatUntil && !payload.announcementId) {
+  if (payload.repeat !== "none" && payload.repeatUntil) {
     try {
       const timeZone = await getChurchTimezone(ctx.supabase, ctx.churchId);
-      await createRecurringOccurrences(
+      const localStart = payload.allDay
+        ? new Date(payload.startAt).toISOString().slice(0, 10)
+        : toZonedInputValue(Date.parse(payload.startAt), timeZone);
+      const result = await createRecurringOccurrences(
         {
           announcementId,
           churchId: ctx.churchId,
-          startDate: payload.startAt,
-          startTime: payload.allDay ? null : new Date(payload.startAt).toISOString().slice(11, 16),
-          endTime: payload.allDay || !payload.endAt ? null : new Date(payload.endAt).toISOString().slice(11, 16),
+          startDate: localStart.slice(0, 10),
+          startTime: payload.allDay ? null : localStart.slice(11, 16),
+          endTime: payload.allDay || !payload.endAt ? null : toZonedInputValue(Date.parse(payload.endAt), timeZone).slice(11, 16),
           frequency: payload.repeat,
           untilDate: payload.repeatUntil,
           timezone: timeZone,
@@ -607,6 +615,7 @@ export async function publishAnnouncement(
         },
         createAdminClient(),
       );
+      if (result.error) throw new Error(result.error);
     } catch (error) {
       console.error("Failed to generate recurring occurrences:", error);
       // Don't fail the whole publish if occurrence generation fails
@@ -842,6 +851,8 @@ export async function createWeeklyAnnouncementDraftAction(options?: {
     success: true,
     draftUrl: result.draftUrl,
     eventCount: result.eventCount,
+    documentUrl: result.documentUrl,
+    documentWarning: result.documentWarning,
   };
 }
 

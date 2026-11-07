@@ -76,12 +76,10 @@ export function ChurchInfoEditor({
   initial,
   context,
   canEdit,
-  initialSection,
 }: {
   initial: ChurchAppInfo;
   context: ChurchAppInfoContext;
   canEdit: boolean;
-  initialSection?: string;
 }) {
   const [saved, setSaved] = useState(initial);
   const [form, setForm] = useState(initial);

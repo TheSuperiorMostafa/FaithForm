@@ -70,7 +70,7 @@ export function WeeklyEmailCard({
           setMessage({ tone: "problem", text: result.error });
           return;
         }
-        const text = "Email drafted.";
+        const text = result.documentWarning ? `Email drafted. ${result.documentWarning}` : "Email drafted.";
         setMessage({ tone: "done", text });
         toast.success(text);
         router.refresh();

@@ -7,48 +7,6 @@
 -- 3. Apply occurrence-specific overrides (title, location, time)
 -- 4. Maintain backward compatibility with non-recurring events
 
--- Helper function: expand recurring event into visible occurrences within a date range
-create or replace function public.expand_announcement_occurrences(
-  p_announcement_id uuid,
-  p_from_date timestamptz,
-  p_to_date timestamptz,
-  p_now timestamptz
-)
-returns table (
-  occurrence_id uuid,
-  occurrence_date date,
-  start_at timestamptz,
-  end_at timestamptz,
-  all_day boolean,
-  title text,
-  description text,
-  location text
-)
-language sql
-security definer
-stable
-set search_path = public
-as $$
-  select
-    o.id as occurrence_id,
-    o.occurrence_date,
-    o.start_at,
-    o.end_at,
-    o.all_day,
-    o.title,
-    o.description,
-    o.event_location as location
-  from public.announcement_occurrences o
-  where o.announcement_id = p_announcement_id
-    and o.status = 'active'
-    and o.start_at >= p_from_date
-    and o.start_at < p_to_date
-    and o.start_at >= p_now
-  order by o.start_at asc
-$$;
-
-grant execute on function public.expand_announcement_occurrences(uuid, timestamptz, timestamptz, timestamptz) to service_role;
-
 -- Update mobile_announcement_feed to show recurring occurrences
 drop function if exists public.mobile_announcement_feed(text, text, boolean, timestamptz, uuid, integer, timestamptz);
 
@@ -124,18 +82,21 @@ as $$
       null::uuid as occurrence_id,
       null::uuid as parent_announcement_id
     from visible_announcements v
-    where not v.is_recurring
+    where (not v.is_recurring or not exists (
+      select 1 from public.announcement_occurrences o
+      where o.announcement_id = v.id and o.church_id = v.church_id
+    ))
       and v.effective_start is not null
       and coalesce(
         v.end_at,
         v.effective_start + case when coalesce(v.all_day, false) then interval '2 days' else interval '1 day' end
       ) > p_now
-    
+
     union all
-    
+
     -- Recurring event occurrences
     select
-      v.id || '-' || o.id::text as id, -- Synthetic ID combining announcement and occurrence
+      o.id as id,
       coalesce(o.title, v.title, v.event_title) as title,
       coalesce(o.description, nullif(v.body, ''), v.notes, '') as body,
       o.start_at,
@@ -151,10 +112,9 @@ as $$
       o.id as occurrence_id,
       v.id as parent_announcement_id
     from visible_announcements v
-    join public.announcement_occurrences o on o.announcement_id = v.id
+    join public.announcement_occurrences o on o.announcement_id = v.id and o.church_id = v.church_id
     where v.is_recurring
       and o.status = 'active'
-      and o.start_at >= p_now
       and coalesce(
         o.end_at,
         o.start_at + case when o.all_day then interval '2 days' else interval '1 day' end
@@ -195,6 +155,7 @@ as $$
   limit least(greatest(coalesce(p_limit, 20), 1), 50)
 $$;
 
+revoke all on function public.mobile_announcement_feed(text, text, boolean, timestamptz, uuid, integer, timestamptz) from public, anon, authenticated;
 grant execute on function public.mobile_announcement_feed(text, text, boolean, timestamptz, uuid, integer, timestamptz) to service_role;
 
 -- Update mobile_announcement_schedule to show recurring occurrences
@@ -273,14 +234,17 @@ as $$
       v.effective_start,
       v.effective_end
     from visible_announcements v
-    where not v.is_recurring
+    where (not v.is_recurring or not exists (
+      select 1 from public.announcement_occurrences o
+      where o.announcement_id = v.id and o.church_id = v.church_id
+    ))
       and v.effective_start is not null
-    
+
     union all
-    
+
     -- Recurring event occurrences
     select
-      v.id || '-' || o.id::text as id,
+      o.id as id,
       coalesce(o.title, v.title, v.event_title) as title,
       coalesce(o.description, nullif(v.body, ''), v.notes, '') as body,
       o.start_at,
@@ -301,7 +265,7 @@ as $$
         o.start_at + case when o.all_day then interval '2 days' else interval '1 day' end
       ) as effective_end
     from visible_announcements v
-    join public.announcement_occurrences o on o.announcement_id = v.id
+    join public.announcement_occurrences o on o.announcement_id = v.id and o.church_id = v.church_id
     where v.is_recurring
       and o.status = 'active'
   )
@@ -327,6 +291,7 @@ as $$
   order by e.effective_start asc, e.id asc
 $$;
 
+revoke all on function public.mobile_announcement_schedule(text, text, timestamptz, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function public.mobile_announcement_schedule(text, text, timestamptz, timestamptz, timestamptz) to service_role;
 
 -- Update mobile_announcement_detail to show specific occurrence when requested
@@ -361,13 +326,13 @@ stable
 set search_path = public
 as $$
   select
-    a.id,
-    coalesce(a.title, a.event_title),
-    coalesce(nullif(a.body, ''), a.notes, ''),
-    coalesce(a.start_at, a.event_date),
-    a.end_at,
-    coalesce(a.all_day, false),
-    a.event_location,
+    coalesce(o.id, a.id),
+    coalesce(o.title, a.title, a.event_title),
+    coalesce(o.description, nullif(a.body, ''), a.notes, ''),
+    coalesce(o.start_at, a.start_at, a.event_date),
+    case when o.id is not null then o.end_at else a.end_at end,
+    coalesce(o.all_day, a.all_day, false),
+    coalesce(o.event_location, a.event_location),
     a.social_graphic_url,
     a.poster_alt_text,
     (a.is_pinned and (a.pinned_until is null or a.pinned_until > p_now)),
@@ -378,12 +343,18 @@ as $$
     a.recurrence_rule
   from public.announcements a
   join public.churches c on c.id = a.church_id
+  left join public.announcement_occurrences o
+    on o.announcement_id = a.id and o.church_id = a.church_id
+    and o.id = p_announcement_id and o.status = 'active' and a.is_recurring
   where c.slug = p_church_slug
-    and a.id = p_announcement_id
+    and (a.id = p_announcement_id or o.id = p_announcement_id)
     and a.status = 'published'
     and a.is_ready
     and a.mobile_unpublished_at is null
     and a.mobile_visibility <> 'none'
+    and coalesce(o.start_at, a.start_at, a.event_date) is not null
+    and (o.id is not null or coalesce(a.end_at, coalesce(a.start_at, a.event_date)
+      + case when a.all_day then interval '2 days' else interval '1 day' end) > p_now)
     and coalesce(a.mobile_published_at, a.published_at, p_now) <= p_now
     and (
       a.mobile_visibility = 'public'
@@ -392,6 +363,7 @@ as $$
     )
 $$;
 
+revoke all on function public.mobile_announcement_detail(text, uuid, text, timestamptz) from public, anon, authenticated;
 grant execute on function public.mobile_announcement_detail(text, uuid, text, timestamptz) to service_role;
 
 notify pgrst, 'reload schema';

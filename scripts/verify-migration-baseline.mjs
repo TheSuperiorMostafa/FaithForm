@@ -140,7 +140,7 @@ else {
     // authenticated as service_role. Narrow scope: creates one new private bucket only,
     // does not modify existing baseline-secured storage.objects policies.
     [
-      "0146_stream_recordings_bucket.sql",
+      "0148_stream_recordings_bucket.sql",
       "4d600d9f76d57a9cea0ad9f7434e63e4ea062393a578a064342ed337f806eb23",
     ],
     // Recurring events (announcement_occurrences) + group announcements (notification_outbox).
@@ -148,15 +148,7 @@ else {
     // working group_event_rsvps. Kept recurrence tables + saved_event_locations. Reviewed.
     [
       "0147_recurring_events_and_group_announcements.sql",
-      "3fc6f20311bad5f29d6d18c7a8c18a4b55ecb141078cae5ef861055bf036021f",
-    ],
-    // Member self-service availability updates with active church relationship
-    // verification. Narrow UPDATE grant (availability only) on group_memberships
-    // with same-church + active relationship enforcement. Independent review approved
-    // ownership + active relationship + church-specific narrow availability grant.
-    [
-      "0148_member_self_service_rls.sql",
-      "8baa38618f489c61db0ca344211d1e4aac65f677e34d5fd48f568e5104c98a15",
+      "813d27051905ac9960c4776927b1db1554d36729d517468b9c84708e74ba5b33",
     ],
     // Wire announcement_occurrences into mobile feed/calendar SQL functions for
     // recurring event support. Updates mobile_announcement_feed and mobile_announcement_schedule
@@ -164,7 +156,7 @@ else {
     // occurrence-specific overrides. Maintains backward compatibility with non-recurring events.
     [
       "0150_wire_occurrences_into_mobile_feed.sql",
-      "dda9462d30045e3ba5ec0ee5b70493e0c51437f2b88dd917d0b68bf6e88576f4",
+      "001ab246d648558f4c6ff6ae38e0737328167f159b56805fa137613a528b3e71",
     ],
   ]);
 

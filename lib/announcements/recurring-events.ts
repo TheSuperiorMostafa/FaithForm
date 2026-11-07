@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fromZonedInputValue } from "@/lib/announcements/facebook-schedule";
 
 export type RecurrenceFrequency = "daily" | "weekly" | "monthly";
 
@@ -46,10 +47,10 @@ export function generateOccurrenceDates(config: RecurringEventConfig): Occurrenc
   
   // Calculate max date (5 years or until date, whichever is earlier)
   const fiveYearsOut = new Date(start);
-  fiveYearsOut.setFullYear(fiveYearsOut.getFullYear() + 5);
+  fiveYearsOut.setUTCFullYear(fiveYearsOut.getUTCFullYear() + 5);
   const maxDate = new Date(Math.min(until.getTime(), fiveYearsOut.getTime()));
   
-  let current = new Date(start);
+  const current = new Date(start);
   let count = 0;
   
   while (current.getTime() <= maxDate.getTime() && count < MAX_OCCURRENCES) {
@@ -115,7 +116,8 @@ function buildOccurrenceTimestamps(
   
   // Convert church-local datetime to UTC
   const startAt = toUTCTimestamp(date, startTime, timezone);
-  const endAt = endTime ? toUTCTimestamp(date, endTime, timezone) : null;
+  const nextDay = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  const endAt = endTime ? toUTCTimestamp(endTime <= startTime ? nextDay : date, endTime, timezone) : null;
   
   return { startAt, endAt };
 }
@@ -124,41 +126,9 @@ function buildOccurrenceTimestamps(
  * Convert a date and time in a specific timezone to UTC ISO 8601.
  */
 function toUTCTimestamp(date: string, time: string, timezone: string): string {
-  try {
-    // Use Intl.DateTimeFormat to properly handle DST and timezone offsets
-    const localDatetime = `${date}T${time}:00`;
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).formatToParts(new Date(localDatetime));
-    
-    const partsMap: Record<string, string> = {};
-    for (const part of parts) {
-      if (part.type !== "literal") {
-        partsMap[part.type] = part.value;
-      }
-    }
-    
-    // Build UTC-equivalent by parsing in UTC then adjusting
-    const utcEquivalent = new Date(
-      `${partsMap.year}-${partsMap.month}-${partsMap.day}T${partsMap.hour}:${partsMap.minute}:${partsMap.second}Z`
-    );
-    
-    // Calculate offset and adjust
-    const localTime = new Date(localDatetime);
-    const offset = localTime.getTime() - utcEquivalent.getTime();
-    const utcTime = new Date(localTime.getTime() - offset);
-    
-    return utcTime.toISOString();
-  } catch {
-    throw new Error(`Failed to convert ${date} ${time} in ${timezone} to UTC`);
-  }
+  const ms = fromZonedInputValue(`${date}T${time}`, timezone);
+  if (ms === null) throw new Error(`Failed to convert ${date} ${time} in ${timezone} to UTC`);
+  return new Date(ms).toISOString();
 }
 
 /**
@@ -177,11 +147,12 @@ export async function createRecurringOccurrences(
     }
     
     // Check which occurrences already exist
-    const { data: existing } = await db
+    const { data: existing, error: readError } = await db
       .from("announcement_occurrences")
       .select("occurrence_date")
       .eq("announcement_id", config.announcementId)
-      .eq("status", "active");
+      .eq("church_id", config.churchId);
+    if (readError) return { created: 0, skipped: 0, error: readError.message };
     
     const existingDates = new Set((existing || []).map((row) => row.occurrence_date));
     
@@ -253,9 +224,9 @@ export async function cancelOccurrence(
 export async function editOccurrence(
   occurrenceId: string,
   overrides: {
-    title?: string;
-    description?: string;
-    location?: string;
+    title?: string | null;
+    description?: string | null;
+    location?: string | null;
     startAt?: string;
     endAt?: string | null;
   },
@@ -264,7 +235,6 @@ export async function editOccurrence(
   const { error } = await db
     .from("announcement_occurrences")
     .update({
-      ...overrides,
       title: overrides.title || null,
       description: overrides.description || null,
       event_location: overrides.location || null,

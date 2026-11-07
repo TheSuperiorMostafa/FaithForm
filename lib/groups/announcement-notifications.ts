@@ -11,8 +11,7 @@ export interface GroupAnnouncementNotification {
   churchId: string;
   title: string;
   message: string;
-  deepLink?: string;
-  actorUserId: string;
+  churchSlug: string;
 }
 
 /**
@@ -30,7 +29,7 @@ export async function queueGroupAnnouncement(
       .select("id, name, church_id")
       .eq("id", notification.groupId)
       .eq("church_id", notification.churchId)
-      .eq("is_active", true)
+      .eq("status", "active")
       .maybeSingle();
     
     if (!group) {
@@ -44,6 +43,7 @@ export async function queueGroupAnnouncement(
       .eq("group_id", notification.groupId)
       .eq("church_id", notification.churchId)
       .eq("status", "active")
+      .neq("notification_level", "muted")
       .not("account_id", "is", null)
       .limit(200); // Max per batch
     
@@ -106,7 +106,7 @@ export async function queueGroupAnnouncement(
     // Create dedupe key (group + timestamp bucket)
     const bucket = Math.floor(Date.now() / 60_000); // 1-minute buckets
     const dedupeKey = createHash("sha256")
-      .update(`group-announcement:${notification.groupId}:${bucket}`)
+      .update(`group-announcement:${notification.groupId}:${bucket}:${notification.title}:${notification.message}`)
       .digest("hex");
     
     // Insert notification into outbox
@@ -119,8 +119,8 @@ export async function queueGroupAnnouncement(
       target_account_ids: finalAccountIds,
       topic: "groups",
       title: notification.title,
-      body: notification.message,
-      deep_link: notification.deepLink || `faithform://groups/${notification.groupId}`,
+      body: notification.message.slice(0, 180),
+      deep_link: `faithform://church/${notification.churchSlug}/groups/${notification.groupId}`,
       collapse_key: `group-${notification.groupId}`,
       dedupe_key: dedupeKey,
     });
@@ -139,40 +139,4 @@ export async function queueGroupAnnouncement(
     console.error("[group-announcements] Failed to queue notification:", msg);
     return { ok: false, recipientCount: 0, error: msg };
   }
-}
-
-/**
- * Check if a user can send announcements to a group.
- * Only group leaders/managers can send announcements.
- */
-export async function canSendGroupAnnouncement(
-  userId: string,
-  groupId: string,
-  churchId: string,
-  db: SupabaseClient
-): Promise<boolean> {
-  // Resolve userId to account_id
-  const { data: account } = await db
-    .from("visitor_accounts")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
-  
-  if (!account) return false;
-  
-  // Check if account has a leader/manager role in the group
-  const { data: membership } = await db
-    .from("group_memberships")
-    .select("group_role")
-    .eq("group_id", groupId)
-    .eq("church_id", churchId)
-    .eq("account_id", account.id as string)
-    .eq("status", "active")
-    .maybeSingle();
-  
-  if (!membership) return false;
-  
-  const role = membership.group_role as string;
-  return role === "leader" || role === "manager";
 }
