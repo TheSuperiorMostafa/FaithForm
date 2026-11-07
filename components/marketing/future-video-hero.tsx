@@ -23,6 +23,23 @@ export function HeroVideoPreview({ src, mobileSrc, poster, captions }: HeroVideo
   const [replayPending, setReplayPending] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const demoRef = useRef<HTMLDivElement>(null);
+  const failureTimer = useRef<number | undefined>(undefined);
+
+  const checkMediaFailure = useCallback(() => {
+    window.clearTimeout(failureTimer.current);
+    // The browser can report a source error while it is still selecting or
+    // retrying a source. Only show the fallback if the video is still failed.
+    failureTimer.current = window.setTimeout(() => {
+      const video = videoRef.current;
+      if (!video) return;
+      const noPlayableSource = video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE
+        && video.readyState === HTMLMediaElement.HAVE_NOTHING;
+      if (video.error || noPlayableSource) {
+        setMediaError(true);
+        setReplayPending(false);
+      }
+    }, 300);
+  }, []);
 
   const startPlayback = useCallback(() => {
     const video = videoRef.current;
@@ -30,21 +47,30 @@ export function HeroVideoPreview({ src, mobileSrc, poster, captions }: HeroVideo
     video.play().catch((error: unknown) => {
       // Pausing or reloading cancels an older play request; it is not a failure.
       if (error instanceof DOMException && error.name === "AbortError") return;
-      setReplayPending(false);
-      if (video.error) setMediaError(true);
-      else setBlocked(true);
+      if (error instanceof DOMException && error.name === "NotAllowedError") {
+        setReplayPending(false);
+        setBlocked(true);
+        return;
+      }
+      checkMediaFailure();
     });
-  }, []);
+  }, [checkMediaFailure]);
 
   useEffect(() => {
     const video = videoRef.current;
-    const lastSource = video?.querySelector("source:last-of-type");
-    const handleSourceError = () => { setMediaError(true); setReplayPending(false); };
-    lastSource?.addEventListener("error", handleSourceError);
-    // Source errors do not bubble, and can occur before React hydrates the page.
-    if (video?.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) handleSourceError();
-    return () => lastSource?.removeEventListener("error", handleSourceError);
-  }, []);
+    if (!video) return;
+    const lastSource = video.querySelector("source:last-of-type");
+    // Listen directly so a failed caption track cannot mark the film as failed.
+    video.addEventListener("error", checkMediaFailure);
+    lastSource?.addEventListener("error", checkMediaFailure);
+    // The initial error can occur before React hydrates the page.
+    if (video.error || video.networkState === HTMLMediaElement.NETWORK_NO_SOURCE) checkMediaFailure();
+    return () => {
+      window.clearTimeout(failureTimer.current);
+      video.removeEventListener("error", checkMediaFailure);
+      lastSource?.removeEventListener("error", checkMediaFailure);
+    };
+  }, [checkMediaFailure]);
 
   useEffect(() => {
     if (showDemo) {
@@ -84,12 +110,17 @@ export function HeroVideoPreview({ src, mobileSrc, poster, captions }: HeroVideo
     <div hidden={showDemo}>
       <div className="marketing-hero-video-frame">
         <video ref={videoRef} autoPlay muted playsInline controls preload="auto" poster={poster ?? undefined}
-          onPlaying={() => { setBlocked(false); setEnded(false); setMediaError(false); setReplayPending(false); }}
+          onPlaying={() => {
+            window.clearTimeout(failureTimer.current);
+            setBlocked(false);
+            setEnded(false);
+            setMediaError(false);
+            setReplayPending(false);
+          }}
           onEnded={(event) => { if (event.currentTarget.ended) setEnded(true); }}
-          onError={() => { setMediaError(true); setReplayPending(false); }}
           onVolumeChange={() => setMuted(videoRef.current?.muted ?? true)} aria-label="FaithForm product film">
           {mobileSrc && <source src={mobileSrc} type="video/mp4" media="(max-width: 767px)" />}
-          <source src={src} type="video/mp4" onError={() => { setMediaError(true); setReplayPending(false); }} />
+          <source src={src} type="video/mp4" />
           {captions && <track kind="captions" src={captions} srcLang="en" label="English captions" />}
           Your browser does not support video playback.
         </video>
