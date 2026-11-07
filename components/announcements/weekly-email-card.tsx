@@ -70,10 +70,7 @@ export function WeeklyEmailCard({
           setMessage({ tone: "problem", text: result.error });
           return;
         }
-        const text = `Monday's email is ready in ${mailbox} with ${countLabel(
-          result.eventCount ?? 0,
-          "announcement",
-        )}. The complete message is attached as a document.${result.documentWarning ? ` ${result.documentWarning}` : ""} Open it to check it and send it.`;
+        const text = "Email drafted.";
         setMessage({ tone: "done", text });
         toast.success(text);
         router.refresh();

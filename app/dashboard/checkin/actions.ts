@@ -772,7 +772,7 @@ export async function alertGuardians(sessionId: string): Promise<ActionResult<{ 
     revalidateCheckin();
     return { ok: true, data };
   } catch (error) {
-    return fail(toUserError(error, "We couldn't queue the guardian alert. Please try again."));
+    return fail(toUserError(error, "We couldn't queue the guardian alert."));
   }
 }
 
