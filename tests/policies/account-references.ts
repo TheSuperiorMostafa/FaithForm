@@ -67,13 +67,6 @@ export const KEPT_UNLINKED: readonly Reference[] = [
   { table: "checkin_sessions", column: "pre_checked_in_by_account_id", action: "set null" },
   // A group's audit keeps the event, not the person.
   { table: "group_audit_events", column: "subject_account_id", action: "set null" },
-  // Recurring event occurrence cancellations preserve the record when staff member is deleted.
-  { table: "announcement_occurrences", column: "cancelled_by", action: "set null" },
-  // Volunteer schedule responses are church records, preserved when staff member's auth is deleted.
-  { table: "group_event_responses", column: "user_id", action: "set null" },
-  { table: "group_event_responses", column: "assigned_by", action: "set null" },
-  // Saved event locations preserve the record when the creator is deleted.
-  { table: "saved_event_locations", column: "created_by", action: "set null" },
 ];
 
 export const ACCOUNT_REFERENCES: readonly Reference[] = [...ACCOUNT_OWNED, ...KEPT_UNLINKED];

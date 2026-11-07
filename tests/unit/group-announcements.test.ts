@@ -3,7 +3,6 @@
  * Validates leader-only permissions, recipient filtering, church isolation.
  */
 
-// @ts-nocheck
 import { strict as assert } from "node:assert";
 import { describe, it, before, after } from "node:test";
 import { createClient } from "@supabase/supabase-js";
@@ -28,9 +27,9 @@ describe("Group announcements (G2)", { skip: !supabaseUrl || !supabaseServiceKey
     // Create test church
     const { data: church } = await db
       .from("churches")
-      .insert({ name: "Test Church", slug: `test-group-ann-${Date.now()}` } as any)
+      .insert({ name: "Test Church", slug: `test-group-ann-${Date.now()}` })
       .select("id")
-      .single() as any;
+      .single() as { data: { id: string } | null };
     
     testChurchId = church!.id;
     

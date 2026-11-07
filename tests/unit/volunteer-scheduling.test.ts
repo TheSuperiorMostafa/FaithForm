@@ -3,7 +3,6 @@
  * Validates self-service restrictions, manager permissions, and proper isolation.
  */
 
-// @ts-nocheck
 import { strict as assert } from "node:assert";
 import { describe, it, before, after } from "node:test";
 import { createClient } from "@supabase/supabase-js";
@@ -274,7 +273,7 @@ describe("Volunteer scheduling (B2/G1)", { skip: !supabaseUrl || !supabaseServic
   it("validates status values", async () => {
     const { error } = await db
       .from("group_event_responses")
-      .update({ status: "invalid" as any })
+      .update({ status: "invalid" as "pending" | "accepted" | "declined" | "tentative" })
       .eq("event_id", testEventId)
       .eq("membership_id", testMembershipId);
     

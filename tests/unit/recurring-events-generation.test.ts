@@ -208,11 +208,11 @@ describe("Recurring event generation (E4)", () => {
         allDay: false,
       },
       {
-        ...({} as any),
+        ...({}  as Partial<typeof validConfig>),
         timezone: "America/Los_Angeles",
       },
       {
-        ...({} as any),
+        ...({}  as Partial<typeof validConfig>),
         timezone: "America/Chicago",
       },
     ];
