@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Laptop, Loader2, RefreshCw } from "lucide-react";
+import { Copy, Download, Laptop, Loader2, RefreshCw } from "lucide-react";
 import { createStreamingPcPairingCode } from "@/app/dashboard/live-streaming/actions";
 import { Button } from "@/components/ui/button";
 import type { EncoderDevice } from "@/lib/stream/encoder";
@@ -20,6 +20,10 @@ export function EncoderPairingCard({ isAdmin, devices }: EncoderPairingCardProps
   const [pending, startTransition] = useTransition();
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
+
+  const commands = pairingCode ? `cd "$HOME/Downloads/faithform-stream-agent" &&
+npm install &&
+FAITHFORM_PAIRING_CODE=${pairingCode} npm start` : "";
 
   const pairedDevice = devices.find((device) => device.isPaired);
 
@@ -75,12 +79,21 @@ export function EncoderPairingCard({ isAdmin, devices }: EncoderPairingCardProps
               Expires {new Date(expiresAt).toLocaleTimeString()}
             </p>
           ) : null}
-          <p className="mt-4 text-sm text-muted-foreground">On the streaming PC, run:</p>
-          <pre className="mt-2 overflow-x-auto rounded-lg bg-background p-3 text-sm text-muted-foreground">
-{`cd infra/stream-agent
-npm install
-FAITHFORM_PAIRING_CODE=${pairingCode} npm start`}
-          </pre>
+          <div className="mt-4 space-y-3 text-[15px]">
+            <p>On the Mac running OBS:</p>
+            <ol className="list-decimal space-y-2 pl-5">
+              <li><a className="inline-flex min-h-11 items-center gap-2 font-medium text-primary underline" href="/downloads/faithform-stream-agent.zip" download><Download className="size-4" aria-hidden />Download streaming helper</a></li>
+              <li>Open the ZIP in Downloads. Keep the extracted <strong>faithform-stream-agent</strong> folder there.</li>
+              <li>Open OBS and enable its WebSocket server in Tools → WebSocket Server Settings.</li>
+              <li>Open Terminal and paste these commands:</li>
+            </ol>
+          </div>
+          <pre className="mt-2 overflow-x-auto rounded-lg bg-background p-3 text-sm text-muted-foreground">{commands}</pre>
+          <Button type="button" variant="outline" className="mt-3" onClick={async () => {
+            try { await navigator.clipboard.writeText(commands); toast.success("Pairing commands copied."); }
+            catch { toast.error("Select and copy the commands above."); }
+          }}><Copy className="size-4" aria-hidden />Copy Mac commands</Button>
+          <p className="mt-3 text-sm text-muted-foreground">Requires Node.js 18 or later. If OBS asks for a WebSocket password, follow the included README to add it. If you saved the helper elsewhere, change the first line to that folder.</p>
         </div>
       ) : null}
 

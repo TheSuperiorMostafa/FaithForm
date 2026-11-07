@@ -11,21 +11,33 @@ Runs on the church computer that has OBS open. FaithForm sends **Go Live** / **E
 
 1. In FaithForm, open **Live Streaming → Pair streaming PC**
 2. Copy the 6-digit code
-3. On the streaming PC:
+3. Download the streaming helper from FaithForm Setup on the OBS computer.
+   Extract the ZIP into Downloads; it contains a `faithform-stream-agent` folder.
+4. On a Mac, open Terminal and run the commands below. Replace `123456` with a
+   freshly generated code. The `&&` stops if the folder or install is missing.
 
 ```bash
-cd infra/stream-agent
-npm install
+cd "$HOME/Downloads/faithform-stream-agent" &&
+npm install &&
 FAITHFORM_PAIRING_CODE=123456 npm start
 ```
+
+If OBS WebSocket authentication is enabled, add
+`OBS_WEBSOCKET_PASSWORD="your OBS password"` before `npm start` (on the same line
+as `FAITHFORM_PAIRING_CODE`). Keep the password private.
+
+If you saved the helper somewhere other than Downloads, use that folder in the
+`cd` command. Do not run npm from your home folder.
+
+Developers with a repository checkout can instead use
+`cd /path/to/FaithForm/infra/stream-agent`.
 
 The agent saves `.faithform-agent.json` locally and keeps polling FaithForm.
 
 ## Run every Sunday
 
 ```bash
-cd infra/stream-agent
-npm start
+cd "$HOME/Downloads/faithform-stream-agent" && npm start
 ```
 
 Open OBS first, then start the agent. When an admin clicks **Go Live** in FaithForm, the agent configures OBS and starts streaming.

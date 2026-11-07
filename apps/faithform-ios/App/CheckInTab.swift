@@ -120,6 +120,7 @@ struct CheckInTabView: View {
                 if isStale { OfflineBanner(message: L.offlineCached) }
                 ScrollView {
                     HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug).id(features.churchSlug)
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                     AutomaticCheckInSection(
                         model: attendance,
                         onSetUp: {
@@ -254,7 +255,6 @@ struct AutomaticCheckInSection: View {
 
 /// Pickup credentials remain in this authenticated view only, never in a cache or push payload.
 struct HouseholdPickupSection: View {
-    @Environment(\.faithformTheme) private var theme
     @Environment(\.scenePhase) private var scenePhase
     let api: APIClient
     let churchSlug: String
@@ -262,44 +262,8 @@ struct HouseholdPickupSection: View {
     @State private var refreshID = 0
 
     var body: some View {
-        GroupPanelView("Kids check-in") {
-            VStack(alignment: .leading, spacing: 16) {
-                if pickup.isLoading && pickup.data == nil && pickup.errorMessage == nil {
-                    ProgressView("Loading household pickup codes…")
-                        .frame(maxWidth: .infinity, minHeight: 100)
-                } else if let message = pickup.errorMessage {
-                    Text(message)
-                        .foregroundStyle(theme.palette.contentSecondary)
-                } else if let data = pickup.data, data.households.isEmpty {
-                    Text("No household is linked to your account. Ask the check-in team to confirm your guardian access.")
-                        .foregroundStyle(theme.palette.contentSecondary)
-                } else if let data = pickup.data {
-                    ForEach(data.households, id: \.id) { household in
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text(household.label).font(.headline)
-                            Text("Household pickup code").font(.subheadline)
-                            Text(household.pickupCode)
-                                .font(.system(size: 34, weight: .bold, design: .monospaced))
-                                .textSelection(.enabled)
-                                .accessibilityLabel("Household pickup code \(household.pickupCode.map(String.init).joined(separator: " "))")
-                            Text("Show this code to the check-in team at pickup. Keep it private.")
-                                .font(.caption).foregroundStyle(theme.palette.contentSecondary)
-                            ForEach(household.children, id: \.id) { child in
-                                HStack { Text(child.name); Spacer(); Text(child.roomName).foregroundStyle(theme.palette.contentSecondary) }
-                            }
-                            ForEach(household.alerts, id: \.id) { alert in
-                                Label("Please return to \(alert.roomName) for \(alert.childName).", systemImage: "exclamationmark.triangle.fill")
-                                    .font(.headline).foregroundStyle(.red)
-                                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-                            }
-                        }
-                    }
-                }
-                Button("Refresh pickup codes", systemImage: "arrow.clockwise") { refreshID &+= 1 }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                    .disabled(pickup.isLoading)
-            }
+        HouseholdPickupCard(data: pickup.data, isLoading: pickup.isLoading, errorMessage: pickup.errorMessage) {
+            refreshID &+= 1
         }
         .task(id: "\(churchSlug)-\(scenePhase)-\(refreshID)") {
             guard scenePhase == .active else { return }
@@ -319,5 +283,79 @@ struct HouseholdPickupSection: View {
             if phase != .active { pickup.clear() }
         }
         .onDisappear { pickup.clear() }
+    }
+}
+
+
+/// Shares the parent's proposed width in every state, including its loading label.
+struct HouseholdPickupCard: View {
+    @Environment(\.faithformTheme) private var theme
+    let data: KidsCheckInData?
+    let isLoading: Bool
+    let errorMessage: String?
+    let onRefresh: () -> Void
+
+    var body: some View {
+        GroupPanelView("Kids check-in") {
+            VStack(alignment: .leading, spacing: 16) {
+                if isLoading && data == nil && errorMessage == nil {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading household pickup codes…")
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 100)
+                    .accessibilityElement(children: .combine)
+                } else if let message = errorMessage {
+                    Text(message)
+                        .foregroundStyle(theme.palette.contentSecondary)
+                } else if let data = data, data.households.isEmpty {
+                    Text("No household is linked to your account. Ask the check-in team to confirm your guardian access.")
+                        .foregroundStyle(theme.palette.contentSecondary)
+                } else if let data = data {
+                    ForEach(data.households, id: \.id) { household in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(household.label).font(.headline)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text("Household pickup code").font(.subheadline)
+                            Text(household.pickupCode)
+                                .font(.system(size: 34, weight: .bold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                                .accessibilityLabel("Household pickup code \(household.pickupCode.map(String.init).joined(separator: " "))")
+                            Text("Show this code to the check-in team at pickup. Keep it private.")
+                                .font(.caption).foregroundStyle(theme.palette.contentSecondary)
+                            ForEach(household.children, id: \.id) { child in
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(child.name)
+                                    Text(child.roomName).foregroundStyle(theme.palette.contentSecondary)
+                                }
+                                .fixedSize(horizontal: false, vertical: true)
+                            }
+                            ForEach(household.alerts, id: \.id) { alert in
+                                Label("Please return to \(alert.roomName) for \(alert.childName).", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.headline).foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                    }
+                }
+                Button(action: onRefresh) {
+                    Label {
+                        Text("Refresh pickup codes")
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: { Image(systemName: "arrow.clockwise") }
+                }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                .disabled(isLoading)
+            }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 }
