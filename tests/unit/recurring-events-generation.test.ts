@@ -208,12 +208,22 @@ describe("Recurring event generation (E4)", () => {
         allDay: false,
       },
       {
-        ...({}  as Partial<typeof validConfig>),
+        startDate: "2026-01-01",
+        startTime: "10:00",
+        endTime: "11:00",
+        frequency: "weekly" as const,
+        untilDate: "2026-01-15",
         timezone: "America/Los_Angeles",
+        allDay: false,
       },
       {
-        ...({}  as Partial<typeof validConfig>),
+        startDate: "2026-01-01",
+        startTime: "10:00",
+        endTime: "11:00",
+        frequency: "weekly" as const,
+        untilDate: "2026-01-15",
         timezone: "America/Chicago",
+        allDay: false,
       },
     ];
     

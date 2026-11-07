@@ -2,23 +2,23 @@
 
 import { getLocationSuggestions, saveLocation } from "@/lib/announcements/location-suggestions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requireChurchAndUser } from "@/lib/auth/church-context";
+import { getChurchAuth } from "@/lib/auth/church";
 
 export async function searchLocations(query: string): Promise<{ ok: true; suggestions: Array<{ label: string; value: string }> } | { ok: false; error: string }> {
   try {
-    const ctx = await requireChurchAndUser();
-    if (!ctx.churchId) {
+    const auth = await getChurchAuth();
+    if (!auth?.churchId) {
       return { ok: false, error: "Church ID not found" };
     }
 
     const db = createAdminClient();
-    const suggestions = await getLocationSuggestions(ctx.churchId, query, db);
+    const suggestions = await getLocationSuggestions(auth.churchId, query, db);
 
     return {
       ok: true,
       suggestions: suggestions.map(s => ({
         label: s.name,
-        value: s.full_address,
+        value: s.fullAddress,
       })),
     };
   } catch (error) {
@@ -29,11 +29,11 @@ export async function searchLocations(query: string): Promise<{ ok: true; sugges
 
 export async function trackLocationUsage(location: string): Promise<{ ok: boolean }> {
   try {
-    const ctx = await requireChurchAndUser();
-    if (!ctx.churchId || !location) return { ok: false };
+    const auth = await getChurchAuth();
+    if (!auth?.churchId || !location) return { ok: false };
 
     const db = createAdminClient();
-    await saveLocation(ctx.churchId, location, db);
+    await saveLocation(auth.churchId, location, undefined, db);
 
     return { ok: true };
   } catch {

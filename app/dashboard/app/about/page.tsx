@@ -48,8 +48,7 @@ export default async function ChurchAppAboutPage() {
       
       <div className="rounded-xl border border-border bg-card p-6">
         <ChurchAboutForm
-          initialDescription={churchInfo.info.description}
-          initialMission={churchInfo.info.mission}
+          initialAbout={churchInfo.info.about}
           canEdit={auth.isAdmin}
         />
       </div>
