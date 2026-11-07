@@ -5,7 +5,7 @@
 
 import { strict as assert } from "node:assert";
 import { describe, it } from "node:test";
-import { generateOccurrenceDates } from "@/lib/announcements/recurring-events";
+import { generateOccurrenceDates, type RecurringEventConfig } from "@/lib/announcements/recurring-events";
 
 describe("Recurring event generation (E4)", () => {
   it("generates daily occurrences correctly", () => {
@@ -195,42 +195,21 @@ describe("Recurring event generation (E4)", () => {
   });
   
   it("handles different timezones correctly", () => {
-    const configs = [
-      {
-        churchId: "church-1",
-        announcementId: "event-1",
-        frequency: "weekly" as const,
-        startDate: "2026-01-01",
-        startTime: "10:00",
-        endTime: "11:00",
-        untilDate: "2026-01-15",
-        timezone: "America/New_York",
-        allDay: false,
-      },
-      {
-        startDate: "2026-01-01",
-        startTime: "10:00",
-        endTime: "11:00",
-        frequency: "weekly" as const,
-        untilDate: "2026-01-15",
-        timezone: "America/Los_Angeles",
-        allDay: false,
-      },
-      {
-        startDate: "2026-01-01",
-        startTime: "10:00",
-        endTime: "11:00",
-        frequency: "weekly" as const,
-        untilDate: "2026-01-15",
-        timezone: "America/Chicago",
-        allDay: false,
-      },
-    ];
+    const baseConfig: RecurringEventConfig = {
+      churchId: "church-1",
+      announcementId: "event-1",
+      frequency: "weekly",
+      startDate: "2026-01-01",
+      startTime: "10:00",
+      endTime: "11:00",
+      untilDate: "2026-01-15",
+      timezone: "America/New_York",
+      allDay: false,
+    };
     
-    // Copy config for different timezones
-    const nyConfig = configs[0];
-    const laConfig = { ...nyConfig, timezone: "America/Los_Angeles" };
-    const chiConfig = { ...nyConfig, timezone: "America/Chicago" };
+    const nyConfig = baseConfig;
+    const laConfig: RecurringEventConfig = { ...baseConfig, timezone: "America/Los_Angeles" };
+    const chiConfig: RecurringEventConfig = { ...baseConfig, timezone: "America/Chicago" };
     
     const nyOccurrences = generateOccurrenceDates(nyConfig);
     const laOccurrences = generateOccurrenceDates(laConfig);

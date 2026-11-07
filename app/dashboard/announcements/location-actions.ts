@@ -33,7 +33,7 @@ export async function trackLocationUsage(location: string): Promise<{ ok: boolea
     if (!auth?.churchId || !location) return { ok: false };
 
     const db = createAdminClient();
-    await saveLocation(auth.churchId, location, undefined, db);
+    await saveLocation(auth.churchId, location, auth.userId, db);
 
     return { ok: true };
   } catch {
