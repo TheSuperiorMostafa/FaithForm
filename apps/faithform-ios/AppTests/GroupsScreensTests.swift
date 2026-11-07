@@ -31,7 +31,7 @@ struct GroupsScreensTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
         let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while await transport.requestCount() < expectedRequests && ContinuousClock.now < deadline {
+        while await transport.requestCount() == 0 && ContinuousClock.now < deadline {
             try await Task.sleep(for: .milliseconds(50))
         }
         let paths = await transport.received.compactMap { $0.url?.path }
@@ -85,7 +85,9 @@ struct GroupsScreensTests {
                 }.faithformTheme().environment(\.colorScheme, scheme))
                 window.makeKeyAndVisible()
                 let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-                while await transport.requestCount() == 0 && ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
+                while await transport.requestCount() < expectedRequests && ContinuousClock.now < deadline {
+                    try await Task.sleep(for: .milliseconds(50))
+                }
                 try await Task.sleep(for: .milliseconds(500))
                 #expect(await transport.requestCount() == expectedRequests)
                 #expect(model.error == nil)
