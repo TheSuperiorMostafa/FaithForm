@@ -92,12 +92,12 @@ export async function notifyHouseholdCode(churchId: string, householdId: string,
 export async function queueGuardianAlert(churchId: string, sessionId: string, actorUserId: string, client?: SupabaseClient): Promise<{ queued: boolean; guardianCount: number }> {
   const admin = client ?? createAdminClient();
   const session = checked(await admin.from("checkin_sessions").select("id, household_id, member_id").eq("id", sessionId).eq("church_id", churchId).eq("status", "checked_in").maybeSingle());
-  if (!session?.household_id) throw new Error("session_not_found");
+  if (!session?.household_id) return { queued: false, guardianCount: 0 };
   // A moved household or removed dependent must not alert its former guardians.
   const dependent = checked(await admin.from("household_members").select("id").eq("church_id", churchId).eq("household_id", session.household_id).eq("member_id", session.member_id).eq("relationship", "dependent").maybeSingle());
-  if (!dependent) throw new Error("not_a_dependent");
+  if (!dependent) return { queued: false, guardianCount: 0 };
   const accountIds = await guardianAccountIds(churchId, session.household_id, admin);
-  if (!accountIds.length) throw new Error("no_guardians_linked");
+  if (!accountIds.length) return { queued: false, guardianCount: 0 };
   const church = checked(await admin.from("churches").select("slug").eq("id", churchId).maybeSingle());
   if (!church?.slug) throw new Error("church_not_found");
   const id = randomUUID();

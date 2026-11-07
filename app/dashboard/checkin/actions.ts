@@ -768,14 +768,12 @@ export async function alertGuardians(sessionId: string): Promise<ActionResult<{ 
   if (typeof sessionId !== "string" || !sessionId) return fail("Choose a child to alert their guardians.");
   try {
     const data = await queueGuardianAlert(context.auth.churchId, sessionId, context.auth.userId);
-    if (data.queued) await tryQueueStaffNotification({ churchId: context.auth.churchId, event: "kids_alerts", eventKey: `${sessionId}:${Math.floor(Date.now() / 60_000)}`, href: "/dashboard/checkin" });
+    if (data.queued) {
+      await tryQueueStaffNotification({ churchId: context.auth.churchId, event: "kids_alerts", eventKey: `${sessionId}:${Math.floor(Date.now() / 60_000)}`, href: "/dashboard/checkin" });
+    }
     revalidateCheckin();
     return { ok: true, data };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "";
-    if (msg === "session_not_found") return fail("This check-in session could not be found. Refresh the page and try again.");
-    if (msg === "not_a_dependent") return fail("This child is no longer in the household. Refresh the page and try again.");
-    if (msg === "no_guardians_linked") return fail("No verified guardians found. Make sure guardians are linked in People and have active accounts in the church app.");
     return fail(toUserError(error, "We couldn't queue the guardian alert."));
   }
 }

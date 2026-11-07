@@ -134,10 +134,11 @@ create table if not exists public.group_event_responses (
   group_id uuid not null references public.groups (id) on delete cascade,
   event_id uuid not null references public.group_events (id) on delete cascade,
   
-  -- Who is responding (must be a group member)
-  user_id uuid not null references auth.users (id) on delete cascade,
+  -- Who is responding (must be a group member). Nullable to preserve church
+  -- records when auth account or membership is deleted.
+  user_id uuid references auth.users (id) on delete set null,
   member_id uuid references public.members (id) on delete set null,
-  membership_id uuid not null references public.group_memberships (id) on delete cascade,
+  membership_id uuid references public.group_memberships (id) on delete set null,
   
   -- Response
   status text not null default 'pending'
@@ -172,8 +173,54 @@ create policy "group_event_responses_select"
   for select
   using (public.has_groups_access(church_id));
 
+-- Members can update their own responses
+create policy "group_event_responses_update_own"
+  on public.group_event_responses
+  for update
+  to authenticated
+  using (
+    -- Member owns this response through their membership's visitor account
+    exists (
+      select 1 
+      from public.group_memberships gm
+      join public.visitor_accounts va on va.id = gm.account_id
+      where gm.id = group_event_responses.membership_id
+      and va.user_id = auth.uid()
+    )
+  )
+  with check (
+    -- Same ownership check
+    exists (
+      select 1 
+      from public.group_memberships gm
+      join public.visitor_accounts va on va.id = gm.account_id
+      where gm.id = group_event_responses.membership_id
+      and va.user_id = auth.uid()
+    )
+  );
+
+-- Managers can assign volunteers
+create policy "group_event_responses_insert_managers"
+  on public.group_event_responses
+  for insert
+  to authenticated
+  with check (
+    -- Must be a manager or leader of the group
+    exists (
+      select 1
+      from public.group_memberships gm
+      join public.visitor_accounts va on va.id = gm.account_id
+      where gm.group_id = group_event_responses.group_id
+      and gm.church_id = group_event_responses.church_id
+      and va.user_id = auth.uid()
+      and gm.group_role in ('manager', 'leader')
+    )
+  );
+
 revoke all on table public.group_event_responses from public, anon;
 grant select on table public.group_event_responses to authenticated;
+grant insert on table public.group_event_responses to authenticated;
+grant update (status, response_note, responded_at) on table public.group_event_responses to authenticated;
 grant all on table public.group_event_responses to service_role;
 
 -- ---------------------------------------------------------------------------
