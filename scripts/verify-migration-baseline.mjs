@@ -117,6 +117,12 @@ else {
   // additive correction closes direct staff reads that its original policies
   // left open. Pin the exact file so later edits cannot silently widen access.
   const reviewedCorrections = new Map([
+    // 0142's new directory classification needs the same read access as the
+    // named basic columns in 0110. No table-wide or sensitive-column grant.
+    [
+      "0146_people_membership_status_read_grant.sql",
+      "e7f7a0e52126fcdce6644026a62f7b110391d1446cf9363430e0a4b934dbbb01",
+    ],
     [
       "0110_feature_scoped_sensitive_reads.sql",
       "68f5877a17de0eab91025e57cf719c2cec645909213cf65f302d4328d8049863",

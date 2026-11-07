@@ -27,3 +27,17 @@ test("People statuses default to Unknown, persist all six choices, and reject in
     await db.end();
   }
 });
+
+test("the classification read grant preserves the existing sensitive-column boundary", options, async () => {
+  const db = await connect();
+  try {
+    const { rows: [privileges] } = await db.query(`select
+      has_column_privilege('authenticated', 'public.members', 'membership_status', 'SELECT') as status,
+      has_column_privilege('authenticated', 'public.members', 'id', 'SELECT') as id,
+      has_column_privilege('authenticated', 'public.members', 'medical_notes', 'SELECT') as medical,
+      has_column_privilege('anon', 'public.members', 'membership_status', 'SELECT') as anonymous,
+      relrowsecurity as rls
+      from pg_class where oid = 'public.members'::regclass`);
+    assert.deepEqual(privileges, { status: true, id: true, medical: false, anonymous: false, rls: true });
+  } finally { await db.end(); }
+});
