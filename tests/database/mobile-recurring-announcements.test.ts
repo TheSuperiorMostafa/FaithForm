@@ -58,3 +58,32 @@ test("mobile recurring events retain UUID detail links and member visibility", s
     }
   });
 });
+
+test("group announcement jobs require explicit recipients and preserve existing group jobs", suiteOptions, async () => {
+  await withChurch(async (client, church) => {
+    const addJob = (kind: string, topic: string, subject: string, recipients: string[] | null) =>
+      client.query(
+        `insert into public.notification_outbox
+          (church_id, kind, topic, subject_type, subject_id, target_visibility,
+           target_account_ids, title, deep_link, collapse_key, dedupe_key)
+         values ($1, $2, $3, $4, $5, 'members', $6, 'Test', 'faithform://test', 'test', $7)`,
+        [church.id, kind, topic, subject, randomUUID(), recipients, randomUUID()],
+      );
+    const recipients = [randomUUID()];
+    await addJob("group_announcement", "groups", "group", recipients);
+    await addJob("group_join_requested", "groups", "group_join_request", recipients);
+    await addJob("recording_published", "events", "stream_recording", null);
+    await assert.rejects(addJob("group_announcement", "groups", "group", null), /notification_outbox_target_shape_check/);
+    await assert.rejects(addJob("group_announcement", "events", "group", null), /notification_outbox_target_shape_check/);
+    await assert.rejects(addJob("group_announcement", "groups", "group_event", recipients), /notification_outbox_target_shape_check/);
+  });
+});
+
+test("the recordings bucket is private with a bounded upload size", suiteOptions, async () => {
+  await withChurch(async (client) => {
+    const { rows } = await client.query(
+      "select public, file_size_limit::text from storage.buckets where id = 'stream-recordings'",
+    );
+    assert.deepEqual(rows, [{ public: false, file_size_limit: "5368709120" }]);
+  });
+});
