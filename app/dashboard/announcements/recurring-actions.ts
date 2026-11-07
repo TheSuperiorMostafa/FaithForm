@@ -188,6 +188,61 @@ export async function editRecurringOccurrence(
 }
 
 /**
+ * List occurrences for a recurring announcement.
+ */
+export async function listAnnouncementOccurrences(
+  announcementId: string
+): Promise<ActionResult<Array<{
+  id: string;
+  occurrence_date: string;
+  start_at: string;
+  end_at: string | null;
+  override_title: string | null;
+  override_description: string | null;
+  override_location: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancel_reason: string | null;
+}>>> {
+  const auth = await getChurchAuth();
+  if (!auth) return fail("Not signed in.");
+  
+  const featureError = await featureActionError("announcements");
+  if (featureError) return fail(featureError);
+  
+  try {
+    const admin = createAdminClient();
+    
+    // Verify announcement belongs to this church
+    const { data: announcement, error: checkError } = await admin
+      .from("announcements")
+      .select("id, church_id")
+      .eq("id", announcementId)
+      .eq("church_id", auth.churchId)
+      .maybeSingle();
+    
+    if (checkError || !announcement) {
+      return fail("Announcement not found.");
+    }
+    
+    const { data: occurrences, error } = await admin
+      .from("announcement_occurrences")
+      .select("id, occurrence_date, start_at, end_at, override_title, override_description, override_location, cancelled_at, cancelled_by, cancel_reason")
+      .eq("announcement_id", announcementId)
+      .order("occurrence_date", { ascending: true });
+    
+    if (error) {
+      console.error("[listAnnouncementOccurrences] Error:", error);
+      return fail("Failed to load occurrences.");
+    }
+    
+    return { ok: true, data: occurrences || [] };
+  } catch (error) {
+    return fail(toUserError(error, "We couldn't load the occurrences."));
+  }
+}
+
+/**
  * Record that a location was used (for autocomplete suggestions).
  */
 export async function trackLocationUsage(location: string): Promise<void> {
