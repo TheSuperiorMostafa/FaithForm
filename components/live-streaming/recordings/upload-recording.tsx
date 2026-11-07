@@ -61,8 +61,7 @@ export function UploadRecording() {
   }
 
   return <>
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-[15px] text-muted-foreground">Streamed services and videos you upload.</p>
+    <div className="flex justify-end">
       <Button onClick={() => { setTitle(""); setFile(null); setError(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
     </div>
     <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>

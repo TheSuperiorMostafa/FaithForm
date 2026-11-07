@@ -772,6 +772,10 @@ export async function alertGuardians(sessionId: string): Promise<ActionResult<{ 
     revalidateCheckin();
     return { ok: true, data };
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "";
+    if (msg === "session_not_found") return fail("This check-in session could not be found. Refresh the page and try again.");
+    if (msg === "not_a_dependent") return fail("This child is no longer in the household. Refresh the page and try again.");
+    if (msg === "no_guardians_linked") return fail("No verified guardians found. Make sure guardians are linked in People and have active accounts in the church app.");
     return fail(toUserError(error, "We couldn't queue the guardian alert."));
   }
 }
