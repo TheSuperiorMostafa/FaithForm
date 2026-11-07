@@ -152,6 +152,14 @@ else {
       "0148_member_self_service_rls.sql",
       "8baa38618f489c61db0ca344211d1e4aac65f677e34d5fd48f568e5104c98a15",
     ],
+    // Wire announcement_occurrences into mobile feed/calendar SQL functions for
+    // recurring event support. Updates mobile_announcement_feed and mobile_announcement_schedule
+    // to expand recurring events into individual occurrences, hide cancelled ones, and apply
+    // occurrence-specific overrides. Maintains backward compatibility with non-recurring events.
+    [
+      "0150_wire_occurrences_into_mobile_feed.sql",
+      "dda9462d30045e3ba5ec0ee5b70493e0c51437f2b88dd917d0b68bf6e88576f4",
+    ],
   ]);
 
   for (const later of files.filter((file) => file > securityFile)) {

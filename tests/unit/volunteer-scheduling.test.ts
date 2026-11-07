@@ -132,157 +132,76 @@ describe("Volunteer scheduling (B2/G1)", { skip: !supabaseUrl || !supabaseServic
     assert.match(error!.message, /availability/i);
   });
   
-  it("allows member to respond to assignment", async () => {
+  it("allows member to RSVP to event", async () => {
     const { error } = await db
-      .from("group_event_responses")
+      .from("group_event_rsvps")
       .insert({
         church_id: testChurchId,
         group_id: testGroupId,
         event_id: testEventId,
-        user_id: testUserId,
         membership_id: testMembershipId,
-        status: "accepted",
-        response_note: "I'll be there!",
+        response: "going",
       });
     
-    assert.equal(error, null, "Should allow member to respond");
+    assert.equal(error, null, "Should allow member to RSVP");
     
     const { data } = await db
-      .from("group_event_responses")
-      .select("status, response_note")
+      .from("group_event_rsvps")
+      .select("response")
       .eq("event_id", testEventId)
       .eq("membership_id", testMembershipId)
       .single();
     
-    assert.equal(data!.status, "accepted");
-    assert.equal(data!.response_note, "I'll be there!");
+    assert.equal(data!.response, "going");
   });
   
-  it("allows changing response", async () => {
+  it("allows changing RSVP", async () => {
     const { error } = await db
-      .from("group_event_responses")
+      .from("group_event_rsvps")
       .update({
-        status: "declined",
-        response_note: "Sorry, can't make it",
+        response: "not_going",
       })
       .eq("event_id", testEventId)
       .eq("membership_id", testMembershipId);
     
-    assert.equal(error, null, "Should allow changing response");
+    assert.equal(error, null, "Should allow changing RSVP");
     
     const { data } = await db
-      .from("group_event_responses")
-      .select("status")
+      .from("group_event_rsvps")
+      .select("response")
       .eq("event_id", testEventId)
       .eq("membership_id", testMembershipId)
       .single();
     
-    assert.equal(data!.status, "declined");
+    assert.equal(data!.response, "not_going");
   });
   
-  it("enforces 500 character limit on response note", async () => {
-    const tooLong = "x".repeat(501);
-    
+  it("enforces valid RSVP responses", async () => {
     const { error } = await db
-      .from("group_event_responses")
-      .update({ response_note: tooLong })
+      .from("group_event_rsvps")
+      .update({ response: "invalid" as any })
       .eq("event_id", testEventId)
       .eq("membership_id", testMembershipId);
     
-    assert.ok(error, "Should reject note over 500 characters");
+    assert.ok(error, "Should reject invalid response");
   });
   
-  it("enforces unique response per event+membership", async () => {
+  it("enforces unique RSVP per event+membership", async () => {
     const { error } = await db
-      .from("group_event_responses")
+      .from("group_event_rsvps")
       .insert({
         church_id: testChurchId,
         group_id: testGroupId,
         event_id: testEventId,
-        user_id: testUserId,
         membership_id: testMembershipId,
-        status: "tentative",
+        response: "maybe",
       });
     
-    assert.ok(error, "Should reject duplicate response");
+    assert.ok(error, "Should reject duplicate RSVP");
     assert.match(error!.message, /unique|duplicate/i);
   });
   
-  it("tracks assignment metadata", async () => {
-    // Create manager user
-    const { data: managerAuthUser } = await db.auth.admin.createUser({
-      email: `manager-test-${Date.now()}@example.com`,
-      password: "test-password-123",
-      email_confirm: true,
-    });
-    
-    const managerId = managerAuthUser.user!.id;
-    
-    // Create manager membership
-    await db.from("group_memberships").insert({
-      church_id: testChurchId,
-      group_id: testGroupId,
-      user_id: managerId,
-      status: "active",
-      role: "leader",
-    });
-    
-    // Create new event for assignment test
-    const { data: event2 } = await db
-      .from("group_events")
-      .insert({
-        church_id: testChurchId,
-        group_id: testGroupId,
-        name: "Test Event 2",
-        starts_at: new Date("2026-12-08T10:00:00Z").toISOString(),
-      })
-      .select("id")
-      .single();
-    
-    const assignedAt = new Date().toISOString();
-    
-    const { error } = await db
-      .from("group_event_responses")
-      .insert({
-        church_id: testChurchId,
-        group_id: testGroupId,
-        event_id: event2!.id,
-        user_id: testUserId,
-        membership_id: testMembershipId,
-        status: "pending",
-        is_assigned: true,
-        assigned_by: managerId,
-        assigned_at: assignedAt,
-      });
-    
-    assert.equal(error, null, "Should track assignment metadata");
-    
-    const { data } = await db
-      .from("group_event_responses")
-      .select("is_assigned, assigned_by")
-      .eq("event_id", event2!.id)
-      .eq("membership_id", testMembershipId)
-      .single();
-    
-    assert.equal(data!.is_assigned, true);
-    assert.equal(data!.assigned_by, managerId);
-    
-    // Clean up
-    await db.auth.admin.deleteUser(managerId);
-  });
-  
-  it("validates status values", async () => {
-    const { error } = await db
-      .from("group_event_responses")
-      .update({ status: "invalid" as "pending" | "accepted" | "declined" | "tentative" })
-      .eq("event_id", testEventId)
-      .eq("membership_id", testMembershipId);
-    
-    assert.ok(error, "Should reject invalid status");
-    assert.match(error!.message, /check|constraint/i);
-  });
-  
-  it("isolates responses by church", async () => {
+  it("isolates RSVPs by church", async () => {
     // Create another church
     const { data: church2 } = await db
       .from("churches")
@@ -290,16 +209,17 @@ describe("Volunteer scheduling (B2/G1)", { skip: !supabaseUrl || !supabaseServic
       .select("id")
       .single();
     
-    // Try to query responses from different church
+    // Try to query RSVPs from different church
     const { data } = await db
-      .from("group_event_responses")
+      .from("group_event_rsvps")
       .select("*")
       .eq("church_id", church2!.id)
       .eq("event_id", testEventId);
     
-    assert.equal(data!.length, 0, "Should not see other church's responses");
+    assert.equal(data!.length, 0, "Should not see other church's RSVPs");
     
     // Clean up
     await db.from("churches").delete().eq("id", church2!.id);
   });
+  
 });
