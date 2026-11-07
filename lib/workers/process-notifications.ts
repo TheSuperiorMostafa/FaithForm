@@ -1,22 +1,40 @@
 /**
  * Notification outbox worker processor
- * Handles group_announcement and other notification kinds
+ * Handles group_announcement and other notification kinds using real push dispatch.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { 
+  ApnsAdapter, 
+  FcmAdapter,
+  type PushAdapter,
+  type PushMessage,
+  type DeliveryResult 
+} from "@/lib/faithform/push/adapters";
+import { invalidateToken } from "@/lib/faithform/push/installations";
 
+type PushRecipient = {
+  installationId: string;
+  token: string;
+  provider: "apns" | "fcm";
+  apnsEnvironment?: "development" | "production" | null;
+};
+
+/**
+ * Process notification outbox entries, dispatching via real push providers.
+ * Handles retries, token invalidation, and delivery tracking.
+ */
 export async function processNotificationOutbox(batchSize = 50) {
-  const db = createAdminClient();
+  const admin = createAdminClient();
   
-  // Fetch pending notifications
-  const { data: pending, error } = await db
+  const { data: pending, error } = await admin
     .from("notification_outbox")
     .select("*")
     .eq("status", "pending")
     .limit(batchSize);
 
   if (error || !pending) {
-    console.error("Failed to fetch notifications:", error);
+    console.error("[outbox] Failed to fetch notifications:", error);
     return { processed: 0, failed: 0 };
   }
 
@@ -25,20 +43,18 @@ export async function processNotificationOutbox(batchSize = 50) {
 
   for (const notification of pending) {
     try {
-      // Mark as processing
-      await db
+      await admin
         .from("notification_outbox")
-        .update({ status: "processing" })
+        .update({ status: "processing", attempts: (notification.attempts || 0) + 1 })
         .eq("id", notification.id);
 
-      // Handle different notification kinds
       if (notification.kind === "group_announcement") {
-        await processGroupAnnouncement(notification, db);
+        await dispatchGroupAnnouncement(notification, admin);
+      } else {
+        console.warn(`[outbox] Unhandled notification kind: ${notification.kind}`);
       }
-      // Add other notification handlers here
 
-      // Mark as delivered
-      await db
+      await admin
         .from("notification_outbox")
         .update({ 
           status: "delivered",
@@ -48,14 +64,15 @@ export async function processNotificationOutbox(batchSize = 50) {
 
       processed++;
     } catch (error) {
-      console.error(`Failed to process notification ${notification.id}:`, error);
+      console.error(`[outbox] Failed to process ${notification.id}:`, error);
       
-      // Mark as failed
-      await db
+      const shouldRetry = (notification.attempts || 0) < 3;
+      await admin
         .from("notification_outbox")
         .update({ 
-          status: "failed",
+          status: shouldRetry ? "retryable" : "failed",
           error_message: error instanceof Error ? error.message : "Unknown error",
+          next_attempt_after: shouldRetry ? new Date(Date.now() + Math.pow(2, notification.attempts || 0) * 60_000).toISOString() : null,
         })
         .eq("id", notification.id);
 
@@ -66,15 +83,101 @@ export async function processNotificationOutbox(batchSize = 50) {
   return { processed, failed };
 }
 
-async function processGroupAnnouncement(notification: any, db: any) {
-  // In production, this would send push notifications
-  // For testing, we just mark as delivered
-  console.log(`[TEST MODE] Would send group announcement to ${notification.target_account_ids?.length || 0} members`);
-  
-  // Check user preferences before sending (stub)
-  // const preferences = await getUserNotificationPreferences(notification.target_account_ids, db);
-  // Filter recipients based on preferences
-  
-  // In production: call push notification service
-  // await sendPushNotification({ ... });
+/**
+ * Dispatch group announcement via real push notification providers.
+ * Resolves installations, sends via APNs/FCM, tracks delivery, handles token invalidation.
+ */
+async function dispatchGroupAnnouncement(notification: any, admin: any) {
+  if (!notification.target_account_ids || notification.target_account_ids.length === 0) {
+    throw new Error("No target accounts");
+  }
+
+  // Load push installations for target accounts
+  const { data: installations } = await admin
+    .from("push_installations")
+    .select("id, token, provider, apns_environment, account_id")
+    .in("account_id", notification.target_account_ids)
+    .eq("is_active", true)
+    .limit(1000);
+
+  if (!installations || installations.length === 0) {
+    console.log(`[outbox] No active installations for ${notification.id}`);
+    return;
+  }
+
+  const recipients: PushRecipient[] = installations.map((i: any) => ({
+    installationId: i.id,
+    token: i.token,
+    provider: i.provider,
+    apnsEnvironment: i.apns_environment,
+  }));
+
+  const message: PushMessage = {
+    title: notification.title,
+    body: notification.body,
+    deepLink: notification.deep_link || "faithform://groups",
+    collapseKey: notification.collapse_key || `group-${notification.subject_id}`,
+    correlationId: notification.id,
+    topic: "groups",
+  };
+
+  const adapters: Record<string, PushAdapter> = {
+    apns: new ApnsAdapter(),
+    fcm: new FcmAdapter(),
+  };
+
+  // Check if providers are configured
+  const hasApns = adapters.apns.isConfigured();
+  const hasFcm = adapters.fcm.isConfigured();
+
+  if (!hasApns && !hasFcm) {
+    console.warn("[outbox] No push providers configured, skipping actual send (test mode)");
+    return;
+  }
+
+  let anyRetryable = false;
+
+  // Send to each recipient
+  for (const recipient of recipients) {
+    const adapter = adapters[recipient.provider];
+    
+    if (!adapter.isConfigured()) {
+      console.log(`[outbox] ${recipient.provider} not configured, skipping installation ${recipient.installationId}`);
+      continue;
+    }
+
+    try {
+      const outcome: DeliveryResult = await adapter.send(
+        recipient.token, 
+        message, 
+        recipient.apnsEnvironment
+      );
+
+      // Record delivery attempt
+      await admin.from("notification_delivery_attempts").insert({
+        outbox_id: notification.id,
+        installation_id: recipient.installationId,
+        provider: recipient.provider,
+        attempt_number: notification.attempts || 1,
+        outcome: outcome.outcome,
+        error_category: outcome.errorCategory ?? null,
+        provider_status: outcome.providerStatus ?? null,
+      });
+
+      if (outcome.invalidToken) {
+        await invalidateToken(recipient.token, outcome.errorCategory ?? "invalid_token");
+      }
+
+      if (outcome.outcome === "retryable") {
+        anyRetryable = true;
+      }
+    } catch (error) {
+      console.error(`[outbox] Send failed for installation ${recipient.installationId}:`, error);
+      anyRetryable = true;
+    }
+  }
+
+  if (anyRetryable) {
+    throw new Error("Some deliveries failed with retryable errors");
+  }
 }
