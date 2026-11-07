@@ -918,6 +918,12 @@ export function AnnouncementComposer({
         }
         appendFacebook(form);
         appendPicture(form);
+        
+        // Recurring event fields (E4)
+        if (repeat !== "none" && repeatUntil) {
+          form.set("repeat", repeat);
+          form.set("repeat_until", repeatUntil);
+        }
 
         const result = await publishAnnouncement(form);
         if (!result.ok) {

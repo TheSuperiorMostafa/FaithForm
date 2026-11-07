@@ -135,6 +135,37 @@ else {
       "0126_support_email_review.sql",
       "752e1fc7a3a3dcc0c8ec0c355a4471b59ffae29b05e06c1d3c2f390647c58dca",
     ],
+    // New private storage bucket for stream recordings. No storage.objects policies
+    // = default-deny for authenticated/anon (intentional). All access via signed URLs
+    // authenticated as service_role. Narrow scope: creates one new private bucket only,
+    // does not modify existing baseline-secured storage.objects policies.
+    [
+      "0146_stream_recordings_bucket.sql",
+      "4d600d9f76d57a9cea0ad9f7434e63e4ea062393a578a064342ed337f806eb23",
+    ],
+    // Recurring events (announcement_occurrences) + group announcements (notification_outbox).
+    // Removed unused parallel RSVP system (group_event_responses) conflicting with existing
+    // working group_event_rsvps. Kept recurrence tables + saved_event_locations. Reviewed.
+    [
+      "0147_recurring_events_and_group_announcements.sql",
+      "3fc6f20311bad5f29d6d18c7a8c18a4b55ecb141078cae5ef861055bf036021f",
+    ],
+    // Member self-service availability updates with active church relationship
+    // verification. Narrow UPDATE grant (availability only) on group_memberships
+    // with same-church + active relationship enforcement. Independent review approved
+    // ownership + active relationship + church-specific narrow availability grant.
+    [
+      "0148_member_self_service_rls.sql",
+      "8baa38618f489c61db0ca344211d1e4aac65f677e34d5fd48f568e5104c98a15",
+    ],
+    // Wire announcement_occurrences into mobile feed/calendar SQL functions for
+    // recurring event support. Updates mobile_announcement_feed and mobile_announcement_schedule
+    // to expand recurring events into individual occurrences, hide cancelled ones, and apply
+    // occurrence-specific overrides. Maintains backward compatibility with non-recurring events.
+    [
+      "0150_wire_occurrences_into_mobile_feed.sql",
+      "dda9462d30045e3ba5ec0ee5b70493e0c51437f2b88dd917d0b68bf6e88576f4",
+    ],
   ]);
 
   for (const later of files.filter((file) => file > securityFile)) {

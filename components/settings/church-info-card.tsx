@@ -19,6 +19,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
+import { formatUsPhoneDisplay } from "@/lib/sms/phone";
 import { cn } from "@/lib/utils";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -615,7 +616,7 @@ function ChurchDetailsReadOnly({
     .join(" ");
   const rows: Array<{ label: string; value: string }> = [
     { label: "Church name", value: basics.name },
-    { label: "Phone", value: basics.phone },
+    { label: "Phone", value: formatUsPhoneDisplay(basics.phone) ?? basics.phone },
     { label: "Email", value: basics.email },
   ];
   const placeRows: Array<{ label: string; value: string }> = [

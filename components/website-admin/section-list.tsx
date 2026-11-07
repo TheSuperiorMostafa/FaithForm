@@ -276,11 +276,11 @@ function SectionRow({
     <div
       ref={rowRef}
       className={cn(
-        "scroll-mt-6 rounded-2xl border border-border bg-card shadow-card",
+        "scroll-mt-4 rounded-xl border border-border bg-card shadow-sm",
         !section.isVisible && "bg-muted/40",
       )}
     >
-      <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
+      <div className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
         {/* Room for a heading to read on one line: when the card is narrow the
          * buttons drop below it instead of squeezing it into a column. */}
         <div className="min-w-0 flex-[1_1_16rem]">
@@ -318,24 +318,26 @@ function SectionRow({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
             type="button"
             variant="ghost"
+            size="sm"
             aria-label={`Move ${section.label} up`}
             disabled={index === 0 || busy || !canEdit}
             onClick={() => onMove(index, -1)}
           >
-            <ArrowUp className="size-4" aria-hidden /> Move up
+            <ArrowUp className="size-4" aria-hidden /> <span className="hidden sm:inline">Up</span>
           </Button>
           <Button
             type="button"
             variant="ghost"
+            size="sm"
             aria-label={`Move ${section.label} down`}
             disabled={index === total - 1 || busy || !canEdit}
             onClick={() => onMove(index, 1)}
           >
-            <ArrowDown className="size-4" aria-hidden /> Move down
+            <ArrowDown className="size-4" aria-hidden /> <span className="hidden sm:inline">Down</span>
           </Button>
           <label className="flex min-h-11 items-center gap-2 px-2 text-[15px] font-medium">
             <Switch
@@ -349,6 +351,7 @@ function SectionRow({
           {!locked ? (
             <Button
               type="button"
+              size="sm"
               variant={open ? "default" : "outline"}
               onClick={onToggleOpen}
               aria-expanded={open}
@@ -360,7 +363,7 @@ function SectionRow({
       </div>
 
       {open && section.fields ? (
-        <div className="border-t border-border p-4 sm:p-6">
+        <div className="border-t border-border p-3 sm:p-4">
           <fieldset disabled={saving || !canEdit} className="min-w-0">
             <SectionFieldsForm
               fields={section.fields}
@@ -371,15 +374,16 @@ function SectionRow({
             />
           </fieldset>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <SaveStatus status={status} />
             <Button
               type="button"
+              size="sm"
               variant="ghost"
               onClick={() => void reset()}
               disabled={saving || !canEdit || !section.hasOverride}
             >
-              <RotateCcw className="size-4" aria-hidden /> Reset to original
+              <RotateCcw className="size-4" aria-hidden /> <span className="hidden sm:inline">Reset</span>
             </Button>
           </div>
 

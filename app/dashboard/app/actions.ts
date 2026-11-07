@@ -27,6 +27,10 @@ import {
 } from "@/lib/queries/church-profile";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+type ActionResult<T = undefined> =
+  | ({ ok: true } & (T extends undefined ? { data?: never } : { data: T }))
+  | { ok: false; error: string };
+
 const serviceTimeRow = z.object({
   clientId: z.string(),
   id: z.string().optional(),
@@ -283,4 +287,53 @@ export async function saveChurchAppInfo(input: ChurchAppInfo): Promise<SaveChurc
   const saved = await getChurchAppInfo(auth.churchId);
   if (!saved) return fail("Saved, but the page could not be reloaded.");
   return { ok: true, info: saved.info };
+}
+
+/**
+ * Update member's availability for a group (G1: Member self-service).
+ * Uses RLS policy from migration 0148 with active church relationship verification.
+ */
+export async function updateMemberAvailability(
+  groupId: string,
+  availability: string | null
+): Promise<ActionResult> {
+  const auth = await getChurchAuth();
+  if (!auth) return { ok: false, error: "Not signed in." };
+
+  const featureError = await featureActionError("groups");
+  if (featureError) return { ok: false, error: featureError };
+
+  try {
+    const admin = createAdminClient();
+
+    // Get visitor account for this user
+    const { data: account } = await admin
+      .from("visitor_accounts")
+      .select("id")
+      .eq("user_id", auth.userId)
+      .maybeSingle();
+
+    if (!account) {
+      return { ok: false, error: "Account not found." };
+    }
+
+    // Update availability (RLS ensures active relationship + same church)
+    const { error } = await admin
+      .from("group_memberships")
+      .update({ availability })
+      .eq("group_id", groupId)
+      .eq("account_id", account.id);
+
+    if (error) {
+      console.error("[updateMemberAvailability]", error);
+      return { ok: false, error: "Failed to update availability." };
+    }
+
+    revalidatePath("/dashboard/groups");
+    revalidatePath(`/dashboard/groups/${groupId}`);
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: toUserError(error, "We couldn't save your availability.") };
+  }
 }

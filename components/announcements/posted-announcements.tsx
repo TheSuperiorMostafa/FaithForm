@@ -6,6 +6,7 @@ import { ChevronDown, Megaphone, Pencil, RotateCcw, TriangleAlert } from "lucide
 
 import { useAnnouncementComposer } from "@/components/announcements/composer-context";
 import { TakeDownButton } from "@/components/announcements/published-switch";
+import { OccurrencesManager } from "@/components/announcements/occurrences-manager";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SectionHeader } from "@/components/ui/page-header";
@@ -172,6 +173,7 @@ function PostedRow({
   onChange: () => void;
 }) {
   const { settings } = useAnnouncementComposer();
+  const [showOccurrences, setShowOccurrences] = useState(false);
   const row = item.announcement;
   const state = announcementState(row, {
     queuedForWeeklyEmail: item.queuedForWeeklyEmail,
@@ -190,39 +192,55 @@ function PostedRow({
   );
 
   return (
-    <Row
-      leading={<Thumb url={row.social_graphic_url ?? null} />}
-      title={row.title}
-      subtitle={`${when} · ${describeDestinations(row, {
-        queuedForWeeklyEmail: item.queuedForWeeklyEmail,
-        timeZone,
-        now,
-      })}`}
-      note={row.last_publish_error ? plainNote(row.last_publish_error) : null}
-      status={
-        <StatusBadge tone={ANNOUNCEMENT_STATE_TONE[state]}>
-          {ANNOUNCEMENT_STATE_LABEL[state]}
-        </StatusBadge>
-      }
-      actions={
-        <>
-          <Button variant="outline" onClick={onChange}>
-            <Pencil aria-hidden strokeWidth={1.75} />
-            Change
-          </Button>
-          {isAdmin && (
-            <TakeDownButton
-              announcementId={row.id}
-              title={row.title}
-              calendarLinked={Boolean(row.google_event_id)}
-              facebookIsLive={channels.facebook.published && !channels.facebook.scheduledFor}
-              inApp={channels.app.published}
-              inEmail={!settings.emailSwitchedOff || channels.weeklyEmail.published}
-            />
-          )}
-        </>
-      }
-    />
+    <li className="flex flex-col">
+      <Row
+        leading={<Thumb url={row.social_graphic_url ?? null} />}
+        title={row.title}
+        subtitle={`${when} · ${describeDestinations(row, {
+          queuedForWeeklyEmail: item.queuedForWeeklyEmail,
+          timeZone,
+          now,
+        })}`}
+        note={row.last_publish_error ? plainNote(row.last_publish_error) : null}
+        status={
+          <StatusBadge tone={ANNOUNCEMENT_STATE_TONE[state]}>
+            {ANNOUNCEMENT_STATE_LABEL[state]}
+          </StatusBadge>
+        }
+        actions={
+          <>
+            <Button variant="outline" onClick={onChange}>
+              <Pencil aria-hidden strokeWidth={1.75} />
+              Change
+            </Button>
+            {row.is_recurring && isAdmin && (
+              <Button
+                variant="outline"
+                onClick={() => setShowOccurrences(!showOccurrences)}
+              >
+                {showOccurrences ? <ChevronDown className="size-4" /> : <ChevronDown className="size-4" />}
+                {showOccurrences ? "Hide" : "View"} occurrences
+              </Button>
+            )}
+            {isAdmin && (
+              <TakeDownButton
+                announcementId={row.id}
+                title={row.title}
+                calendarLinked={Boolean(row.google_event_id)}
+                facebookIsLive={channels.facebook.published && !channels.facebook.scheduledFor}
+                inApp={channels.app.published}
+                inEmail={!settings.emailSwitchedOff || channels.weeklyEmail.published}
+              />
+            )}
+          </>
+        }
+      />
+      {row.is_recurring && showOccurrences && (
+        <div className="px-4 py-3">
+          <OccurrencesManager announcementId={row.id} title={row.title} />
+        </div>
+      )}
+    </li>
   );
 }
 
