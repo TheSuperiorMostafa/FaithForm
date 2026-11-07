@@ -32,11 +32,16 @@ older audit checkout.
 
 ## Rollout
 
-Apply migrations 0142_people_membership_status.sql, 0144_offline_giving.sql and
-0145_group_member_availability.sql before deploying the corresponding UI/API.
-The selected FaithForm production database was inspected read-only: these three
-features were absent. No production migrations or test donations were executed.
-Follow the migration rehearsal and deployment instructions before application.
+Applied migrations 0142_people_membership_status.sql, 0144_offline_giving.sql and
+0145_group_member_availability.sql to FaithForm production through Safari on
+November 6, 2026. A transaction rehearsal ran successfully and rolled back before
+the committed application. All nine post-application catalog/permission checks
+passed. Source filename/hash records are in
+`supabase_migrations.faithform_source_migrations`, with RLS enabled.
+No test donations or provider notifications were sent.
+
+The application commit remains local: GitHub and Vercel DNS resolution is blocked
+in this shell, so push and application deployment have not completed.
 
 Reconnect the church's Google account with Drive access to enable native Docs;
 ensure Drive API is enabled for the configured Google project. Existing
