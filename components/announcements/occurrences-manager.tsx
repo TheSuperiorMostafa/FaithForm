@@ -49,7 +49,7 @@ export function OccurrencesManager({ announcementId, title }: { announcementId: 
       title: "Cancel this occurrence?",
       description: `This will cancel the ${title} event on ${new Date(date).toLocaleDateString()}. You can optionally add a reason.`,
       confirmLabel: "Cancel occurrence",
-      variant: "destructive",
+      destructive: true,
     });
 
     if (!confirmed) return;
