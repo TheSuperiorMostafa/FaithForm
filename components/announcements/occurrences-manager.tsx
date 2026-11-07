@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, Edit2, XCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Calendar, XCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
@@ -9,6 +9,7 @@ import {
   listAnnouncementOccurrences,
   cancelRecurringOccurrence,
 } from "@/app/dashboard/announcements/recurring-actions";
+import { EditOccurrenceDialog } from "@/components/announcements/edit-occurrence-dialog";
 
 type Occurrence = {
   id: string;
@@ -121,7 +122,9 @@ export function OccurrencesManager({ announcementId, title }: { announcementId: 
           <OccurrenceRow
             key={occurrence.id}
             occurrence={occurrence}
+            baseTitle={title}
             onCancel={() => handleCancel(occurrence.id, occurrence.occurrence_date)}
+            onEdit={loadOccurrences}
             busy={busy}
           />
         ))}
@@ -129,7 +132,9 @@ export function OccurrencesManager({ announcementId, title }: { announcementId: 
           <OccurrenceRow
             key={occurrence.id}
             occurrence={occurrence}
+            baseTitle={title}
             onCancel={() => handleCancel(occurrence.id, occurrence.occurrence_date)}
+            onEdit={loadOccurrences}
             busy={busy}
             isPast
           />
@@ -141,12 +146,16 @@ export function OccurrencesManager({ announcementId, title }: { announcementId: 
 
 function OccurrenceRow({
   occurrence,
+  baseTitle,
   onCancel,
+  onEdit,
   busy,
   isPast = false,
 }: {
   occurrence: Occurrence;
+  baseTitle: string;
   onCancel: () => void;
+  onEdit: () => void;
   busy: boolean;
   isPast?: boolean;
 }) {
@@ -191,15 +200,7 @@ function OccurrenceRow({
 
       {!isCancelled && !isPast && (
         <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            title="Edit this occurrence"
-          >
-            <Edit2 className="size-4" />
-          </Button>
+          <EditOccurrenceDialog occurrence={occurrence} baseTitle={baseTitle} onSuccess={onEdit} />
           <Button
             type="button"
             variant="ghost"

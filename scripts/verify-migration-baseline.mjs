@@ -137,6 +137,13 @@ else {
       "0146_stream_recordings_bucket.sql",
       "4d600d9f76d57a9cea0ad9f7434e63e4ea062393a578a064342ed337f806eb23",
     ],
+    // Recurring events (announcement_occurrences) + group announcements (notification_outbox).
+    // Removed unused parallel RSVP system (group_event_responses) conflicting with existing
+    // working group_event_rsvps. Kept recurrence tables + saved_event_locations. Reviewed.
+    [
+      "0147_recurring_events_and_group_announcements.sql",
+      "3fc6f20311bad5f29d6d18c7a8c18a4b55ecb141078cae5ef861055bf036021f",
+    ],
     // Member self-service availability updates with active church relationship
     // verification. Narrow UPDATE grant (availability only) on group_memberships
     // with same-church + active relationship enforcement. Independent review approved

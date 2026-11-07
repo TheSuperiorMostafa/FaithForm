@@ -40,7 +40,7 @@ export async function queueGroupAnnouncement(
     // Get all active members with accounts
     const { data: memberships, error: membershipsError } = await db
       .from("group_memberships")
-      .select("account_id, user_id")
+      .select("account_id")
       .eq("group_id", notification.groupId)
       .eq("church_id", notification.churchId)
       .eq("status", "active")
@@ -151,18 +151,28 @@ export async function canSendGroupAnnouncement(
   churchId: string,
   db: SupabaseClient
 ): Promise<boolean> {
-  // Check if user is a leader or co-leader of the group
+  // Resolve userId to account_id
+  const { data: account } = await db
+    .from("visitor_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  
+  if (!account) return false;
+  
+  // Check if account has a leader/manager role in the group
   const { data: membership } = await db
     .from("group_memberships")
-    .select("role")
+    .select("group_role")
     .eq("group_id", groupId)
     .eq("church_id", churchId)
-    .eq("user_id", userId)
+    .eq("account_id", account.id as string)
     .eq("status", "active")
     .maybeSingle();
   
   if (!membership) return false;
   
-  const role = membership.role as string;
-  return role === "leader" || role === "co_leader" || role === "manager";
+  const role = membership.group_role as string;
+  return role === "leader" || role === "manager";
 }
