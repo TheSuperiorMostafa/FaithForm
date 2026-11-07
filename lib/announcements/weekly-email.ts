@@ -256,8 +256,6 @@ export type WeeklyDraftResult =
       /** The mailbox the draft was made in. */
       provider: WeeklyEmailChannel;
       eventCount: number;
-      documentUrl?: string;
-      documentWarning?: string;
       skipped: boolean;
       reason?: string;
     }
@@ -491,8 +489,7 @@ export async function createWeeklyAnnouncementGmailDraft(
     timeZone,
   });
 
-  const documentAttachment = await buildEmailDocument(rendered.subject, rendered.bodyText);
-  const attachments = [...await loadAttachmentsForSend(churchId, supabase), documentAttachment];
+  const attachments = await loadAttachmentsForSend(churchId, supabase);
 
   let claim: Awaited<ReturnType<typeof claimWeeklyDraft>>;
   try {
@@ -515,16 +512,7 @@ export async function createWeeklyAnnouncementGmailDraft(
     };
   }
 
-  // Claim ownership first: simultaneous runs must not create duplicate Google Docs.
-  let documentUrl: string | undefined;
-  let documentWarning: string | undefined;
-  if (channel === "gmail") {
-    try {
-      documentUrl = await createEmailGoogleDoc(churchId, rendered.subject, documentAttachment, supabase);
-    } catch {
-      documentWarning = "The full message is attached as a Word document. To also create a Google Doc, reconnect Google in Settings. If it still fails, ask FaithForm support to check the Google Drive connection.";
-    }
-  }
+  // No automatic document creation - announcements are in the email body.
 
   let draft: { draftId: string; draftUrl: string };
   try {
@@ -534,7 +522,7 @@ export async function createWeeklyAnnouncementGmailDraft(
       {
         to: settings.to ?? undefined,
         subject: rendered.subject,
-        bodyHtml: rendered.bodyHtml + (documentUrl ? `<p><a href="${documentUrl}">Open this message in Google Docs</a> (available to the connected Google account)</p>` : ""),
+        bodyHtml: rendered.bodyHtml,
         attachments,
       },
       supabase,
@@ -561,8 +549,6 @@ export async function createWeeklyAnnouncementGmailDraft(
     draftUrl: draft.draftUrl,
     provider: channel,
     eventCount: emailEvents.length,
-    documentUrl,
-    documentWarning,
     skipped: false,
   };
 }

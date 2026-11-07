@@ -802,8 +802,6 @@ export async function createWeeklyAnnouncementDraftAction(options?: {
     success: true,
     draftUrl: result.draftUrl,
     eventCount: result.eventCount,
-    documentUrl: result.documentUrl,
-    documentWarning: result.documentWarning,
   };
 }
 
