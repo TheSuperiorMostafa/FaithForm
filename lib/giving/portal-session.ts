@@ -218,12 +218,13 @@ export async function clearDonorPortalSession(churchSlug: string): Promise<void>
 
   if (payload) {
     const admin = createAdminClient();
-    await admin
+    const { error } = await admin
       .from("donor_portal_sessions")
       .update({ revoked_at: new Date().toISOString() })
       .eq("id", payload.sessionId)
       .eq("church_id", payload.churchId)
       .eq("donor_id", payload.donorId);
+    if (error) throw new Error("Could not revoke donor sign-in session.");
   }
 
   cookieStore.delete({ name: COOKIE_NAME, path: "/" });

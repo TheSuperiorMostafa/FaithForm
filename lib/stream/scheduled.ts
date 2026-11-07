@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { startLiveBroadcast } from "@/lib/stream/go-live";
-import { queueSimulatedPlayout } from "@/lib/stream/simulated";
+import { retryPendingSimulatedPlayouts, type SimulatedPlayoutStart } from "@/lib/stream/simulated";
 
 /**
  * How late a service may start.
@@ -18,17 +18,18 @@ const START_GRACE_MS = 30 * 60 * 1000;
 
 export async function startDueScheduledEvents(
   supabase?: SupabaseClient,
-): Promise<{ started: number; simulated: number; expired?: number }> {
+): Promise<{ started: number; simulated: number; expired: number; failed: number; deferred: number }> {
   const client = supabase ?? createAdminClient();
   const now = new Date().toISOString();
   const earliest = new Date(Date.now() - START_GRACE_MS).toISOString();
 
-  const { data: expiredRows } = await client
+  const { data: expiredRows, error: expiryError } = await client
     .from("stream_events")
     .update({ status: "cancelled" })
     .eq("status", "scheduled")
     .lt("starts_at", earliest)
     .select("id");
+  if (expiryError) throw new Error("Scheduled stream expiry failed");
 
   const expired = expiredRows?.length ?? 0;
 
@@ -41,29 +42,35 @@ export async function startDueScheduledEvents(
     .order("starts_at", { ascending: true })
     .limit(20);
 
-  if (error || !events?.length) {
-    return { started: 0, simulated: 0, expired };
-  }
+  if (error) throw new Error("Scheduled stream list failed");
 
   let started = 0;
-  let simulated = 0;
+  let failed = 0;
+  let deferred = 0;
+  const newlyStarted: SimulatedPlayoutStart[] = [];
 
-  for (const row of events) {
+  for (const row of events ?? []) {
     const eventId = row.id as string;
     const churchId = row.church_id as string;
     const createdBy = row.created_by as string | null;
-    const isSimulated = Boolean(row.simulated);
 
     try {
-      const { data: active } = await client
+      const { data: active, error: activeError } = await client
         .from("stream_sessions")
-        .select("id")
+        .select("id, status, error_message, created_at")
         .eq("church_id", churchId)
         .in("status", ["preparing", "waiting_for_encoder", "live"])
         .limit(1)
         .maybeSingle();
 
-      if (active) continue;
+      if (activeError) throw new Error("Scheduled stream session read failed");
+      if (active) {
+        if (active.status === "preparing" && (
+          active.error_message || Date.now() - Date.parse(active.created_at) > 5 * 60 * 1000
+        )) failed++;
+        else deferred++;
+        continue;
+      }
 
       await startLiveBroadcast(
         churchId,
@@ -72,20 +79,20 @@ export async function startDueScheduledEvents(
         client,
       );
 
-      if (isSimulated && row.simulated_source_path) {
-        await queueSimulatedPlayout({
-          churchId,
-          eventId,
-          storagePath: row.simulated_source_path as string,
-        });
-        simulated++;
-      }
-
       started++;
-    } catch (err) {
-      console.error("scheduled-start failed", eventId, err);
+      if (row.simulated && typeof row.simulated_source_path === "string" && row.simulated_source_path) {
+        newlyStarted.push({ churchId, eventId, storagePath: row.simulated_source_path });
+      }
+    } catch {
+      failed++;
     }
   }
 
-  return { started, simulated, expired };
+  // Live events remain pending handoffs after a signing/write failure or an
+  // interrupted invocation, so the next cron/poll repairs them in place.
+  const handoffs = await retryPendingSimulatedPlayouts(client, newlyStarted);
+  return {
+    started, simulated: handoffs.prepared, expired,
+    failed: failed + handoffs.failed, deferred: deferred + handoffs.deferred,
+  };
 }

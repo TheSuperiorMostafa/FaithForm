@@ -135,7 +135,8 @@ export async function createStreamSession(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message ?? "Could not create stream session.");
+    if (error?.code === "23505") throw new Error("A broadcast is already in progress.");
+    throw new Error("Could not reserve this broadcast. No platform setup was started.");
   }
 
   return mapSession(data as SessionRow);

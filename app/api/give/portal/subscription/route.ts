@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isChurchFeatureEnabled } from "@/lib/features/access";
+import { isPublicFeatureEnabled } from "@/lib/features/public-access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import {
@@ -43,7 +43,7 @@ export async function POST(request: Request) {
 
   if (
     restartsGiving &&
-    !(await isChurchFeatureEnabled(session.churchId, "giving"))
+    !(await isPublicFeatureEnabled(session.churchId, "giving"))
   ) {
     return NextResponse.json({ error: "Giving not available" }, { status: 404 });
   }

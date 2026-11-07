@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { recurringFirstChargeAt } from "@/lib/giving/recurring-schedule";
 import { NextResponse } from "next/server";
-import { isChurchFeatureEnabled } from "@/lib/features/access";
+import { isPublicFeatureEnabled } from "@/lib/features/public-access";
 import { z } from "zod";
 import { linkDonorStripeCustomer, upsertGivingDonor } from "@/lib/giving/donors";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
   // Giving switched off in the control center stops new money moving. Donor
   // paths that only stop or view an existing gift stay open — a church can
   // turn a feature off, but a donor must always be able to cancel.
-  if (!(await isChurchFeatureEnabled(church.churchId, "giving"))) {
+  if (!(await isPublicFeatureEnabled(church.churchId, "giving"))) {
     return NextResponse.json({ error: "Giving not available" }, { status: 404 });
   }
 

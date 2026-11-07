@@ -53,6 +53,9 @@
     },
     "app/api/webhooks/retell/reconcile/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/webhooks/operations/monitor/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -111,6 +114,10 @@
     {
       "path": "/api/support/notion/retry",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/webhooks/operations/monitor",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

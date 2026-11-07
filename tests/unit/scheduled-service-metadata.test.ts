@@ -104,7 +104,7 @@ test("recording inheritance is insert-only, scoped to the church, and preserves 
   }
   const simulated = readFileSync("lib/stream/simulated.ts", "utf8");
   assert.doesNotMatch(simulated, /artwork_url/);
-  assert.match(simulated, /sourceUrl: event.simulated_playout_url/);
+  assert.match(simulated, /handoff\?\.source_url/);
 });
 
 test("upcoming metadata update keeps unrelated scheduling and platform fields untouched", async () => {

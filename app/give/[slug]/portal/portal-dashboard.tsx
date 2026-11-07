@@ -112,6 +112,7 @@ export function PortalDashboard({
   const [pending, startTransition] = useTransition();
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   const stripePromise =
@@ -155,14 +156,23 @@ export function PortalDashboard({
   };
 
   const signOut = () => {
+    setSignOutError(null);
     startTransition(async () => {
-      await fetch("/api/give/portal/sign-out", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slug }),
-      });
-      router.push(`/give/${slug}/portal`);
-      router.refresh();
+      try {
+        const response = await fetch("/api/give/portal/sign-out", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug }),
+        });
+        if (!response.ok) {
+          setSignOutError("We could not sign you out. Please try again.");
+          return;
+        }
+        router.push(`/give/${slug}/portal`);
+        router.refresh();
+      } catch {
+        setSignOutError("We could not sign you out. Please try again.");
+      }
     });
   };
 
@@ -179,6 +189,8 @@ export function PortalDashboard({
           Sign out
         </Button>
       </div>
+
+      {signOutError && <p role="alert" className="text-sm text-destructive">{signOutError}</p>}
 
       {givingEnabled && funds.length > 0 && (
         <section id="give-now" className="space-y-3">

@@ -88,11 +88,8 @@ export async function startLiveBroadcast(
 ) {
   const client = getClient(supabase);
 
-  // Refused before anything is touched. The session insert below refuses a
-  // second broadcast too, but only after the event is created and the
-  // platforms are provisioned — and provisioning ends whatever YouTube
-  // broadcast is bound to the church's stream. A second Go Live from a tab
-  // that had not refreshed ended the service's YouTube broadcast mid-sermon.
+  // Give an early response for an existing broadcast. Concurrent starts are
+  // guarded by the session insert below, before any provider is touched.
   if (await getActiveStreamSession(churchId, client)) {
     throw new Error("A broadcast is already in progress.");
   }
@@ -120,99 +117,9 @@ export async function startLiveBroadcast(
     );
   }
 
-  // A disconnected platform is a syndication problem, not a reason to block
-  // the service. It gets recorded as a failed attempt below and picked up by
-  // the retry job once the church reconnects.
-  const syndicateYoutube =
-    event.syndicateYoutube && integrationStatus.youtube.connected;
-  const syndicateFacebook =
-    event.syndicateFacebook && integrationStatus.facebook.connected;
-
-  // Always start from a clean slate. Destinations persist on the church's
-  // stream integration, so last week's RTMP URLs would otherwise still be in
-  // the relay config — pushing this service to an ended broadcast, or to a
-  // platform the operator has since turned off.
-  await clearRelayDestinations(churchId, userId, client);
-
-  const provisioned =
-    syndicateYoutube || syndicateFacebook
-      ? await provisionDestinationsForEvent(
-          { ...event, syndicateYoutube, syndicateFacebook },
-          userId,
-          client,
-        )
-      : { destinations: [], errors: {} };
-
-  const destinations = provisioned.destinations;
-
-  // Provisioning only proves a destination exists. Whether video reaches the
-  // platform is the relay's business, and it reports that back to
-  // /api/stream/syndication/report — so a successful hand-off is `pending`
-  // here, not `success`. Calling it success at this point is why the dashboard
-  // showed both platforms green through services that never went out.
-  if (event.syndicateYoutube) {
-    const ok = destinations.some((d) => d.name === "youtube");
-    await recordSyndicationAttempt(
-      event.id,
-      "youtube",
-      ok ? "pending" : "failed",
-      ok
-        ? undefined
-        : (provisioned.errors.youtube ??
-          "YouTube is not connected for this church."),
-      client,
-    );
-  }
-  if (event.syndicateFacebook) {
-    const ok = destinations.some((d) => d.name === "facebook");
-    await recordSyndicationAttempt(
-      event.id,
-      "facebook",
-      ok ? "pending" : "failed",
-      ok
-        ? undefined
-        : (provisioned.errors.facebook ??
-          "Facebook is not connected for this church."),
-      client,
-    );
-  }
-
-  const settings = await ensureStreamRelayCredentials(churchId, userId, client);
-
-  if (!settings.connected) {
-    throw new Error("Stream credentials are missing.");
-  }
-
-  // "Go live" is the congregation-facing action, not merely a relay switch.
-  // Before this, a pastor could be on air successfully while both mobile apps
-  // kept the service hidden until somebody found a separate publishing screen.
-  // Scheduled starts keep their explicit publication choice; an admin-started
-  // broadcast is published to everyone as part of the same intent.
-  const appVisibility = event.recordingAppVisibility ?? (userId ? "public" : "none");
-  if (event.recordingAppVisibility === "none") {
-    // A scheduled service might have been published before this week's choice
-    // was changed. Honour an explicit opt-out before it can become live.
-    const { error } = await client.from("stream_events")
-      .update({ mobile_visibility: "none", mobile_unpublished_at: new Date().toISOString() })
-      .eq("id", event.id).eq("church_id", churchId);
-    if (error) throw new Error("Could not save this service's app visibility.");
-  }
-  if (userId && appVisibility !== "none") {
-    const publication = await publishToFaithForm(
-      {
-        churchId,
-        kind: "live",
-        id: event.id,
-        visibility: appVisibility,
-        actorUserId: userId,
-      },
-      client,
-    );
-    if (!publication.ok) {
-      throw new Error("Could not make this broadcast visible in FaithForm.");
-    }
-  }
-
+  // The unique active-session insert is the church's start claim. Acquire it
+  // before clearing destinations or provisioning anything on external platforms.
+  // Concurrent callers may both pass the read above; only this insert wins.
   const session = await createStreamSession(
     {
       churchId,
@@ -220,66 +127,170 @@ export async function startLiveBroadcast(
       startedBy: userId,
       encoderDeviceId: encoder?.id ?? null,
       streamEventId: event.id,
-      // Names only. The URLs carry the YouTube and Facebook stream keys, and
-      // every staff member can read broadcast history; nothing reads the URL
-      // back from here (see getDestinationPlatforms).
-      destinationsSnapshot: destinations.map(({ name }) => ({ name, url: "" })),
+      destinationsSnapshot: [],
     },
     client,
   );
 
-  await startRecordingFor(session);
+  try {
+    // A disconnected platform is a syndication problem, not a reason to block
+    // the service. It gets recorded as a failed attempt below and picked up by
+    // the retry job once the church reconnects.
+    const syndicateYoutube =
+      event.syndicateYoutube && integrationStatus.youtube.connected;
+    const syndicateFacebook =
+      event.syndicateFacebook && integrationStatus.facebook.connected;
 
-  const previewActive = await isPreviewIngestActive(churchId, client);
-  const now = new Date().toISOString();
+    // Always start from a clean slate. Destinations persist on the church's
+    // stream integration, so last week's RTMP URLs would otherwise still be in
+    // the relay config — pushing this service to an ended broadcast, or to a
+    // platform the operator has since turned off.
+    await clearRelayDestinations(churchId, userId, client);
 
-  await updateStreamEvent(
-    event.id,
-    churchId,
-    {
-      status: "live",
-      streamSessionId: session.id,
-      syndicationRetryUntil: syndicationRetryUntil(),
-    },
-    client,
-  );
+    const provisioned =
+      syndicateYoutube || syndicateFacebook
+        ? await provisionDestinationsForEvent(
+            { ...event, syndicateYoutube, syndicateFacebook },
+            userId,
+            client,
+          )
+        : { destinations: [], errors: {} };
 
-  if (encoder && !previewActive) {
-    await queueStreamCommand(
-      {
-        churchId,
-        encoderDeviceId: encoder.id,
-        command: "start_stream",
-        payload: {
-          sessionId: session.id,
-          eventId: event.id,
-          ingestServerUrl: settings.ingestServerUrl,
+    const destinations = provisioned.destinations;
+
+    // Provisioning only proves a destination exists. Whether video reaches the
+    // platform is the relay's business, and it reports that back to
+    // /api/stream/syndication/report — so a successful hand-off is `pending`
+    // here, not `success`. Calling it success at this point is why the dashboard
+    // showed both platforms green through services that never went out.
+    if (event.syndicateYoutube) {
+      const ok = destinations.some((d) => d.name === "youtube");
+      await recordSyndicationAttempt(
+        event.id,
+        "youtube",
+        ok ? "pending" : "failed",
+        ok
+          ? undefined
+          : (provisioned.errors.youtube ??
+            "YouTube is not connected for this church."),
+        client,
+      );
+    }
+    if (event.syndicateFacebook) {
+      const ok = destinations.some((d) => d.name === "facebook");
+      await recordSyndicationAttempt(
+        event.id,
+        "facebook",
+        ok ? "pending" : "failed",
+        ok
+          ? undefined
+          : (provisioned.errors.facebook ??
+            "Facebook is not connected for this church."),
+        client,
+      );
+    }
+
+    const settings = await ensureStreamRelayCredentials(churchId, userId, client);
+
+    if (!settings.connected) {
+      throw new Error("Stream credentials are missing.");
+    }
+
+    // "Go live" is the congregation-facing action, not merely a relay switch.
+    // Before this, a pastor could be on air successfully while both mobile apps
+    // kept the service hidden until somebody found a separate publishing screen.
+    // Scheduled starts keep their explicit publication choice; an admin-started
+    // broadcast is published to everyone as part of the same intent.
+    const appVisibility = event.recordingAppVisibility ?? (userId ? "public" : "none");
+    if (event.recordingAppVisibility === "none") {
+      // A scheduled service might have been published before this week's choice
+      // was changed. Honour an explicit opt-out before it can become live.
+      const { error } = await client.from("stream_events")
+        .update({ mobile_visibility: "none", mobile_unpublished_at: new Date().toISOString() })
+        .eq("id", event.id).eq("church_id", churchId);
+      if (error) throw new Error("Could not save this service's app visibility.");
+    }
+    if (userId && appVisibility !== "none") {
+      const publication = await publishToFaithForm(
+        {
+          churchId,
+          kind: "live",
+          id: event.id,
+          visibility: appVisibility,
+          actorUserId: userId,
         },
-      },
-      client,
-    );
-  }
+        client,
+      );
+      if (!publication.ok) {
+        throw new Error("Could not make this broadcast visible in FaithForm.");
+      }
+    }
 
-  if (previewActive) {
-    await transitionYouTubeBroadcastLive(churchId, client);
-    const live = await updateStreamSession(
-      session.id,
+    // History contains names only; destination URLs carry private stream keys.
+    await updateStreamSession(session.id, {
+      destinationsSnapshot: destinations.map(({ name }) => ({ name, url: "" })),
+    }, client);
+
+    await startRecordingFor(session);
+
+    const previewActive = await isPreviewIngestActive(churchId, client);
+    const now = new Date().toISOString();
+
+    await updateStreamEvent(
+      event.id,
+      churchId,
       {
         status: "live",
-        ingestStartedAt: now,
-        liveStartedAt: now,
+        streamSessionId: session.id,
+        syndicationRetryUntil: syndicationRetryUntil(),
       },
       client,
     );
-    await notifyServiceLive({ churchId, eventId: event.id, sessionId: session.id }).catch(() => false);
-    return live;
-  }
 
-  return updateStreamSession(
-    session.id,
-    { status: "waiting_for_encoder" },
-    client,
-  );
+    if (encoder && !previewActive) {
+      await queueStreamCommand(
+        {
+          churchId,
+          encoderDeviceId: encoder.id,
+          command: "start_stream",
+          payload: {
+            sessionId: session.id,
+            eventId: event.id,
+            ingestServerUrl: settings.ingestServerUrl,
+          },
+        },
+        client,
+      );
+    }
+
+    if (previewActive) {
+      await transitionYouTubeBroadcastLive(churchId, client);
+      const live = await updateStreamSession(
+        session.id,
+        {
+          status: "live",
+          ingestStartedAt: now,
+          liveStartedAt: now,
+        },
+        client,
+      );
+      await notifyServiceLive({ churchId, eventId: event.id, sessionId: session.id }).catch(() => false);
+      return live;
+    }
+
+    return await updateStreamSession(
+      session.id,
+      { status: "waiting_for_encoder" },
+      client,
+    );
+  } catch {
+    // A failed/uncertain provider request must never release the claim and
+    // automatically mint another broadcast. The existing End action can close
+    // this session and its provider resources before an explicit fresh start.
+    const message = "Broadcast setup did not finish. End this broadcast before trying again.";
+    await updateStreamSession(session.id, { errorMessage: message }, client).catch(() => undefined);
+    throw new Error(message);
+  }
 }
 
 export async function endLiveBroadcast(

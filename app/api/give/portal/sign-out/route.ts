@@ -19,7 +19,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  await clearDonorPortalSession(parsed.data.slug);
+  try {
+    await clearDonorPortalSession(parsed.data.slug);
+  } catch {
+    return NextResponse.json(
+      { error: "We could not sign you out. Please try again." },
+      { status: 503 },
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }

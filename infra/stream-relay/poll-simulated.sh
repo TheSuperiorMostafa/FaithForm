@@ -16,13 +16,17 @@ fi
 
 mkdir -p "$PID_DIR"
 
-JOBS_JSON="$(curl -fsS -H "x-stream-relay-secret: ${SECRET}" \
+JOBS_JSON="$(curl -sS --max-time 25 -H "x-stream-relay-secret: ${SECRET}" \
   "${APP_URL%/}/api/stream/simulated-playout")"
 
 python3 -c '
 import json, os, subprocess, sys
 
-jobs = json.loads(sys.stdin.read()).get("jobs", [])
+payload = json.loads(sys.stdin.read())
+if "jobs" not in payload:
+    print("[simulated] handoff polling failed", file=sys.stderr)
+    sys.exit(1)
+jobs = payload.get("jobs", [])
 ffmpeg = os.environ.get("FFMPEG", "/home/mostafa/bin/ffmpeg")
 pid_dir = os.environ.get("PID_DIR", "/home/mostafa/mediamtx/pids")
 
@@ -49,4 +53,8 @@ for job in jobs:
     ])
     with open(pid_file, "w") as f:
         f.write(str(proc.pid))
+if payload.get("ok") is False:
+    # Other churches usable jobs still start; the failed recovery stays visible.
+    print("[simulated] some video handoffs need retry", file=sys.stderr)
+    sys.exit(1)
 ' <<<"$JOBS_JSON"
