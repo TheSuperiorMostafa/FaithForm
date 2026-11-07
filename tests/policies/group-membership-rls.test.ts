@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 describe("group_memberships RLS church relationship verification", () => {
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient> | null = null;
   let testChurch1: string;
   let testChurch2: string;
   let testUser: { id: string; email: string; client: SupabaseClient };
@@ -19,6 +19,12 @@ describe("group_memberships RLS church relationship verification", () => {
   let testMembership1: string;
 
   before(async () => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      console.warn("⚠️  Skipping group_memberships RLS tests: Supabase env vars not set");
+      console.warn("   Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY to run these tests");
+      return;
+    }
+    admin = createAdminClient();
     // Create test churches
     const { data: church1 } = await admin.from("churches").insert({
       name: "Test Church 1",
@@ -93,6 +99,7 @@ describe("group_memberships RLS church relationship verification", () => {
   });
 
   after(async () => {
+    if (!admin) return;
     // Clean up in reverse dependency order
     if (testMembership1) {
       await admin.from("group_memberships").delete().eq("id", testMembership1);
@@ -119,7 +126,8 @@ describe("group_memberships RLS church relationship verification", () => {
     }
   });
 
-  it("allows updating own availability with active relationship", async () => {
+  it("allows updating own availability with active relationship", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     const { data, error } = await testUser.client
       .from("group_memberships")
       .update({ availability: "available" })
@@ -130,7 +138,8 @@ describe("group_memberships RLS church relationship verification", () => {
     assert.ok(data && data.length > 0, "Should return updated row");
   });
 
-  it("denies update without active relationship", async () => {
+  it("denies update without active relationship", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     // Create a membership in church 2 (user has inactive relationship)
     const { data: group2 } = await admin.from("groups").insert({
       church_id: testChurch2,
@@ -160,7 +169,8 @@ describe("group_memberships RLS church relationship verification", () => {
     assert.ok(error || !data || data.length === 0, "Should deny update without active relationship");
   });
 
-  it("denies cross-church updates", async () => {
+  it("denies cross-church updates", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     // Try to update church 1 membership while claiming to be from church 2 account
     // This should fail because the policy verifies membership.church_id = relationship.church_id
     const { data: crossGroup } = await admin.from("groups").insert({

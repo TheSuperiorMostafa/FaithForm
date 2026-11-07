@@ -4,11 +4,20 @@
  */
 
 import { strict as assert } from "node:assert";
-import { describe, it } from "node:test";
+import { describe, it, before } from "node:test";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 describe("notification_outbox target_shape_check constraint", () => {
-  const db = createAdminClient();
+  let db: ReturnType<typeof createAdminClient> | null = null;
+
+  before(() => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      console.warn("⚠️  Skipping notification_outbox constraint tests: Supabase env vars not set");
+      console.warn("   Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY to run these tests");
+      return;
+    }
+    db = createAdminClient();
+  });
 
   // Valid combinations - should all succeed
   const validNotifications = [
@@ -37,7 +46,8 @@ describe("notification_outbox target_shape_check constraint", () => {
     { kind: "household_code_ready", topic: "groups", subject_type: "household", target_account_ids: ["user-1"], desc: "checkin kind with groups topic" },
   ];
 
-  it("allows all valid kind/topic/subject_type combinations", async () => {
+  it("allows all valid kind/topic/subject_type combinations", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!db) return;
     for (const notification of validNotifications) {
       const { error } = await db.from("notification_outbox").insert({
         church_id: "00000000-0000-0000-0000-000000000000",
@@ -62,7 +72,8 @@ describe("notification_outbox target_shape_check constraint", () => {
     }
   });
 
-  it("rejects mismatched kind/topic combinations", async () => {
+  it("rejects mismatched kind/topic combinations", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!db) return;
     for (const notification of invalidNotifications) {
       const { error } = await db.from("notification_outbox").insert({
         church_id: "00000000-0000-0000-0000-000000000000",
@@ -80,7 +91,8 @@ describe("notification_outbox target_shape_check constraint", () => {
     }
   });
 
-  it("validates target_account_ids cardinality (1-200)", async () => {
+  it("validates target_account_ids cardinality (1-200)", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!db) return;
     // Empty array should fail
     const { error: emptyError } = await db.from("notification_outbox").insert({
       church_id: "00000000-0000-0000-0000-000000000000",

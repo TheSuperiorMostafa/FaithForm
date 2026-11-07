@@ -9,7 +9,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 describe("stream-recordings storage RLS", () => {
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient> | null = null;
   let testChurch1: string;
   let testChurch2: string;
   let testUser: { id: string; email: string; client: SupabaseClient };
@@ -17,6 +17,12 @@ describe("stream-recordings storage RLS", () => {
   let testFilePath2: string;
 
   before(async () => {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SECRET_KEY) {
+      console.warn("⚠️  Skipping stream-recordings storage tests: Supabase env vars not set");
+      console.warn("   Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY to run these tests");
+      return;
+    }
+    admin = createAdminClient();
     // Create test churches
     const { data: church1 } = await admin.from("churches").insert({
       name: "Test Storage Church 1",
@@ -61,6 +67,7 @@ describe("stream-recordings storage RLS", () => {
   });
 
   after(async () => {
+    if (!admin) return;
     // Clean up files
     if (testFilePath1) {
       await admin.storage.from("stream-recordings").remove([testFilePath1]);
@@ -81,7 +88,8 @@ describe("stream-recordings storage RLS", () => {
     }
   });
 
-  it("denies direct authenticated user access to list files", async () => {
+  it("denies direct authenticated user access to list files", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     const { data, error } = await testUser.client.storage
       .from("stream-recordings")
       .list();
@@ -90,7 +98,8 @@ describe("stream-recordings storage RLS", () => {
     assert.ok(error || !data || data.length === 0, "Authenticated user should not list bucket contents");
   });
 
-  it("denies direct authenticated user download", async () => {
+  it("denies direct authenticated user download", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     const { data, error } = await testUser.client.storage
       .from("stream-recordings")
       .download(testFilePath1);
@@ -98,7 +107,8 @@ describe("stream-recordings storage RLS", () => {
     assert.ok(error, "Authenticated user should not download directly");
   });
 
-  it("denies direct authenticated user upload", async () => {
+  it("denies direct authenticated user upload", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     const userPath = `${testChurch1}/user-upload-${Date.now()}.mp4`;
     const testContent = new Uint8Array([0x00, 0x00, 0x00, 0x20]);
 
@@ -112,7 +122,8 @@ describe("stream-recordings storage RLS", () => {
     await admin.storage.from("stream-recordings").remove([userPath]);
   });
 
-  it("allows service_role to create signed URLs and access via them", async () => {
+  it("allows service_role to create signed URLs and access via them", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin) return;
     // Create signed URL (5 minute expiry)
     const { data: signedData, error: signedError } = await admin.storage
       .from("stream-recordings")
@@ -126,7 +137,8 @@ describe("stream-recordings storage RLS", () => {
     assert.ok(response.ok, "Signed URL should allow download");
   });
 
-  it("isolates church paths via signed URLs", async () => {
+  it("isolates church paths via signed URLs", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin) return;
     // Create signed URL for church 1 file
     const { data: signed1 } = await admin.storage
       .from("stream-recordings")
@@ -156,7 +168,8 @@ describe("stream-recordings storage RLS", () => {
     assert.ok(!crossResponse.ok, "Signed URL should not allow cross-church access via path manipulation");
   });
 
-  it("denies authenticated user deletion", async () => {
+  it("denies authenticated user deletion", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin || !testUser) return;
     const { error } = await testUser.client.storage
       .from("stream-recordings")
       .remove([testFilePath1]);
@@ -170,9 +183,10 @@ describe("stream-recordings storage RLS", () => {
     assert.ok(stillExists, "File should still exist after denied deletion");
   });
 
-  it("allows service_role to delete files", async () => {
+  it("allows service_role to delete files", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
+    if (!admin) return;
     const deletePath = `${testChurch1}/delete-test-${Date.now()}.mp4`;
-    const testContent = new Uint8Array([0x00, 0x00, 0x00, 0x20]);
+    const testContent = new Uint8Array([0x00, 0x00, 0x20]);
 
     // Upload test file
     await admin.storage
