@@ -74,8 +74,10 @@ export function PagesWorkspace({
     (currentPath === "/" ? "Home" : currentPath);
 
   const workspace = (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky fillHeight={expanded} />
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,2fr)_380px]">
+      <div className="min-h-[600px] xl:min-h-[800px]">
+        <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky fillHeight={expanded} />
+      </div>
       <div className="flex min-w-0 flex-col gap-4">
         <LiveEditsNote isLive={isLive} />
 

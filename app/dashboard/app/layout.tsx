@@ -1,6 +1,24 @@
-import type { ReactNode } from "react";
-import { FeatureGate } from "@/components/dashboard/feature-gate";
+import { Smartphone } from "lucide-react";
 
-export default function MemberAppLayout({ children }: { children: ReactNode }) {
-  return <FeatureGate feature="member_app">{children}</FeatureGate>;
+import { ChurchAppTabs } from "@/components/member-app/church-app-tabs";
+import { PageHeader } from "@/components/ui/page-header";
+
+export default function ChurchAppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <PageHeader
+        title="Church App"
+        icon={Smartphone}
+        description="Your church's page in the FaithForm app."
+      />
+
+      <ChurchAppTabs />
+
+      {children}
+    </div>
+  );
 }
