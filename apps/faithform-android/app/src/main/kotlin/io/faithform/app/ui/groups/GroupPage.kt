@@ -97,6 +97,7 @@ import kotlinx.serialization.json.*
  */
 @Composable fun GroupInfoScreen(store: GroupsStore, groupId: String, fromChat: Boolean, onOpen: (GroupRoute) -> Unit, onBack: () -> Unit) {
     var editing by remember { mutableStateOf(false) }
+    var announcing by remember { mutableStateOf(false) }
     var detail by remember(groupId) { mutableStateOf<GroupDetail?>(null) }
     var reload by remember { mutableIntStateOf(0) }
     var confirmingLeave by remember { mutableStateOf(false) }
@@ -110,6 +111,11 @@ import kotlinx.serialization.json.*
     val uri = LocalUriHandler.current
     val theme = LocalFaithFormTheme.current
     LaunchedEffect(groupId, reload) { try { detail = store.read("${store.path}/$groupId") } catch (e: CancellationException) { throw e } catch (e: Exception) { detail = null; store.error = GroupsStore.message(e) } }
+    if (announcing) detail?.let { current ->
+        GroupFormSheet("Group announcement", onDismiss = { announcing = false }) {
+            GroupAnnouncementSheet(store, groupId, current.group.name, onDismiss = { announcing = false })
+        }
+    }
     if (preferences) GroupPreferences(store, groupId, onDismiss = { preferences = false })
     if (requests) GroupRequests(store, groupId, onDismiss = { requests = false; reload++ })
     if (editing && detail != null) GroupEdit(store, detail!!, onDismiss = { editing = false }, saved = { reload++ })
@@ -178,6 +184,9 @@ import kotlinx.serialization.json.*
             if (d.group.membershipState == "member" && !d.isArchived) item { Box(Modifier.padding(horizontal = 20.dp)) { GroupAvailabilitySection(store, groupId) } }
             val canManage = d.capabilities.canEditDetails || d.capabilities.canManageRequests || d.capabilities.canInvite
             if (canManage) item { Box(Modifier.padding(horizontal = 20.dp)) { GroupPanel("Leader tools") {
+                if (!d.isArchived && d.group.membershipState == "member" && d.group.groupRole in listOf("leader", "manager")) {
+                    GroupActionRow(Icons.Outlined.NotificationsNone, "Send announcement") { announcing = true }
+                }
                 if (d.capabilities.canEditDetails) GroupActionRow(Icons.Outlined.Edit, "Edit group details") { editing = true }
                 if (d.capabilities.canManageRequests) GroupActionRow(Icons.Outlined.PersonAddAlt, "Join requests", "${d.pendingRequestCount}") { requests = true }
                 if (d.capabilities.canInvite) GroupActionRow(Icons.Outlined.Share, "Invite someone") { scope.launch { store.action("Invitation ready to share.") { invite = store.send<GroupInvitation>("${store.path}/$groupId/invitations").url } } }

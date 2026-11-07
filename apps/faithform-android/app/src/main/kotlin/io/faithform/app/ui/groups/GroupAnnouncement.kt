@@ -15,11 +15,6 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 @Serializable
-data class SendAnnouncementResponse(
-    val data: SendAnnouncementData
-)
-
-@Serializable
 data class SendAnnouncementData(
     val sent: Boolean,
     val recipientCount: Int,
@@ -64,12 +59,12 @@ fun GroupAnnouncementSheet(
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    "Announcement Sent",
+                    "Announcement queued",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    "Sent to $recipientCount ${if (recipientCount == 1) "member" else "members"}",
+                    "Queued for $recipientCount ${if (recipientCount == 1) "member" else "members"}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -88,6 +83,7 @@ fun GroupAnnouncementSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             
+            GroupFeedback(store)
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it.take(100) },
@@ -122,9 +118,10 @@ fun GroupAnnouncementSheet(
                 Button(
                     onClick = {
                         scope.launch {
+                            store.error = null
                             sending = true
                             try {
-                                val response = store.send<SendAnnouncementResponse>(
+                                val response = store.send<SendAnnouncementData>(
                                     path,
                                     buildJsonObject {
                                         put("title", title)
@@ -132,7 +129,7 @@ fun GroupAnnouncementSheet(
                                     },
                                     "POST"
                                 )
-                                recipientCount = response.data.recipientCount
+                                recipientCount = response.recipientCount
                                 sent = true
                             } catch (e: Exception) {
                                 store.error = e.message ?: "Failed to send announcement"

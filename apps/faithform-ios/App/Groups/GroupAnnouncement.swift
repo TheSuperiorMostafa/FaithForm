@@ -26,10 +26,10 @@ struct GroupAnnouncementView: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .font(.system(size: 48))
                                 .foregroundStyle(.green)
-                            Text("Announcement Sent")
+                            Text("Announcement queued")
                                 .font(.title2)
                                 .fontWeight(.semibold)
-                            Text("Sent to \(recipientCount) \(recipientCount == 1 ? "member" : "members")")
+                            Text("Queued for \(recipientCount) \(recipientCount == 1 ? "member" : "members")")
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -44,6 +44,7 @@ struct GroupAnnouncementView: View {
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                         
+                        GroupFeedback(model: model)
                         TextField("Title", text: $title)
                             .textFieldStyle(.roundedBorder)
                             .onChange(of: title) { _, value in
@@ -80,19 +81,17 @@ struct GroupAnnouncementView: View {
     }
     
     private func send() async {
+        model.error = nil
         sending = true
         do {
-            struct Response: Decodable {
-                struct Data: Decodable {
-                    let recipientCount: Int
-                }
-                let data: Data
+            struct Response: Decodable, Sendable {
+                let recipientCount: Int
             }
             let response: Response = try await model.send(path, body: [
                 "title": title,
                 "message": message
             ], as: Response.self)
-            recipientCount = response.data.recipientCount
+            recipientCount = response.recipientCount
             sent = true
         } catch {
             model.error = GroupsModel.message(error)
