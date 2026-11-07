@@ -49,7 +49,7 @@ describe("notification_outbox target_shape_check constraint", () => {
   it("allows all valid kind/topic/subject_type combinations", { skip: !process.env.NEXT_PUBLIC_SUPABASE_URL }, async () => {
     if (!db) return;
     for (const notification of validNotifications) {
-      const { error } = await db.from("notification_outbox").insert({
+      const { error }: { error: unknown } = await db.from("notification_outbox").insert({
         church_id: "00000000-0000-0000-0000-000000000000",
         kind: notification.kind,
         topic: notification.topic,
