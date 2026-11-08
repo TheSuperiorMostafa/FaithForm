@@ -35,11 +35,11 @@ stop_pid() {
 
 stop_pid "$FANOUT_PID_FILE"
 
-# Clears the publishing flag the dashboard reads. Deliberately does not end the
-# broadcast: YouTube's enableAutoStop is off precisely so a brief encoder gap
-# cannot end a service, and this must behave the same way. Ending a service
-# stays an operator action.
+# Clear the dashboard preview flag. The signed encoder signal separately starts
+# a reconnect grace period for churches using automatic Go Live.
 if [[ -n "${SECRET}" ]]; then
+  python3 /home/mostafa/scripts/encoder-lifecycle.py unpublish >>"$LOG_FILE" 2>&1 &
+  ENCODER_LIFECYCLE_PID=$!
   curl -fsS --max-time 10 -X POST "${APP_URL%/}/api/stream/lifecycle" \
     -H "x-stream-relay-secret: ${SECRET}" \
     -H "content-type: application/json" \
@@ -51,3 +51,7 @@ fi
 # keeps running on its own until every segment is uploaded, and the relay's
 # sweeper finishes the job if it cannot. Nothing is uploaded from here any more.
 python3 /home/mostafa/scripts/faithform-recorder.py stop "$MTX_PATH" >>"$LOG_FILE" 2>&1 || true
+
+if [[ -n "${ENCODER_LIFECYCLE_PID:-}" ]]; then
+  wait "$ENCODER_LIFECYCLE_PID" || true
+fi

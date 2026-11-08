@@ -54,6 +54,7 @@ export default async function LiveStreamingPage() {
   return (
     <BroadcastControlCenter
       initialStatus={{
+        autoGoLive: broadcastStatus.autoGoLive,
         previewIngestActive: broadcastStatus.previewIngestActive,
         shareLinks: broadcastStatus.shareLinks,
         overview,

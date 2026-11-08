@@ -1,6 +1,6 @@
 # FaithForm streaming PC agent
 
-Runs on the church computer that has OBS open. FaithForm sends **Go Live** / **End stream** commands to this agent.
+This optional agent runs on the church computer that has OBS open. It receives **Go Live** and **End stream** commands from the FaithForm dashboard. To start and stop from the encoder itself, configure the church’s permanent stream key in **Live Streaming → Setup** and enable **Go live from your equipment**.
 
 ## Requirements
 

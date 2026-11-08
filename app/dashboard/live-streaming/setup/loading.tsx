@@ -1,9 +1,12 @@
+import { ChevronDown } from "lucide-react";
+
+import { STREAMING_TOOLS } from "@/components/live-streaming/encoder-docs-card";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 const STEPS = [
   {
     title: "What do you stream with?",
-    description: "Pick the one you use. We'll show just the steps for it.",
+    description: "Connect your equipment once. Then start each service from the equipment you already use.",
   },
   {
     title: "After the service",
@@ -11,20 +14,6 @@ const STEPS = [
   },
 ];
 
-const TOOLS = [
-  "OBS Studio",
-  "ATEM Mini",
-  "vMix",
-  "This computer (camera)",
-  "Someone else sets it up",
-];
-
-/**
- * Mirrors Set up streaming: the section header, the three step cards (their
- * titles and the tool choices are static, so they render as real text) and
- * the folded Advanced section. Only live values — the video check and the
- * saved choices — shimmer.
- */
 export default function StreamSetupLoading() {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="streaming setup">
@@ -50,30 +39,37 @@ export default function StreamSetupLoading() {
             </div>
             {index === 0 ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {TOOLS.map((tool) => (
+                <div className="choice-grid choice-grid-3">
+                  {STREAMING_TOOLS.map((tool) => (
                     <div
-                      key={tool}
+                      key={tool.id}
                       className="flex min-h-20 items-center gap-4 rounded-2xl border-2 border-border bg-card p-4"
                     >
-                      <Skeleton className="size-11 shrink-0 rounded-xl" />
-                      <span className="text-base font-semibold">{tool}</span>
+                      <span aria-hidden className="size-11 shrink-0 rounded-xl bg-primary/[0.07] dark:bg-accent/15" />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="text-base font-semibold">{tool.name}</span>
+                        <span className="text-sm text-muted-foreground">{tool.blurb}</span>
+                      </span>
                     </div>
                   ))}
                 </div>
-                <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
-                  <span className="text-[15px] font-semibold">Technical details</span>
+                <div className="flex min-h-12 items-center justify-between gap-3 rounded-2xl border border-border bg-card/50 px-5 py-3">
+                  <span className="space-y-0.5">
+                    <span className="block text-[15px] font-semibold">Technical details</span>
+                    <span className="block text-sm text-muted-foreground">Server address and stream key, one at a time</span>
+                  </span>
+                  <ChevronDown aria-hidden className="size-5 shrink-0 text-muted-foreground" />
                 </div>
-              <div className="flex flex-col gap-4 rounded-2xl border border-border p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-3">
-                  <Skeleton className="size-7 rounded-full" />
-                  <div className="flex flex-col gap-1.5">
-                    <Skeleton className="h-6 w-52" />
-                    <Skeleton className="h-4 w-72 max-w-full" />
+                <div className="flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-border p-5">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-base font-semibold">Go live from your equipment</span>
+                    <p className="text-[15px] text-muted-foreground">
+                      When on, pressing Start Streaming or On Air makes your service public as soon as video reaches FaithForm.
+                      Leave it off to check your video privately on the Go live tab.
+                    </p>
                   </div>
+                  <Skeleton className="h-8 w-14 shrink-0 rounded-full" />
                 </div>
-                <Skeleton className="min-h-11 w-36 rounded-[10px]" />
-              </div>
               </>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -89,7 +85,7 @@ export default function StreamSetupLoading() {
         <span className="space-y-0.5">
           <span className="block text-[15px] font-semibold">Advanced</span>
           <span className="block text-sm text-muted-foreground">
-            Streaming PC pairing, encoder settings, embed code, and how your last service reached YouTube and
+            Optional remote OBS control, encoder settings, embed code, and how your last service reached YouTube and
             Facebook
           </span>
         </span>

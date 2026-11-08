@@ -215,7 +215,7 @@ async function writeAudit(
     action: PublicationAction;
     previousVisibility: MobileVisibility | null;
     newVisibility: MobileVisibility | null;
-    actorUserId: string;
+    actorUserId: string | null;
   },
   supabase?: SupabaseClient,
 ): Promise<void> {
@@ -309,7 +309,7 @@ export async function publishToFaithForm(
     visibility: Exclude<MobileVisibility, "none">;
     posterUrl?: string | null;
     summary?: string | null;
-    actorUserId: string;
+    actorUserId: string | null;
   },
   supabase?: SupabaseClient,
 ): Promise<PublicationResult> {

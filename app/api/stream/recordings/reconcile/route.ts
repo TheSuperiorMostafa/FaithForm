@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getIntegration } from "@/lib/integrations/tokens";
 import { compareSecret } from "@/lib/security/compare-secret";
+import { endDisconnectedEncoderBroadcasts } from "@/lib/stream/encoder-automation";
 import { endLiveBroadcast } from "@/lib/stream/go-live";
 import { logRecordingEvent, reconcileRecordings } from "@/lib/stream/recording-lifecycle";
 import { productionLifecycleDeps } from "@/lib/stream/recording-runtime";
@@ -25,10 +26,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  await endDisconnectedEncoderBroadcasts().catch((error) => {
+    console.error("Encoder disconnect reconciliation failed", error);
+  });
   const deps = productionLifecycleDeps();
   const report = await reconcileRecordings(deps, {
     endAbandonedSession: async (session) => {
-      await endLiveBroadcast(session.churchId);
+      await endLiveBroadcast(session.churchId, undefined, { expectedSessionId: session.id });
     },
     ingestHeartbeatAt: async (churchId) => {
       const [status, integration] = await Promise.all([

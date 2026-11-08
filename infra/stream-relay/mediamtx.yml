@@ -52,7 +52,7 @@ pathDefaults:
 paths:
   # Per-church ingest:
   #   server: rtmp://stream.faithform.io/live
-  #   stream key: {churchId}?token={short-lived capability}
+  #   stream key: {churchId}?token={permanent key or short-lived capability}
   # The query is used only for auth; the media path remains live/{churchId}.
   ~^live/([0-9a-fA-F-]{36})$:
     source: publisher

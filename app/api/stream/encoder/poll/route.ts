@@ -5,6 +5,7 @@ import {
   getPendingStreamCommand,
   touchEncoderDevice,
 } from "@/lib/stream/encoder";
+import { getActiveStreamSession } from "@/lib/stream/sessions";
 import { verifyStreamSecret } from "@/lib/stream/device-secret";
 import {
   buildStaticStreamName,
@@ -35,6 +36,18 @@ export async function GET(request: Request) {
     await touchEncoderDevice(device.id);
     const pending = await getPendingStreamCommand(device.id);
     if (!pending) {
+      return NextResponse.json({ command: null });
+    }
+
+    const active = await getActiveStreamSession(device.church_id);
+    const commandSessionId = pending.payload.sessionId;
+    const stillApplies = pending.command === "start_stream"
+      ? active?.id === commandSessionId && active?.status === "waiting_for_encoder"
+      : !active || active.id === commandSessionId;
+    if (!stillApplies) {
+      await completeStreamCommand(
+        pending.id, device.id, device.church_id, "failed", "This broadcast is no longer current.",
+      );
       return NextResponse.json({ command: null });
     }
 

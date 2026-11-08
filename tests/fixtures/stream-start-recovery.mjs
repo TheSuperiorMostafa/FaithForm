@@ -10,6 +10,7 @@ let fault = true;
 let handoff = null;
 let signCalls = 0;
 let legacySource = null;
+let operationLease = null;
 const event = {
   id: "11111111-1111-4111-8111-111111111111", churchId: "church", title: "Service",
   simulated: true, simulatedSourcePath: "church/video.mp4", status: "scheduled",
@@ -25,6 +26,7 @@ const db = {
     let operation = "read";
     let value;
     let readsHandoff = false;
+    let expectedOperation;
     const query = {
       select: columns => {
         if (table === "stream_events" && columns.includes("stream_simulated_playout_handoffs")) {
@@ -34,7 +36,10 @@ const db = {
         }
         return query;
       }, order: () => query, limit: () => query,
-      eq: () => query, in: () => query, not: () => query, gt: () => query,
+      eq: (column, filter) => {
+        if (column === "operation_id") expectedOperation = filter;
+        return query;
+      }, in: () => query, not: () => query, gt: () => query, or: () => query,
       insert: row => { operation = "insert"; value = row; return query; },
       update: row => { operation = "update"; value = row; return query; },
       upsert: row => { operation = "upsert"; value = row; return query; },
@@ -42,6 +47,17 @@ const db = {
       then: (yes, no) => Promise.resolve(resolve()).then(yes, no),
     };
     function resolve() {
+      if (table === "stream_encoder_automation") {
+        if (operation === "upsert") return { error: null };
+        assert.equal(operation, "update");
+        if (value.operation_id === null) {
+          if (operationLease === expectedOperation) operationLease = null;
+          return { error: null };
+        }
+        if (operationLease) return { data: null, error: null };
+        operationLease = value.operation_id;
+        return { data: { church_id: event.churchId }, error: null };
+      }
       if (table === "stream_events") {
         if (scenario === "pre-migration") {
           if (readsHandoff) return { error: { code: "PGRST200" } };
@@ -149,12 +165,15 @@ if (scenario.startsWith("route-")) {
       startLiveBroadcast("church", null, { eventId: event.id }, db),
     ]);
     assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+    assert.match(results.find(result => result.status === "rejected").reason.message, /update is already in progress/);
+    assert.equal(operationLease, null, "the winning call releases its lease");
     assert.equal(providerCalls, 2, "only the winning claim clears/provisions platforms");
     assert.equal(active.status, "waiting_for_encoder");
     assert.deepEqual(active.destinations_snapshot, [{ name: "youtube", url: "" }]);
   } else {
     await assert.rejects(startLiveBroadcast("church", null, { eventId: event.id }, db), /End this broadcast/);
     assert.equal(active.status, "preparing");
+    assert.equal(operationLease, null, "the failed call releases its lease");
     assert.match(active.error_message, /End this broadcast/);
     fault = false;
     await assert.rejects(startLiveBroadcast("church", null, { eventId: event.id }, db), /already in progress/);

@@ -3,7 +3,7 @@
  * recommended settings for the few people who want to tune them.
  */
 
-export type StreamingToolId = "obs" | "atem" | "vmix" | "browser" | "someone_else";
+export type StreamingToolId = "obs" | "atem" | "vmix" | "other" | "browser" | "someone_else";
 
 /** Where the Setup choice is remembered, so Go live can act on "This computer". */
 export const STREAMING_TOOL_KEY = "ff-streaming-tool";
@@ -28,18 +28,18 @@ export const STREAMING_TOOLS: StreamingTool[] = [
     steps: [
       "In OBS, open Settings, then Stream. Set Service to Custom.",
       "Press Copy both below. Paste the Server into the Server box and the Stream key into the Stream Key box. The key stays the same until you replace it.",
-      "Press OK, then Start Streaming.",
+      "Press OK to save. When you're ready, press Start Streaming in OBS. Press Stop Streaming to finish.",
     ],
   },
   {
     id: "atem",
-    name: "ATEM Mini",
-    blurb: "Blackmagic video switcher",
+    name: "ATEM Mini Pro / Extreme",
+    blurb: "Blackmagic switcher that streams on its own",
     usesKey: true,
     steps: [
-      "In ATEM Software Control, open the Output tab and choose Live Stream.",
-      "Press Copy both below. Paste the Server and the Stream key into their boxes.",
-      "Press On Air on the ATEM.",
+      "Download the settings file below. In ATEM Software Control, choose Stream → Load Streaming Settings and open the file.",
+      "Open Output → Live Stream. Select FaithForm as the Platform and Server, choose Church Service as Quality, and paste your stream key into Key.",
+      "Press On Air on the ATEM to start. Press Off to finish.",
     ],
   },
   {
@@ -50,7 +50,18 @@ export const STREAMING_TOOLS: StreamingTool[] = [
     steps: [
       "Press the gear next to Stream. For Destination, choose the custom server option.",
       "Press Copy both below. Paste the Server into URL and the Stream key into Stream Name or Key.",
-      "Press Save, then Stream.",
+      "Press Save. When you're ready, use the Stream button in vMix to start and stop.",
+    ],
+  },
+  {
+    id: "other",
+    name: "Other streaming equipment",
+    blurb: "A camera or encoder that can stream to a custom server",
+    usesKey: true,
+    steps: [
+      "Open your equipment's streaming settings and choose a custom server.",
+      "Press Copy both below. Paste the Server address and Stream key into the matching fields and save.",
+      "Use your equipment's streaming controls to start and stop the service.",
     ],
   },
   {
@@ -72,10 +83,43 @@ export const STREAMING_TOOLS: StreamingTool[] = [
     steps: [
       "Press Copy both below and send it to the person who sets up your streaming.",
       "They paste the Server and the Stream key into their streaming software.",
-      "Once they start streaming, Step 2 turns to Connected.",
+      "When they start streaming, the video check below will show that FaithForm is receiving it.",
     ],
   },
 ];
+
+/** The service file contains the public server address. The private key is entered separately. */
+export function atemSettingsDownloadUrl(serverUrl: string): string {
+  const server = serverUrl.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  const profiles = [
+    { fps: 30, bitrate: 6000000 },
+    { fps: 60, bitrate: 9000000 },
+  ].map(({ fps, bitrate }) => `        <config resolution="1080p" fps="${fps}" codec="H264">
+          <bitrate>${bitrate}</bitrate>
+          <audio-bitrate>128000</audio-bitrate>
+          <keyframe-interval>2</keyframe-interval>
+        </config>`).join("\n");
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<streaming>
+  <service>
+    <name>FaithForm</name>
+    <servers>
+      <server>
+        <name>FaithForm</name>
+        <url>${server}</url>
+      </server>
+    </servers>
+    <profiles>
+      <profile>
+        <name>Church Service</name>
+${profiles}
+      </profile>
+    </profiles>
+  </service>
+</streaming>
+`;
+  return `data:application/xml;charset=utf-8,${encodeURIComponent(xml)}`;
+}
 
 const ENCODER_PRESETS = [
   // Recordings are published to phones exactly as they were streamed, so the
@@ -98,11 +142,11 @@ const TOOL_DETAILS = [
     ],
   },
   {
-    name: "ATEM / Blackmagic",
+    name: "ATEM Mini Pro / Extreme",
     steps: [
-      "Streaming → Service: Custom",
-      "Server and your church stream key from Technical details",
-      "Encoder: H.264, 1080p30, 6000 kbps, keyframe every 60 frames at 30 fps",
+      "Import the FaithForm settings file from the ATEM setup steps above.",
+      "Use the Church Service quality profile for H.264, 1080p30 at 6 Mbps or 1080p60 at 9 Mbps.",
+      "For an original ATEM Mini without built-in streaming, connect by USB and use OBS or vMix.",
     ],
   },
   {

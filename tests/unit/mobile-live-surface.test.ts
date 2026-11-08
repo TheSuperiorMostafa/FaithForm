@@ -16,9 +16,9 @@ test("Go Live publishes with the service's chosen audience and respects an app o
 
   assert.match(start, /publishToFaithForm\(/);
   assert.match(start, /kind:\s*"live"/);
-  assert.match(start, /event\.recordingAppVisibility \?\? \(userId \? "public" : "none"\)/);
+  assert.match(start, /event\.recordingAppVisibility \?\? \(userId \|\| autoPublish \? "public" : "none"\)/);
   assert.match(start, /visibility:\s*appVisibility/);
-  assert.match(start, /if \(userId && appVisibility !== "none"\)/);
+  assert.match(start, /if \(\(userId \|\| encoderIngestReady\) && appVisibility !== "none"\)/);
   assert.match(start, /mobile_visibility: "none", mobile_unpublished_at:/);
   assert.match(start, /actorUserId:\s*userId/);
 });

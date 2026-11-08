@@ -144,6 +144,26 @@ export async function getStreamEvent(
   return data ? mapEvent(data as EventRow) : null;
 }
 
+/** Match a nearby scheduled service without claiming a future service or replay. */
+export async function getStreamEventNearEncoderStart(churchId: string, client: SupabaseClient) {
+  const now = Date.now();
+  const windowMs = 30 * 60_000;
+  const { data, error } = await client
+    .from("stream_events")
+    .select("*")
+    .eq("church_id", churchId)
+    .eq("status", "scheduled")
+    .eq("simulated", false)
+    .gte("starts_at", new Date(now - windowMs).toISOString())
+    .lte("starts_at", new Date(now + windowMs).toISOString())
+    .order("starts_at");
+  if (error) throw error;
+  const nearest = (data ?? []).sort((a, b) =>
+    Math.abs(Date.parse(a.starts_at) - now) - Math.abs(Date.parse(b.starts_at) - now)
+  )[0];
+  return nearest ? mapEvent(nearest as EventRow) : null;
+}
+
 export async function getUpcomingStreamEvent(
   churchId: string,
   supabase?: SupabaseClient,

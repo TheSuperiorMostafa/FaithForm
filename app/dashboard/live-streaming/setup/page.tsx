@@ -18,11 +18,6 @@ import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Set up streaming: three guided steps, done once and then left alone, kept
- * off the Sunday-morning screen. Everything technical is one click away under
- * "Technical details" (in step 1) or "Advanced" (below the steps).
- */
 export default async function StreamSetupPage() {
   if (await pageFeatureBlocked("live_stream")) return null;
 
@@ -57,6 +52,7 @@ export default async function StreamSetupPage() {
 
       <StreamingSetupGuide
         ingestServerUrl={status.settings.ingestServerUrl}
+        autoGoLive={status.autoGoLive}
         isAdmin={auth.isAdmin}
         appEnabled={Boolean(access?.flags.member_app)}
         settings={settings}
@@ -67,7 +63,7 @@ export default async function StreamSetupPage() {
 
       <AdvancedSection
         title="Advanced"
-        description="Streaming PC pairing, encoder settings, embed code, and how your last service reached YouTube and Facebook"
+        description="Optional remote OBS control, encoder settings, embed code, and how your last service reached YouTube and Facebook"
       >
         <EncoderPairingCard isAdmin={auth.isAdmin} devices={devices} />
         <div className="border-t border-border pt-5">

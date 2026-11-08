@@ -49,9 +49,9 @@ FAITHFORM_PAIRING_CODE=${pairingCode} npm start` : "";
       <div className="flex items-start gap-3">
         <Laptop className="mt-1 size-5 shrink-0 text-accent" aria-hidden />
         <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-lg font-semibold">Pair a streaming PC</h3>
+          <h3 className="font-heading text-lg font-semibold">Optional remote OBS control</h3>
           <p className="text-[15px] text-muted-foreground">
-            Pair the computer running OBS so FaithForm can start streams for you.
+            Pair the computer running OBS if you want to start and stop it from the FaithForm dashboard.
           </p>
         </div>
       </div>

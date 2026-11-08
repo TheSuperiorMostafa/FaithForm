@@ -18,7 +18,6 @@ and never carries the secret itself. Nothing here logs a URL, key or token.
 """
 
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -31,6 +30,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+
+from relay_api import signed_request
 
 VERSION = "2"
 HOME = Path(os.environ.get("HOME", "/home/mostafa"))
@@ -69,15 +70,7 @@ def digest(value):
 # ---------------------------------------------------------------------------
 
 def call(route, payload, timeout=20):
-    body = json.dumps(payload, separators=(",", ":"))
-    ts = str(int(time.time()))
-    nonce = secrets.token_urlsafe(24)
-    mac = hmac.new(SECRET.encode(), f"v1:{ts}:{nonce}:{body}".encode(), hashlib.sha256).hexdigest()
-    req = urllib.request.Request(f"{APP_URL}{route}", data=body.encode(), method="POST")
-    req.add_header("content-type", "application/json")
-    req.add_header("x-faithform-relay-signature", f"v1={mac}")
-    req.add_header("x-faithform-relay-timestamp", ts)
-    req.add_header("x-faithform-relay-nonce", nonce)
+    req = signed_request(f"{APP_URL}{route}", SECRET, payload)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as res:
             return json.loads(res.read() or b"{}")

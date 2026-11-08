@@ -43,6 +43,7 @@ const files = [
   "supabase/migrations/0082_mobile_live_immediate.sql",
   "supabase/migrations/0083_app_members_in_people_and_one_attendance.sql",
   "supabase/migrations/0144_offline_giving.sql",
+  "supabase/migrations/0160_encoder_auto_go_live.sql",
 ];
 
 try {
