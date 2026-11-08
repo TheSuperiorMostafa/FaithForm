@@ -189,7 +189,7 @@ permanent key. Browser and simulated feeds use temporary capabilities on the
 same ingest path. The paired OBS agent is only needed for dashboard control.
 After the encoder stops, FaithForm waits at least 60 seconds for a reconnect,
 then closes the service on its next reconciliation run (every two minutes).
-Apply migration `0151_encoder_auto_go_live.sql` and deploy the app before deploying
+Apply migration `0160_encoder_auto_go_live.sql` and deploy the app before deploying
 these hooks to the relay.
 
 ## Logs
