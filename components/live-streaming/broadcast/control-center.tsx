@@ -54,6 +54,7 @@ import { isStudioSupported } from "@/lib/stream/studio-support";
 import { cn } from "@/lib/utils";
 
 export type ControlCenterStatus = {
+  autoGoLive: boolean;
   previewIngestActive: boolean;
   shareLinks: StreamShareLinks;
   overview: BroadcastOverview;
@@ -304,6 +305,7 @@ export function BroadcastControlCenter({
         ) : (
           <ReadyView
             overview={overview}
+            autoGoLive={status.autoGoLive}
             nextService={nextService}
             timeZone={timeZone}
             title={title}
@@ -443,6 +445,7 @@ function FactRow({
 
 function ReadyView({
   overview,
+  autoGoLive,
   nextService,
   timeZone,
   title,
@@ -458,6 +461,7 @@ function ReadyView({
   onUseComputer,
 }: {
   overview: BroadcastOverview;
+  autoGoLive: boolean;
   nextService: UpcomingService | null;
   timeZone: string;
   title: string;
@@ -553,10 +557,16 @@ function ReadyView({
       </div>
 
       <div className="flex flex-col justify-center gap-3">
+        {autoGoLive ? (
+          <p className="text-center text-base font-medium">
+            Press Start Streaming in OBS or On Air on your ATEM. FaithForm goes live when your video arrives.
+          </p>
+        ) : null}
         {isAdmin ? (
           <>
             <Button
               size="lg"
+              variant={autoGoLive ? "outline" : "default"}
               onClick={onGoLive}
               disabled={pending}
               className="min-h-16 w-full gap-3 text-xl"
@@ -569,14 +579,16 @@ function ReadyView({
               Go live
             </Button>
             <p className="text-center text-[15px] text-muted-foreground">
-              {videoReady
-                ? "Your video is connected. Press Go live when the service starts."
-                : "You can press Go live before your video is connected. FaithForm goes live the moment it arrives."}
+              {autoGoLive
+                ? "Use this button for the browser studio or paired OBS remote control."
+                : videoReady
+                  ? "Your video is connected. Press Go live when the service starts."
+                  : "You can press Go live before your video is connected. FaithForm goes live the moment it arrives."}
             </p>
           </>
-        ) : (
-          <p className="text-[15px] text-muted-foreground">Only church admins can go live.</p>
-        )}
+        ) : !autoGoLive ? (
+          <p className="text-[15px] text-muted-foreground">Only church admins can go live from this page.</p>
+        ) : null}
       </div>
     </div>
   );

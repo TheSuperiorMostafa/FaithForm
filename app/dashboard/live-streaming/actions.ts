@@ -9,6 +9,7 @@ import { featureActionError } from "@/lib/features/guard";
 import { provisionFacebookLiveForChurch } from "@/lib/integrations/facebook-live";
 import { provisionYouTubeLiveForChurch } from "@/lib/integrations/youtube-live";
 import { createEncoderPairingCode } from "@/lib/stream/encoder";
+import { saveEncoderAutoGoLive } from "@/lib/stream/encoder-automation-settings";
 import {
   endLiveBroadcast,
   startLiveBroadcast,
@@ -103,6 +104,28 @@ export async function updateStreamRelaySettings(
     return {
       ok: false,
       error: humanizeStreamError(error, "We couldn't save your streaming settings."),
+    };
+  }
+}
+
+export async function setEncoderAutoGoLive(enabled: boolean): Promise<StreamRelayActionState> {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin || typeof enabled !== "boolean") {
+    return { ok: false, error: "Only church admins can change stream settings." };
+  }
+
+  try {
+    const client = createAdminClient();
+    await saveEncoderAutoGoLive(auth.churchId, enabled, client);
+    revalidateLiveStreaming();
+    revalidatePath("/dashboard/live-streaming/setup");
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: humanizeStreamError(error, "We couldn't change automatic Go Live."),
     };
   }
 }

@@ -77,40 +77,49 @@ async function writeClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * The one button most churches need: the server address and the stream key,
- * together, ready to paste into OBS, an ATEM or vMix (or to send to the
- * person who sets it up).
+ * Copies the server and stream key for most encoders. An ATEM imports the
+ * server address from its settings file and only needs the key copied.
  */
 export function CopyBothButton({
   ingestServerUrl,
   streamKey,
   isAdmin,
+  keyOnly = false,
 }: {
   ingestServerUrl: string;
   streamKey: StreamKeyState;
   isAdmin: boolean;
+  keyOnly?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
 
   if (!isAdmin) {
-    return <p className="text-[15px] text-muted-foreground">A church admin can copy the server and stream key.</p>;
+    return (
+      <p className="text-[15px] text-muted-foreground">
+        {keyOnly ? "A church admin can copy the stream key." : "A church admin can copy the server and stream key."}
+      </p>
+    );
   }
 
   const copyBoth = async () => {
     const key = streamKey.key ?? (await streamKey.reveal());
     if (!key) return;
-    const ok = await writeClipboard(`Server: ${ingestServerUrl}\nStream key: ${key}`);
+    const ok = await writeClipboard(keyOnly ? key : `Server: ${ingestServerUrl}\nStream key: ${key}`);
     if (!ok) {
-      toast.error("Your browser didn't allow copying. Open Technical details below and copy each one.");
+      toast.error("Your browser didn't allow copying. Open Technical details below to copy it.");
       return;
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
-    toast.success("Server and stream key copied. Paste each one into its own box in your streaming software.");
+    toast.success(
+      keyOnly
+        ? "Stream key copied. Paste it into the Key box in ATEM Software Control."
+        : "Server and stream key copied. Paste each one into its own box in your streaming software.",
+    );
   };
 
   return (
-    <Button size="lg" onClick={() => void copyBoth()} disabled={streamKey.pending} className="w-fit gap-2">
+    <Button size="lg" variant={keyOnly ? "outline" : "default"} onClick={() => void copyBoth()} disabled={streamKey.pending} className="w-fit gap-2">
       {streamKey.pending ? (
         <Loader2 className="size-5 motion-safe:animate-spin" aria-hidden />
       ) : copied ? (
@@ -118,7 +127,7 @@ export function CopyBothButton({
       ) : (
         <ClipboardCopy className="size-5" aria-hidden />
       )}
-      {copied ? "Copied" : "Copy both"}
+      {copied ? "Copied" : keyOnly ? "Copy stream key" : "Copy both"}
     </Button>
   );
 }

@@ -183,6 +183,22 @@ export async function updateStreamSession(
   return mapSession(data as SessionRow);
 }
 
+/** A ready callback can race End Stream. Only promote a session still waiting. */
+export async function markStreamSessionIngestLive(
+  sessionId: string,
+  client: SupabaseClient,
+): Promise<StreamSession | null> {
+  const now = new Date().toISOString();
+  const { data, error } = await client.from("stream_sessions")
+    .update({ status: "live", ingest_started_at: now, live_started_at: now })
+    .eq("id", sessionId)
+    .eq("status", "waiting_for_encoder")
+    .select("*")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapSession(data as SessionRow) : null;
+}
+
 export async function markStreamIngestStarted(
   churchId: string,
   supabase?: SupabaseClient,

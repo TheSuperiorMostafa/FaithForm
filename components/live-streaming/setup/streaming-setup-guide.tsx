@@ -1,18 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   Camera,
   Clapperboard,
   CheckCircle2,
+  Download,
   MonitorPlay,
   SlidersHorizontal,
   Users,
+  Video,
 } from "lucide-react";
+import { toast } from "sonner";
 
+import { setEncoderAutoGoLive } from "@/app/dashboard/live-streaming/actions";
 import { CopyBothButton, StreamTechnicalDetails, useStreamKey } from "@/components/live-streaming/encoder-setup-card";
 import {
+  atemSettingsDownloadUrl,
   STREAMING_TOOLS,
   STREAMING_TOOL_KEY,
   type StreamingToolId,
@@ -25,6 +30,8 @@ import {
 import { RecordingSettingsCard } from "@/components/live-streaming/setup/recording-settings-card";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { buttonVariants } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import { GO_LIVE_HREF } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
@@ -33,12 +40,14 @@ const TOOL_ICONS: Record<StreamingToolId, React.ComponentType<{ className?: stri
   obs: MonitorPlay,
   atem: SlidersHorizontal,
   vmix: Clapperboard,
+  other: Video,
   browser: Camera,
   someone_else: Users,
 };
 
 type Props = {
   ingestServerUrl: string;
+  autoGoLive: boolean;
   isAdmin: boolean;
   appEnabled: boolean;
   settings: RecordingSettings;
@@ -47,19 +56,9 @@ type Props = {
   facebook: PlatformPushState;
 };
 
-/**
- * Set up streaming, in three steps a volunteer can follow without training:
- *
- *   1. What do you stream with?  → only that tool's steps, and Copy both
- *   2. Waiting for your video…   → Connected ✓ (live, from the status poll)
- *   3. After the service         → publish automatically, or review first
- *
- * The server address, the stream key and Replace stream key sit under
- * "Technical details"; pairing, encoder presets, embed code and destinations
- * are in the Advanced section below the steps.
- */
 export function StreamingSetupGuide({
   ingestServerUrl,
+  autoGoLive,
   isAdmin,
   appEnabled,
   settings,
@@ -92,7 +91,7 @@ export function StreamingSetupGuide({
 
   return (
     <ol className="flex flex-col gap-6">
-      <Step number={1} title="What do you stream with?" description="Pick the one you use. We'll show just the steps for it.">
+      <Step number={1} title="What do you stream with?" description="Connect your equipment once. Then start each service from the equipment you already use.">
         <div role="radiogroup" aria-label="What do you stream with?" className="choice-grid choice-grid-3">
           {STREAMING_TOOLS.map((entry) => {
             const Icon = TOOL_ICONS[entry.id];
@@ -141,8 +140,31 @@ export function StreamingSetupGuide({
                 </li>
               ))}
             </ol>
+            {chosen.id === "atem" ? (
+              <p className="text-[15px] text-muted-foreground">
+                Using the original ATEM Mini? Connect it to your computer by USB and choose OBS Studio or vMix above.
+              </p>
+            ) : null}
             {chosen.usesKey ? (
-              <CopyBothButton ingestServerUrl={ingestServerUrl} streamKey={streamKey} isAdmin={isAdmin} />
+              <div className="flex flex-wrap items-center gap-3">
+                {chosen.id === "atem" ? (
+                  <a
+                    href={atemSettingsDownloadUrl(ingestServerUrl)}
+                    download="FaithForm-ATEM.xml"
+                    className={buttonVariants({ size: "lg" })}
+                  >
+                    <Download className="size-5" aria-hidden />
+                    Download ATEM settings
+                  </a>
+                ) : null}
+                <CopyBothButton
+                  key={chosen.id}
+                  ingestServerUrl={ingestServerUrl}
+                  streamKey={streamKey}
+                  isAdmin={isAdmin}
+                  keyOnly={chosen.id === "atem"}
+                />
+              </div>
             ) : (
               <Link
                 href={chosen.id === "browser" ? `${GO_LIVE_HREF}?source=computer` : GO_LIVE_HREF}
@@ -157,6 +179,7 @@ export function StreamingSetupGuide({
         <AdvancedSection title="Technical details" description="Server address and stream key, one at a time">
           <StreamTechnicalDetails ingestServerUrl={ingestServerUrl} isAdmin={isAdmin} streamKey={streamKey} />
         </AdvancedSection>
+        <EncoderAutoGoLive initial={autoGoLive} isAdmin={isAdmin} />
       </Step>
 
       <Step number={2} title="After the service" description="Every service is recorded automatically. What should happen next?">
@@ -178,6 +201,51 @@ export function StreamingSetupGuide({
         </div>
       </Step>
     </ol>
+  );
+}
+
+function EncoderAutoGoLive({ initial, isAdmin }: { initial: boolean; isAdmin: boolean }) {
+  const [enabled, setEnabled] = useState(initial);
+  const [pending, startTransition] = useTransition();
+
+  const save = (next: boolean) => {
+    startTransition(async () => {
+      const fallback = "We couldn't save how your stream starts. Please try again.";
+      try {
+        const result = await setEncoderAutoGoLive(next);
+        if (!result.ok) {
+          toast.error(result.error || fallback);
+          return;
+        }
+        setEnabled(next);
+        toast.success(next
+          ? "Your next service will go live when FaithForm receives video from your equipment."
+          : "Your next service will wait for you to press Go live in FaithForm.");
+      } catch {
+        toast.error(fallback);
+      }
+    });
+  };
+
+  return (
+    <div className="flex min-h-24 items-center justify-between gap-4 rounded-2xl border border-border p-5">
+      <div className="flex flex-col gap-1">
+        <Label htmlFor="encoder-auto-go-live" className="text-base font-semibold">
+          Go live from your equipment
+        </Label>
+        <p id="encoder-auto-go-live-hint" className="text-[15px] text-muted-foreground">
+          When on, pressing Start Streaming or On Air makes your service public as soon as video reaches FaithForm.
+          Leave it off to check your video privately on the Go live tab.
+        </p>
+      </div>
+      <Switch
+        id="encoder-auto-go-live"
+        aria-describedby="encoder-auto-go-live-hint"
+        checked={enabled}
+        disabled={!isAdmin || pending}
+        onCheckedChange={save}
+      />
+    </div>
   );
 }
 

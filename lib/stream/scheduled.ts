@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEncoderAutoGoLive } from "@/lib/stream/encoder-automation-settings";
 import { startLiveBroadcast } from "@/lib/stream/go-live";
 import { retryPendingSimulatedPlayouts, type SimulatedPlayoutStart } from "@/lib/stream/simulated";
 
@@ -55,6 +56,11 @@ export async function startDueScheduledEvents(
     const createdBy = row.created_by as string | null;
 
     try {
+      if (!row.simulated && await getEncoderAutoGoLive(churchId, client)) {
+        deferred++;
+        continue;
+      }
+
       const { data: active, error: activeError } = await client
         .from("stream_sessions")
         .select("id, status, error_message, created_at")

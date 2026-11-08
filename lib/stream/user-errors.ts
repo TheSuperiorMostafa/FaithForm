@@ -10,6 +10,7 @@ import { toUserError } from "@/lib/errors/user-error";
  * a friendly fallback.
  */
 const KNOWN_STREAM_FAILURES: Array<[RegExp, string]> = [
+  [/broadcast update is already in progress/i, "FaithForm is updating the broadcast. Try again in a moment."],
   [
     /broadcast is already in progress/i,
     "A service is already live. End it on the Go live tab before starting another one.",

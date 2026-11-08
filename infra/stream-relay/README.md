@@ -6,11 +6,11 @@ RTMP ingest on `stream.faithform.io`, copy-mode fan-out to YouTube/Facebook via 
 
 ```text
 ATEM/OBS → rtmp://stream.faithform.io/live
-             stream key: {churchId}?token={short-lived capability}
+             stream key: {churchId}?token={permanent church key}
                 ↓ MediaMTX
                 ↓ publish auth → FaithForm
-                ↓ relay-config → FaithForm
-                ↓ on-stream-ready.sh
+                ↓ on-stream-ready.sh → signed encoder readiness → FaithForm
+                ↓ relay-config ← FaithForm
                 ↓ ffmpeg -c copy
            YouTube + Facebook RTMP
 ```
@@ -178,12 +178,19 @@ that — it never hands over a hostname — but it is worth doing.
 ## Encoder settings
 
 - Server: `rtmp://stream.faithform.io/live`
-- Stream key: supplied just-in-time by the paired FaithForm encoder agent as
-  `{churchId}?token={short-lived capability}`
+- Stream key: copy the permanent key from **Live Streaming → Setup** and save
+  it in OBS, ATEM, or another custom RTMP encoder. Keep it private.
 
-Do not store or manually distribute the historical persistent publish key. A
-direct hardware encoder must use an approved capability broker/agent rather
-than a static key.
+With automatic Go Live enabled for the church, starting the encoder starts the
+FaithForm broadcast after MediaMTX has a readable feed. The relay reports the
+connection ID when the feed becomes ready, every 30 seconds while publishing,
+and when it stops. FaithForm checks that the connection was authorized with the
+permanent key. Browser and simulated feeds use temporary capabilities on the
+same ingest path. The paired OBS agent is only needed for dashboard control.
+After the encoder stops, FaithForm waits at least 60 seconds for a reconnect,
+then closes the service on its next reconciliation run (every two minutes).
+Apply migration `0146_encoder_auto_go_live.sql` and deploy the app before deploying
+these hooks to the relay.
 
 ## Logs
 

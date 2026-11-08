@@ -85,6 +85,7 @@ destinations_key() {
 # flag left behind by a relay that died. Best effort: the broadcast must not
 # depend on the app being reachable.
 notify_lifecycle() {
+  python3 /home/mostafa/scripts/encoder-lifecycle.py "$1" >>"$LOG_FILE" 2>&1 &
   curl -fsS --max-time 10 -X POST "$LIFECYCLE_URL" \
     -H "x-stream-relay-secret: ${SECRET}" \
     -H "content-type: application/json" \

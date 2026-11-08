@@ -6,12 +6,14 @@ import {
   getPrimaryEncoderDevice,
   queueStreamCommand,
 } from "@/lib/stream/encoder";
+import { getEncoderAutoGoLive, withBroadcastOperation } from "@/lib/stream/encoder-automation-settings";
 import { getStreamRelaySettings, ensureStreamRelayCredentials } from "@/lib/stream/relay";
 import {
   createStreamSession,
   getActiveStreamSession,
   updateStreamSession,
   markStreamEnded,
+  markStreamSessionIngestLive,
 } from "@/lib/stream/sessions";
 import {
   createStreamEvent,
@@ -80,13 +82,24 @@ function getClient(supabase?: SupabaseClient) {
 
 export async function startLiveBroadcast(
   churchId: string,
-  // Nullable so scheduled/cron starts with no acting user do not write an
-  // invalid auth.users reference into created_by / started_by / connected_by.
   userId: string | null,
   options?: { title?: string; eventId?: string },
   supabase?: SupabaseClient,
 ) {
   const client = getClient(supabase);
+  return withBroadcastOperation(churchId, client, () =>
+    startLiveBroadcastLocked(churchId, userId, options, client)
+  );
+}
+
+/** Caller holds the church's broadcast operation lease. */
+export async function startLiveBroadcastLocked(
+  churchId: string,
+  userId: string | null,
+  options: { title?: string; eventId?: string; encoderIngestReady?: boolean } | undefined,
+  client: SupabaseClient,
+) {
+  const encoderIngestReady = options?.encoderIngestReady === true;
 
   // Give an early response for an existing broadcast. Concurrent starts are
   // guarded by the session insert below, before any provider is touched.
@@ -95,12 +108,12 @@ export async function startLiveBroadcast(
   }
 
   const integrationStatus = await getIntegrationStatus(churchId, client);
-  const encoder = await getPrimaryEncoderDevice(churchId, client);
+  const encoder = encoderIngestReady ? null : await getPrimaryEncoderDevice(churchId, client);
 
   let event: StreamEvent | null = null;
   if (options?.eventId) {
     event = await getStreamEvent(options.eventId, client);
-    if (!event || event.churchId !== churchId) {
+    if (!event || event.churchId !== churchId || event.status !== "scheduled") {
       throw new Error("Stream event not found.");
     }
   } else {
@@ -201,7 +214,8 @@ export async function startLiveBroadcast(
     // kept the service hidden until somebody found a separate publishing screen.
     // Scheduled starts keep their explicit publication choice; an admin-started
     // broadcast is published to everyone as part of the same intent.
-    const appVisibility = event.recordingAppVisibility ?? (userId ? "public" : "none");
+    const autoPublish = encoderIngestReady && event.publicAccess;
+    const appVisibility = event.recordingAppVisibility ?? (userId || autoPublish ? "public" : "none");
     if (event.recordingAppVisibility === "none") {
       // A scheduled service might have been published before this week's choice
       // was changed. Honour an explicit opt-out before it can become live.
@@ -210,7 +224,7 @@ export async function startLiveBroadcast(
         .eq("id", event.id).eq("church_id", churchId);
       if (error) throw new Error("Could not save this service's app visibility.");
     }
-    if (userId && appVisibility !== "none") {
+    if ((userId || encoderIngestReady) && appVisibility !== "none") {
       const publication = await publishToFaithForm(
         {
           churchId,
@@ -233,7 +247,7 @@ export async function startLiveBroadcast(
 
     await startRecordingFor(session);
 
-    const previewActive = await isPreviewIngestActive(churchId, client);
+    const previewActive = encoderIngestReady || await isPreviewIngestActive(churchId, client);
     const now = new Date().toISOString();
 
     await updateStreamEvent(
@@ -245,9 +259,30 @@ export async function startLiveBroadcast(
         syndicationRetryUntil: syndicationRetryUntil(),
       },
       client,
+      "scheduled",
     );
 
-    if (encoder && !previewActive) {
+    if (previewActive) {
+      const live = await updateStreamSession(
+        session.id,
+        {
+          status: "live",
+          ingestStartedAt: now,
+          liveStartedAt: now,
+        },
+        client,
+      );
+      if (!encoderIngestReady) await transitionYouTubeBroadcastLive(churchId, client);
+      await notifyServiceLive({ churchId, eventId: event.id, sessionId: session.id }).catch(() => false);
+      return live;
+    }
+
+    const waiting = await updateStreamSession(
+      session.id,
+      { status: "waiting_for_encoder" },
+      client,
+    );
+    if (encoder) {
       await queueStreamCommand(
         {
           churchId,
@@ -262,27 +297,7 @@ export async function startLiveBroadcast(
         client,
       );
     }
-
-    if (previewActive) {
-      await transitionYouTubeBroadcastLive(churchId, client);
-      const live = await updateStreamSession(
-        session.id,
-        {
-          status: "live",
-          ingestStartedAt: now,
-          liveStartedAt: now,
-        },
-        client,
-      );
-      await notifyServiceLive({ churchId, eventId: event.id, sessionId: session.id }).catch(() => false);
-      return live;
-    }
-
-    return await updateStreamSession(
-      session.id,
-      { status: "waiting_for_encoder" },
-      client,
-    );
+    return waiting;
   } catch {
     // A failed/uncertain provider request must never release the claim and
     // automatically mint another broadcast. The existing End action can close
@@ -296,19 +311,31 @@ export async function startLiveBroadcast(
 export async function endLiveBroadcast(
   churchId: string,
   supabase?: SupabaseClient,
+  options?: { expectedSessionId: string },
 ) {
   const client = getClient(supabase);
+  return withBroadcastOperation(churchId, client, () =>
+    endLiveBroadcastLocked(churchId, client, options)
+  );
+}
+
+/** Caller holds the church's broadcast operation lease. */
+export async function endLiveBroadcastLocked(
+  churchId: string,
+  client: SupabaseClient,
+  options?: { expectedSessionId?: string; stopPairedEncoder?: boolean },
+) {
   const session = await getActiveStreamSession(churchId, client);
+  if (options?.expectedSessionId && session?.id !== options.expectedSessionId) return null;
   if (!session) {
     throw new Error("No active broadcast to end.");
   }
 
-  const encoder = await getPrimaryEncoderDevice(churchId, client);
-  if (encoder) {
+  if (session.encoderDeviceId && options?.stopPairedEncoder !== false) {
     await queueStreamCommand(
       {
         churchId,
-        encoderDeviceId: encoder.id,
+        encoderDeviceId: session.encoderDeviceId,
         command: "stop_stream",
         payload: { sessionId: session.id },
       },
@@ -332,6 +359,7 @@ export async function endLiveBroadcast(
         // Still filtered on `live` so ending an already-ended service is inert
         // and cannot mint a second occurrence of a weekly event.
         .eq("id", session.streamEventId)
+        .eq("church_id", churchId)
         .eq("status", "live")
         .limit(1)
     : await client
@@ -429,22 +457,15 @@ export async function endLiveBroadcast(
 export async function onIngestStarted(churchId: string, supabase?: SupabaseClient) {
   const client = getClient(supabase);
   const session = await getActiveStreamSession(churchId, client);
-  if (!session) return null;
+  if (!session || session.status === "preparing") return null;
 
   await transitionYouTubeBroadcastLive(churchId, client);
-  const firstVideo = !session.ingestStartedAt;
-  const updated = await updateStreamSession(
-    session.id,
-    {
-      status: "live",
-      ingestStartedAt: session.ingestStartedAt ?? new Date().toISOString(),
-      liveStartedAt: session.liveStartedAt ?? new Date().toISOString(),
-    },
-    client,
-  );
+  if (session.status === "live") return session;
+  const updated = await markStreamSessionIngestLive(session.id, client);
+  if (!updated) return null;
   // Members hear "live now" once video is actually arriving, not when a button
   // was pressed on an empty stream. Deduplicated per broadcast in the outbox.
-  if (firstVideo && session.streamEventId) {
+  if (session.streamEventId) {
     logRecordingEvent("broadcast_went_live", { churchId, sessionId: session.id });
     await notifyServiceLive({
       churchId,
@@ -469,6 +490,7 @@ export async function getLiveBroadcastStatus(
     previewIngestActive,
     churchRow,
     syndication,
+    autoGoLive,
   ] = await Promise.all([
     getActiveStreamSession(churchId, client),
     getPrimaryEncoderDevice(churchId, client),
@@ -483,6 +505,7 @@ export async function getLiveBroadcastStatus(
     isPreviewIngestActive(churchId, client),
     client.from("churches").select("slug").eq("id", churchId).maybeSingle(),
     getLatestSyndicationStatus(churchId, client),
+    getEncoderAutoGoLive(churchId),
   ]);
 
   const slug = (churchRow.data?.slug as string | undefined) ?? "";
@@ -503,6 +526,7 @@ export async function getLiveBroadcastStatus(
       facebookUrl: "",
     },
     upcomingEvent,
+    autoGoLive,
     previewIngestActive,
     shareLinks,
     slug,

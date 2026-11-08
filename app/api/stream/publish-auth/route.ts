@@ -7,8 +7,7 @@ import {
   parseStreamPath,
 } from "@/lib/stream/relay";
 import { verifyIngestToken } from "@/lib/stream/ingest-token";
-import { onIngestStarted } from "@/lib/stream/go-live";
-import { setPreviewIngestActive } from "@/lib/stream/preview-ingest";
+import { authorizeEncoderSource } from "@/lib/stream/encoder-automation";
 
 type MediaMTXAuthRequest = {
   user?: string;
@@ -85,15 +84,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  await setPreviewIngestActive(parsedPath.churchId, true);
+  if (staticOk && (body.protocol === "rtmp" || body.protocol === "rtmps")) {
+    await authorizeEncoderSource(parsedPath.churchId, body.id).catch(() => {
+      console.error("Could not register authorized encoder source", parsedPath.churchId);
+    });
+  }
 
   const destinations = getStreamDestinationsFromMetadata(
     (integration.metadata ?? {}) as StreamIntegrationMetadata,
   );
-
-  if (destinations.length > 0) {
-    await onIngestStarted(parsedPath.churchId);
-  }
 
   return NextResponse.json({
     ok: true,

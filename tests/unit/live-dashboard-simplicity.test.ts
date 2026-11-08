@@ -235,10 +235,10 @@ test("cancelling a service, removing slides and artwork, and replacing the key a
 // Setup is guided and speaks plainly
 // ---------------------------------------------------------------------------
 
-test("setup offers the five choices, and its default copy has no streaming jargon", () => {
+test("setup offers supported equipment, and its default copy has no streaming jargon", () => {
   assert.deepEqual(
     STREAMING_TOOLS.map((tool) => tool.name),
-    ["OBS Studio", "ATEM Mini", "vMix", "This computer (camera)", "Someone else sets it up"],
+    ["OBS Studio", "ATEM Mini Pro / Extreme", "vMix", "Other streaming equipment", "This computer (camera)", "Someone else sets it up"],
   );
   for (const tool of STREAMING_TOOLS) {
     assert.ok(tool.steps.length <= 3, `${tool.name} has more than three steps`);
@@ -246,8 +246,8 @@ test("setup offers the five choices, and its default copy has no streaming jargo
   }
   const guide = read("components/live-streaming/setup/streaming-setup-guide.tsx");
   assert.match(guide, /Copy both|CopyBothButton/);
-  assert.match(guide, /Waiting for your video…/);
-  assert.match(guide, /Connected ✓/);
+  assert.match(guide, /Go live from your equipment/);
+  assert.match(guide, /check your video privately on the Go live tab/);
   assert.match(guide, /After the service/);
   assert.match(read("components/live-streaming/setup/recording-settings-card.tsx"), /Let me review first/);
   const platforms = read("components/live-streaming/platforms-card.tsx");
