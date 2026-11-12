@@ -7,6 +7,7 @@ import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import {
   assessRendition,
   isTransientRefusal,
+  MAX_CONTAINER_BOX_BYTES,
   refuse,
   type RenditionReason,
   type RenditionVerdict,
@@ -59,19 +60,17 @@ import {
  *
  * ## Why the reads are bounded
  *
- * A service recording is gigabytes. Two range requests — 1 MiB from the front
- * and, only when needed, 4 MiB from the back — are enough to read `ftyp` and
- * locate `moov`, and are the difference between a check a dashboard can run and
- * a check that pulls a congregation's whole archive through a serverless
- * function. Every request also carries a timeout, because a probe that hangs is
- * a request that hangs.
+ * A service recording is gigabytes. Start with 1 MiB from the front, expand
+ * to at most 9 MiB for a long index, then read an 8 MiB suffix if needed.
+ * These bounded ranges locate `ftyp` and `moov` without pulling the whole
+ * archive through a serverless function. Each request carries a timeout.
  */
 
-/** Enough for `ftyp` plus a faststart index on any realistic service. */
+/** Initial prefix for `ftyp` and smaller faststart indexes. */
 const HEAD_BYTES = 1024 * 1024;
 
-/** Enough for a trailing index. Beyond this the file is not worth guessing at. */
-const TAIL_BYTES = 4 * 1024 * 1024;
+/** A trailing index may use the parser's full supported container size. */
+const TAIL_BYTES = MAX_CONTAINER_BOX_BYTES;
 
 /**
  * How long one storage request may take before the probe gives up.
@@ -357,12 +356,12 @@ export async function probeRecording(
 ): Promise<{ verdict: RenditionVerdict; identity: ObjectIdentity }> {
   const db = client(supabase);
 
-  const head = await readRange(storagePath, `bytes=0-${HEAD_BYTES - 1}`, db);
+  let head = await readRange(storagePath, `bytes=0-${HEAD_BYTES - 1}`, db);
   if ("error" in head) {
     return { verdict: refuse(head.error), identity: UNKNOWN_IDENTITY };
   }
 
-  const firstPass = assessRendition(head.bytes);
+  let firstPass = assessRendition(head.bytes);
   // Only the missing index is worth a second request; a Matroska file or an
   // unsupported profile is already decided and reading more would prove nothing.
   if (firstPass.reason !== "index_not_found") {
@@ -375,6 +374,26 @@ export async function probeRecording(
   const total = head.identity.sizeBytes;
   if (!total || total <= head.bytes.length) {
     // The whole file was already read and there was no index in it.
+    return {
+      verdict: firstPass,
+      identity: { ...head.identity, windowHash: hashWindow(head.bytes, null) },
+    };
+  }
+
+  // Long faststart MP4s have sample tables larger than the initial prefix.
+  // Complete that prefix before looking at the end of the file. The parser
+  // still enforces its container limit, and reads stay bounded.
+  const prefixBytes = Math.min(total, HEAD_BYTES + MAX_CONTAINER_BOX_BYTES);
+  const expanded = await readRange(storagePath, `bytes=0-${prefixBytes - 1}`, db);
+  if ("error" in expanded) {
+    return { verdict: refuse(expanded.error, { container: firstPass.container }), identity: UNKNOWN_IDENTITY };
+  }
+  if (!identityMatches(head.identity, expanded.identity)) {
+    return { verdict: refuse("object_changed", { container: firstPass.container }), identity: UNKNOWN_IDENTITY };
+  }
+  head = expanded;
+  firstPass = assessRendition(head.bytes);
+  if (firstPass.reason !== "index_not_found" || total <= head.bytes.length) {
     return {
       verdict: firstPass,
       identity: { ...head.identity, windowHash: hashWindow(head.bytes, null) },
