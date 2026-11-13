@@ -98,4 +98,7 @@ test("an interrupted transfer keeps its real counts and recovery, while final ch
   assert.match(checking, /Finish upload/); assert.match(checking, /0 bytes.*remaining/);
   const preparing = renderToStaticMarkup(createElement(RecordingUploadProgress, { ...props, phase: "preparing", error: null }));
   assert.doesNotMatch(preparing, /aria-valuenow|bytes uploaded/);
+  const invalid = renderToStaticMarkup(createElement(RecordingUploadProgress, { ...props, phase: "preparing", error: "We couldn't read this video." }));
+  assert.match(invalid, /Choose another MP4 video, then try again/);
+  assert.doesNotMatch(invalid, /Reading the video|animate-spin/);
 });

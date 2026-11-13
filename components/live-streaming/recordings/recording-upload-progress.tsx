@@ -1,7 +1,7 @@
 "use client";
 
 import React, { type ReactNode, useEffect, useRef } from "react";
-import { Check, CloudUpload, FileVideo, Loader2 } from "lucide-react";
+import { Check, CircleAlert, CloudUpload, FileVideo, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type RecordingUploadPhase = "preparing" | "optimizing" | "uploading" | "checking";
@@ -33,7 +33,7 @@ export function RecordingUploadProgress({ phase, filename, loaded, total, origin
     : phase === "checking" ? "Video uploaded"
       : phase === "uploading" ? "Uploading your recording"
         : phase === "optimizing" ? "Preparing a smaller video" : "Getting your video ready";
-  const detail = phase === "checking" ? error ? "Choose Finish upload to try the check again." : "Checking playback before opening your review."
+  const detail = error && step === 0 ? "Choose another MP4 video, then try again." : phase === "checking" ? error ? "Choose Finish upload to try the check again." : "Checking playback before opening your review."
     : phase === "uploading" ? error ? "Check your connection, then choose Upload video to try again." : uploadPercent === 100 ? "Upload sent. Waiting for confirmation…" : "Keep this window open until your recording is ready to review."
       : phase === "optimizing" ? "Optimizing the video before the upload starts." : "Reading the video and preparing your upload.";
   const stateText = error ? "Needs attention" : phase === "checking" ? "Checking video" : phase === "uploading" ? "Uploading video" : "Preparing video";
@@ -51,7 +51,7 @@ export function RecordingUploadProgress({ phase, filename, loaded, total, origin
       <div>
         <div className="mb-3 flex items-end justify-between gap-3">
           <p role="status" className="text-base font-semibold">{title}</p>
-          {percent !== null ? <p aria-hidden className="shrink-0 font-heading text-3xl font-bold tabular-nums tracking-tight text-primary dark:text-accent">{percent}<span className="ml-0.5 text-base">%</span></p> : <Loader2 className="size-5 shrink-0 animate-spin motion-reduce:animate-none text-primary dark:text-accent" aria-hidden />}
+          {percent !== null ? <p aria-hidden className="shrink-0 font-heading text-3xl font-bold tabular-nums tracking-tight text-primary dark:text-accent">{percent}<span className="ml-0.5 text-base">%</span></p> : error ? <CircleAlert className="size-5 shrink-0 text-destructive" aria-hidden /> : <Loader2 className="size-5 shrink-0 animate-spin motion-reduce:animate-none text-primary dark:text-accent" aria-hidden />}
         </div>
         {percent !== null ? <div role="progressbar" aria-label={phase === "optimizing" ? "Video preparation" : "Video upload"} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}
           aria-valuetext={phase === "optimizing" ? `${percent}% prepared` : `${percent}% uploaded, ${formatUploadBytes(transferred)} of ${formatUploadBytes(total)}`}
@@ -66,7 +66,7 @@ export function RecordingUploadProgress({ phase, filename, loaded, total, origin
         {step > 0 && total < originalBytes * 0.9 ? <p className="mt-1 text-sm text-muted-foreground">Smaller upload · original video {formatUploadBytes(originalBytes)}</p> : null}
       </div>
       <ol aria-label="Upload stages" className="grid grid-cols-3 gap-2 border-t border-border/70 pt-4">
-        {["Prepare", "Upload", "Check"].map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} className={cn("flex min-w-0 items-center gap-2 text-sm", index > step ? "text-muted-foreground" : "font-semibold text-foreground")}>
+        {["Prepare", "Upload", "Check"].map((label, index) => <li key={label} aria-current={index === step ? "step" : undefined} className={cn("flex min-w-0 flex-col items-center gap-1.5 text-center text-sm sm:flex-row sm:gap-2 sm:text-left", index > step ? "text-muted-foreground" : "font-semibold text-foreground")}>
           <span className={cn("flex size-6 shrink-0 items-center justify-center rounded-full border text-xs", index < step ? "border-accent/40 bg-accent/20 text-primary dark:text-accent" : index === step ? "border-primary bg-primary text-primary-foreground dark:border-accent dark:bg-accent dark:text-accent-foreground" : "border-border bg-background")}>
             {index < step ? <Check className="size-3.5" aria-hidden /> : index === 1 && step === 1 ? <CloudUpload className="size-3.5" aria-hidden /> : <span aria-hidden>{index + 1}</span>}
           </span><span>{label}</span>
