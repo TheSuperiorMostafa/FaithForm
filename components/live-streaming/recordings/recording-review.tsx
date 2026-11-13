@@ -568,7 +568,7 @@ export function RecordingReview({
                         appEnabled,
                       )
                     : appEnabled
-                      ? "Choose where to share this recording: the app, your website, or both."
+                      ? "Choose where to share this recording: in the app under Services, on your website, or both."
                       : "Publish this recording on your church website so visitors can watch it."}
                 </p>
               </div>
