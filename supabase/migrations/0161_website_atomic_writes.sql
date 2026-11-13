@@ -34,13 +34,15 @@ begin
 end $$;
 
 create or replace function public.set_site_publication(p_church_id uuid, p_published boolean)
-returns void language plpgsql security invoker set search_path = public as $$
+-- Preserve the text return contract of the existing hosted publisher.
+returns text language plpgsql security invoker set search_path = public as $$
 begin
   perform 1 from public.churches where id=p_church_id for update;
   if p_published and not exists(select 1 from public.site_pages p join public.site_sections s on s.page_id=p.id and s.church_id=p.church_id where p.church_id=p_church_id and p.path='/') then raise exception 'Build a website first'; end if;
   update public.site_pages set status=case when p_published then 'published' else 'draft' end where church_id=p_church_id;
   insert into public.site_settings(church_id,is_published) values(p_church_id,p_published)
     on conflict(church_id) do update set is_published=excluded.is_published;
+  return case when p_published then 'published' else 'unpublished' end;
 end $$;
 
 create or replace function public.reorder_site_sections(p_church_id uuid, p_ids uuid[])
