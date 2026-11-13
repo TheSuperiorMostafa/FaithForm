@@ -2,16 +2,16 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Upload } from "lucide-react";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
 import { prepareRecordingUpload, finishRecordingUpload, cancelRecordingUpload } from "@/app/dashboard/live-streaming/upload-actions";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { createClient } from "@/lib/supabase/client";
-import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { describeRecordingUploadError, MIN_RECORDING_OPTIMIZE_BYTES, validateRecordingUpload } from "@/lib/stream/recording-upload";
+import { uploadRecordingWithProgress, type RecordingTransferProgress } from "@/lib/stream/upload-recording-browser";
+import { RecordingUploadProgress, type RecordingUploadPhase } from "@/components/live-streaming/recordings/recording-upload-progress";
 
 export function UploadRecording() {
   const router = useRouter();
@@ -19,7 +19,9 @@ export function UploadRecording() {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [stage, setStage] = useState("");
+  const [phase, setPhase] = useState<RecordingUploadPhase | null>(null);
+  const [transfer, setTransfer] = useState<RecordingTransferProgress>({ loaded: 0, total: 0 });
+  const [optimization, setOptimization] = useState<number | null>(null);
   const [optimizing, setOptimizing] = useState(false);
   const optimizationRef = useRef<AbortController | null>(null);
   const uploadInFlight = useRef(false);
@@ -39,7 +41,9 @@ export function UploadRecording() {
       let releaseVideo: (() => Promise<void>) | undefined;
       try {
         if (!id) {
-          setStage("Starting upload…");
+          setPhase("preparing");
+          setTransfer({ loaded: 0, total: file.size });
+          setOptimization(null);
           const durationSec = await videoDuration(file).catch(() => null);
           if (durationSec === null) {
             setError("We couldn't read this video. Export it as an MP4 with H.264 video and AAC audio, then try again.");
@@ -50,11 +54,11 @@ export function UploadRecording() {
             const controller = new AbortController();
             optimizationRef.current = controller;
             setOptimizing(true);
-            setStage("Optimizing video…");
+            setPhase("optimizing");
             try {
               const { optimizeRecording } = await import("@/lib/stream/optimize-recording");
               const optimized = await optimizeRecording(file, durationSec, controller.signal, (fraction) => {
-                setStage(`Optimizing video… ${Math.floor(fraction * 100)}%`);
+                setOptimization(Math.max(0, Math.min(1, fraction)));
               });
               if (optimized) {
                 video = optimized.file;
@@ -68,14 +72,16 @@ export function UploadRecording() {
               setOptimizing(false);
             }
           }
-          setStage("Starting upload…");
+          setPhase("preparing");
           const prepared = await prepareRecordingUpload({ title, filename: file.name, size: video.size, durationSec });
           if (!prepared.ok) { setError(prepared.error); return; }
           id = prepared.recordingId;
-          setStage("Uploading video. Keep this window open…");
+          setPhase("uploading");
+          setTransfer({ loaded: 0, total: video.size });
           if (video.type !== "video/mp4") video = video.slice(0, video.size, "video/mp4");
-          const result = await createClient().storage.from(STREAM_RECORDINGS_BUCKET)
-            .uploadToSignedUrl(prepared.path, prepared.token, video, { upsert: false });
+          const result = await uploadRecordingWithProgress({
+            path: prepared.path, token: prepared.token, video, onProgress: setTransfer,
+          });
           if (result.error) {
             await cancelRecordingUpload(id);
             const { error } = result;
@@ -86,11 +92,12 @@ export function UploadRecording() {
           }
           setUploadedId(id);
         }
-        setStage("Checking your video…");
+        setPhase("checking");
         const finished = await finishRecordingUpload(id);
         if (!finished.ok) { setError(finished.error); return; }
         toast.success("Recording uploaded. Review it before publishing.");
         setOpen(false);
+        setPhase(null);
         router.push(`/dashboard/live-streaming/recordings/${finished.recordingId}`);
         router.refresh();
       } catch {
@@ -98,7 +105,6 @@ export function UploadRecording() {
       } finally {
         try { await releaseVideo?.(); } finally {
           uploadInFlight.current = false;
-          setStage("");
         }
       }
     });
@@ -107,7 +113,7 @@ export function UploadRecording() {
   return <>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-[15px] text-muted-foreground">Streamed services and videos you upload.</p>
-      <Button onClick={() => { setTitle(""); setFile(null); setError(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
+      <Button onClick={() => { setTitle(""); setFile(null); setError(null); setPhase(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
     </div>
     <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
       <DialogContent aria-labelledby="upload-recording-title" onRequestClose={() => !pending}>
@@ -117,17 +123,10 @@ export function UploadRecording() {
         <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col" aria-busy={pending}>
           <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
             <div className="space-y-2"><Label htmlFor="recording-upload-title">Recording title</Label><Input id="recording-upload-title" required maxLength={120} value={title} disabled={pending || Boolean(uploadedId)} onChange={(event) => setTitle(event.target.value)} /></div>
-            <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); }} /></div>
-            {pending && (
-              <div className="rounded-xl border border-border bg-muted/30 p-4">
-                <div role="status" aria-live="polite" className="flex items-start gap-3">
-                  <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
-                  <div className="min-w-0 space-y-1">
-                    <p className="font-medium">{stage || "Preparing your upload…"}</p>
-                    <p className="break-words text-sm text-muted-foreground">{file?.name}</p>
-                    <p className="text-sm text-muted-foreground">Keep this window open until your recording is ready to review.</p>
-                  </div>
-                </div>
+            <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setPhase(null); }} /></div>
+            {phase && file ? (
+              <RecordingUploadProgress phase={phase} filename={file.name} loaded={transfer.loaded} total={transfer.total}
+                originalBytes={file.size} optimization={optimization} error={error}>
                 {optimizing && (
                   <Button className="mt-3" type="button" variant="outline" onClick={() => {
                     optimizationRef.current?.abort();
@@ -136,11 +135,11 @@ export function UploadRecording() {
                     Use original video
                   </Button>
                 )}
-              </div>
-            )}
-            {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+              </RecordingUploadProgress>
+            ) : null}
+            {error && !phase ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
           </div>
-          <DialogFooter><Button variant="outline" type="button" disabled={pending} onClick={() => setOpen(false)}>Close</Button><Button type="submit" disabled={pending}>{pending ? "Uploading…" : uploadedId ? "Finish upload" : "Upload video"}</Button></DialogFooter>
+          <DialogFooter><Button variant="outline" type="button" disabled={pending} onClick={() => setOpen(false)}>Close</Button><Button type="submit" disabled={pending}>{pending ? phase === "checking" ? "Checking video…" : phase === "uploading" ? "Uploading…" : "Preparing…" : uploadedId ? "Finish upload" : "Upload video"}</Button></DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

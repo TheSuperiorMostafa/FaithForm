@@ -23,6 +23,7 @@ function harness() {
   const state = {
     pending: false, prepares: 0, uploads: 0, finishes: 0, pushes: [] as string[], notices: [] as string[],
     upload: async () => ({ error: null }),
+    progress: (() => {}) as (value: { loaded: number; total: number }) => void,
     finish: async (): Promise<{ ok: true; recordingId: string } | { ok: false; error: string }> => ({ ok: true, recordingId: "qa-recording" }),
   };
   const cells: unknown[] = [], work: Promise<unknown>[] = [];
@@ -43,7 +44,9 @@ function harness() {
     react,
     "next/navigation": { useRouter: () => ({ refresh() {}, push(url: string) { state.pushes.push(url); } }) },
     sonner: { toast: { success(text: string) { state.notices.push(text); } } },
-    "@/lib/supabase/client": { createClient: () => ({ storage: { from: () => ({ uploadToSignedUrl: async () => { state.uploads++; return state.upload(); } }) } }) },
+    "@/lib/stream/upload-recording-browser": { uploadRecordingWithProgress: async (input: { onProgress: (value: { loaded: number; total: number }) => void }) => {
+      state.uploads++; state.progress = input.onProgress; return state.upload();
+    } },
     "@/app/dashboard/live-streaming/upload-actions": {
       prepareRecordingUpload: async () => { state.prepares++; return { ok: true, recordingId: "qa-recording", path: "qa.mp4", token: "synthetic" }; },
       finishRecordingUpload: async () => { state.finishes++; return state.finish(); },
@@ -73,8 +76,8 @@ function harness() {
         (find(tree, el => el.props.id === "recording-upload-file")!.props.onChange as (event: unknown) => void)({ target: { files: [file] } });
       },
       busy: find(tree, el => el.type === "form")!.props["aria-busy"],
-      status: find(tree, el => el.props.role === "status"),
-      error: find(tree, el => el.props.role === "alert")?.props.children,
+      status: find(tree, el => el.type === "RecordingUploadProgress"),
+      error: find(tree, el => el.props.role === "alert")?.props.children ?? find(tree, el => el.type === "RecordingUploadProgress")?.props.error,
     };
   };
   const settle = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };
@@ -89,6 +92,9 @@ test("real upload handler announces its busy state and rejects rapid duplicate s
   const form = h.render(); form.submit(); form.submit(); await h.settle();
   assert.equal(h.state.prepares, 1); assert.equal(h.state.uploads, 1);
   assert.equal(h.render().busy, true); assert.ok(h.render().status);
+  h.state.progress({ loaded: 4, total: 12 });
+  assert.equal(h.render().status?.props.loaded, 4); assert.equal(h.render().status?.props.total, 12);
+  assert.equal(h.render().status?.props.phase, "uploading");
   response.resolve({ error: null }); await h.finish();
   assert.equal(h.state.finishes, 1); assert.equal(h.render().busy, false);
   assert.deepEqual(h.state.pushes, ["/dashboard/live-streaming/recordings/qa-recording"]);
@@ -102,4 +108,18 @@ test("finalization failure explains recovery and Finish upload retries without u
   h.state.finish = async () => ({ ok: true, recordingId: "qa-recording" });
   h.render().submit(); await h.finish();
   assert.equal(h.state.prepares, 1); assert.equal(h.state.uploads, 1); assert.equal(h.state.finishes, 2);
+});
+
+test("interrupted uploads retain their actual byte counts for recovery and start a retry from zero", async t => {
+  const h = harness(); t.after(h.cleanup); h.render().populate();
+  h.state.upload = async () => {
+    h.state.progress({ loaded: 4, total: 12 });
+    throw new Error("synthetic connection failure");
+  };
+  h.render().submit(); await h.finish();
+  assert.equal(h.render().busy, false); assert.equal(h.render().status?.props.loaded, 4);
+  assert.equal(h.render().status?.props.phase, "uploading"); assert.match(String(h.render().error), /try again/i);
+  const response = deferred<{ error: null }>(); h.state.upload = () => response.promise;
+  h.render().submit(); await h.settle(); assert.equal(h.render().status?.props.loaded, 0);
+  response.resolve({ error: null }); await h.finish(); assert.equal(h.state.uploads, 2);
 });
