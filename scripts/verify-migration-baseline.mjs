@@ -99,6 +99,7 @@ else {
     "0107_recording_writes_and_bucket_listing.sql",
     // No direct writes to visitor_accounts by the account holder.
     "0108_presentation_church_and_account_writes.sql",
+    "0162_website_server_writes.sql",
   ]);
   const narrowingStatement = /^\s*(?:revoke\b|drop\s+policy\b)/i;
 
