@@ -38,7 +38,7 @@ test("service dates reach the canonical website and app projections without chan
       await db.query(`insert into public.stream_recordings
         (id,church_id,series_id,title,storage_path,status,source_kind,duration_sec,created_at,recording_started_at,
          recording_ended_at,processing_started_at,ready_at,mobile_visibility,mobile_published_at,web_published_at)
-        values($1,$2,$3,'QA Service','qa/' || $1::text || '.mp4','ready','file',60,$4,$5,
+        values($1::uuid,$2,$3,'QA Service','qa/' || ($1::uuid)::text || '.mp4','ready','file',60,$4,$5,
           '2026-11-13T03:12:00Z','2026-11-13T03:12:01Z','2026-11-13T03:12:02Z','public',$6,$6)`,
       [id, owner, collection, originalCreated, originalStart, published]);
       // Use the actual verifier to satisfy the stored object-identity contract.
