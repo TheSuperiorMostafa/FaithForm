@@ -51,6 +51,7 @@ import {
   recordingTone,
 } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
+import { formatRecordingDate, isRecordingServiceDate, recordingDateValue } from "@/lib/stream/recording-date";
 
 type Props = {
   recording: StaffRecording;
@@ -108,6 +109,8 @@ export function RecordingReview({
   const pending = transitionPending || publishPending;
 
   const [title, setTitle] = useState(recording.title);
+  const originalServiceDate = recordingDateValue(recording.recordedAt, timeZone, recording.serviceDate);
+  const [serviceDate, setServiceDate] = useState(originalServiceDate);
   const [speakers, setSpeakers] = useState(createRecordingTagsValue(recording.speakers ?? (recording.speaker ? [recording.speaker] : [])));
   const [description, setDescription] = useState(recording.description ?? "");
   // Pre-filled: its own series, or the church's usual one for a recording
@@ -151,6 +154,7 @@ export function RecordingReview({
   const posterDirty = poster !== originalPoster;
   const detailsDirty =
     title.trim() !== recording.title ||
+    serviceDate !== originalServiceDate ||
     JSON.stringify(recordingTagItems(speakers)) !== JSON.stringify(recording.speakers ?? (recording.speaker ? [recording.speaker] : [])) ||
     description.trim() !== (recording.description ?? "") ||
     (seriesChoice === NEW_SERIES ? newSeries.trim().length > 0 : seriesChoice !== (recording.seriesId ?? "")) ||
@@ -165,6 +169,10 @@ export function RecordingReview({
       audience !== currentAudience(recording.app.visibility));
 
   async function saveDetails(): Promise<boolean> {
+    if (!isRecordingServiceDate(serviceDate)) {
+      toast.error("Choose the date this service was recorded.");
+      return false;
+    }
     if (posterDirty) {
       const chosen = await chooseThumbnailAction({ recordingId: recording.id, url: poster });
       if (!chosen.ok) {
@@ -177,6 +185,7 @@ export function RecordingReview({
     const result = await saveRecordingDetailsAction({
       recordingId: recording.id,
       title,
+      ...(serviceDate !== originalServiceDate ? { serviceDate } : {}),
       description,
       speakers: recordingTagItems(speakers),
       seriesId: seriesChoice && seriesChoice !== NEW_SERIES ? seriesChoice : null,
@@ -338,15 +347,7 @@ export function RecordingReview({
   const playerSrc =
     playback && trimOpen && playback.kind === "hls" ? playback.url.replace(/index\.m3u8$/, "full.m3u8") : playback?.url;
 
-  const recordedOn = new Intl.DateTimeFormat("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  }).format(new Date(recording.recordedAt));
+  const recordedOn = formatRecordingDate(recording.recordedAt, timeZone, recording.serviceDate, true);
 
   const canEdit = isAdmin && phase !== "recording";
   const primaryLabel = published
@@ -601,6 +602,11 @@ export function RecordingReview({
               <legend className="sr-only">Recording details</legend>
               <RecordingPrimaryFields title={title} onTitleChange={setTitle} seriesId={seriesChoice} onSeriesChange={setSeriesChoice}
                 newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} />
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="rec-service-date" className="text-[15px]">Service date</Label>
+                <Input id="rec-service-date" type="date" min="0001-01-01" max="9999-12-31" required value={serviceDate} onChange={event => setServiceDate(event.target.value)} aria-describedby="rec-service-date-hint" />
+                <p id="rec-service-date-hint" className="text-sm text-muted-foreground">The day the service happened. Save changes to update this date on your website and in the app.</p>
+              </div>
               <Check
                 checked={toWebsite}
                 onChange={setToWebsite}

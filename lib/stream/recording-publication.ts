@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isRecordingServiceDate } from "@/lib/stream/recording-date";
 
 import { verifyRecording } from "@/lib/media/v1/rendition-check";
 import { listPosterChoices, type PosterChoice } from "@/lib/media/v1/publication";
@@ -66,6 +67,8 @@ export type StaffRecording = {
   seriesId: string | null;
   seriesName: string | null;
   recordedAt: string;
+  /** Optional chosen service day; encoder and upload timestamps stay intact. */
+  serviceDate?: string | null;
   /** What a viewer will watch, after trimming. */
   durationSec: number | null;
   fullDurationSec: number | null;
@@ -100,7 +103,7 @@ const STAFF_COLUMNS =
   "mobile_rendition_verified_at, mobile_rendition_revision, mobile_rendition_object_hash, " +
   "mobile_visibility, mobile_published_at, mobile_unpublished_at, mobile_poster_url, mobile_summary, " +
   "web_published_at, web_unpublished_at, series_id, speaker_tags, chapter_tags, topic_tags, deleted_at, " +
-  "purged_at, created_at, " +
+  "purged_at, created_at, service_date, " +
   "updated_at, visibility, artwork_wide_url, artwork_poster_url, " +
   "media_series(name, artwork_wide_url), stream_events(artwork_url, mobile_poster_url, recording_app_visibility, recording_publish_to_website, recording_notify_members)";
 
@@ -162,6 +165,7 @@ function toStaffRecording(row: StaffRow, slug: string | null): StaffRecording {
     seriesId: (row.series_id as string | null) ?? null,
     seriesName: (series?.name as string | undefined) ?? null,
     recordedAt: ((row.recording_started_at as string | null) ?? (row.created_at as string)),
+    serviceDate: (row.service_date as string | null) ?? null,
     durationSec: duration === null ? null : Math.round(duration),
     fullDurationSec: full === null ? null : Math.round(full),
     trimStartSec: trimStart,
@@ -395,6 +399,7 @@ export async function updateRecordingDetails(
     recordingId: string;
     title?: string;
     description?: string | null;
+    serviceDate?: string | null;
     speaker?: string | null;
     speakers?: string[];
     seriesId?: string | null;
@@ -407,6 +412,12 @@ export async function updateRecordingDetails(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const db = admin(client);
   const updates: Record<string, unknown> = {};
+  if (input.serviceDate !== undefined) {
+    if (input.serviceDate !== null && !isRecordingServiceDate(input.serviceDate)) {
+      return { ok: false, error: "Choose a valid service date, or clear it to use the original recording date." };
+    }
+    updates.service_date = input.serviceDate;
+  }
   const cleanTags = (values: unknown, maxLength = 80): string[] | null => {
     if (!Array.isArray(values) || values.some(value => typeof value !== "string")) return null;
     const tags = [...new Set(values.map(value => value.trim()).filter(Boolean))] as string[];

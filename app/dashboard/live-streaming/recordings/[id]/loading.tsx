@@ -39,7 +39,7 @@ export default function RecordingReviewLoading() {
                 <SkeletonText lines={2} size="sm" />
               </div>
             </div>
-            {["Title", "Series"].map((label) => (
+            {["Title", "Series", "Service date"].map((label) => (
               <div key={label} className="flex flex-col gap-2">
                 <span className="text-[15px] font-medium">{label}</span>
                 <Skeleton className="h-11 w-full rounded-[10px]" />

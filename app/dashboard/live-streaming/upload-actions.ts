@@ -10,6 +10,7 @@ import { assertRateLimit } from "@/lib/security/rate-limit";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { recordingUploadPath, validateRecordingUpload } from "@/lib/stream/recording-upload";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isRecordingServiceDate } from "@/lib/stream/recording-date";
 
 async function uploadAuth() {
   const denied = await featureActionError("live_stream");
@@ -19,9 +20,10 @@ async function uploadAuth() {
   return auth;
 }
 
-export async function prepareRecordingUpload(input: { title: string; filename: string; size: number; durationSec: number }) {
+export async function prepareRecordingUpload(input: { title: string; filename: string; size: number; durationSec: number; serviceDate?: string }) {
   try {
     const auth = await uploadAuth();
+    if (input.serviceDate !== undefined && !isRecordingServiceDate(input.serviceDate)) return { ok: false as const, error: "Choose the date this service was recorded." };
     const invalid = validateRecordingUpload(input);
     if (invalid) return { ok: false as const, error: invalid };
     if (!Number.isFinite(input.durationSec) || input.durationSec < 5 || input.durationSec > 12 * 60 * 60) return { ok: false as const, error: "Choose a video between 5 seconds and 12 hours long." };
@@ -36,6 +38,7 @@ export async function prepareRecordingUpload(input: { title: string; filename: s
       id, church_id: auth.churchId, title: input.title.trim(), storage_path: path,
       source_kind: "file", status: "processing", total_bytes: input.size, duration_sec: input.durationSec,
       processing_started_at: new Date().toISOString(),
+      ...(input.serviceDate !== undefined ? { service_date: input.serviceDate } : {}),
     });
     if (insertError) throw insertError;
     return { ok: true as const, recordingId: id, path, token: data.token };

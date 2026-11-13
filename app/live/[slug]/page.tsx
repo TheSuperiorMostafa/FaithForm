@@ -5,6 +5,7 @@ import { PlayCircle } from "lucide-react";
 import { PublicWatchClient } from "@/components/live-streaming/public-watch-client";
 import { getChurchBySlug } from "@/lib/queries/giving";
 import { formatDuration } from "@/lib/stream/format";
+import { formatLongDate } from "@/lib/sites/format";
 import { listWebRecordings } from "@/lib/stream/web-recordings";
 
 export const dynamic = "force-dynamic";
@@ -57,11 +58,7 @@ export default async function LiveWatchPage({ params }: PageProps) {
                   <div className="flex flex-col gap-0.5 p-4">
                     <span className="font-semibold group-hover:underline">{recording.title}</span>
                     <span className="text-sm text-muted-foreground">
-                      {new Date(recording.recordedAt).toLocaleDateString(undefined, {
-                        month: "long",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
+                      {formatLongDate(recording.recordedAt, church.timeZone)}
                       {recording.seriesName ? ` · ${recording.seriesName}` : ""}
                     </span>
                   </div>

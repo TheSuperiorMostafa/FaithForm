@@ -131,6 +131,7 @@ export async function saveRecordingDetailsAction(input: {
   recordingId: string;
   title: string;
   description: string;
+  serviceDate?: string | null;
   speaker?: string;
   speakers?: string[];
   seriesId: string | null;
@@ -149,6 +150,7 @@ export async function saveRecordingDetailsAction(input: {
     recordingId: input.recordingId,
     title: input.title,
     description: input.description,
+    serviceDate: input.serviceDate,
     speaker: input.speaker,
     speakers: input.speakers,
     seriesId: input.seriesId,

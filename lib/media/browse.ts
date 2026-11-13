@@ -32,7 +32,7 @@ export function toBrowseItem(item: MediaItem): BrowseItemInput {
     // projections order by `mobile_published_at` instead, which is correct for
     // them: staff care when a service happened, visitors when it appeared.
     publishedAt: null,
-    recordedAt: item.createdAt,
+    recordedAt: item.recordedAt ?? item.createdAt,
     durationSec: item.durationSec,
     visibility: item.visibility,
     seriesId: item.seriesId,

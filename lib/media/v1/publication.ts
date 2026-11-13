@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recordingDateInstant } from "@/lib/stream/recording-date";
 import {
   renditionIdentityUnchanged,
   verdictIsFresh,
@@ -662,7 +663,7 @@ export async function listPublishableMedia(
     db
       .from("stream_recordings")
       .select(
-        "id, title, created_at, duration_sec, trim_start_sec, trim_end_sec, status, storage_path, mobile_visibility, mobile_published_at, mobile_unpublished_at, mobile_revoked_at, mobile_publication_version, mobile_poster_url, mobile_summary, mobile_playable, mobile_rendition_reason, mobile_rendition_verified_at",
+        "id, title, created_at, recording_started_at, service_date, churches(timezone), duration_sec, trim_start_sec, trim_end_sec, status, storage_path, mobile_visibility, mobile_published_at, mobile_unpublished_at, mobile_revoked_at, mobile_publication_version, mobile_poster_url, mobile_summary, mobile_playable, mobile_rendition_reason, mobile_rendition_verified_at",
       )
       .eq("church_id", churchId)
       .order("created_at", { ascending: false })
@@ -756,6 +757,8 @@ export async function listPublishableMedia(
         : original;
 
       const state = recordingState(row);
+      const church = row.churches as { timezone?: string } | { timezone?: string }[] | null;
+      const timeZone = (Array.isArray(church) ? church[0] : church)?.timezone ?? "America/New_York";
       const duration =
         row.trim_end_sec !== null && row.trim_end_sec !== undefined
           ? Number(row.trim_end_sec) - Number(row.trim_start_sec ?? 0)
@@ -767,7 +770,7 @@ export async function listPublishableMedia(
         kind: "recording" as const,
         id: row.id as string,
         title: ((row.title as string | null) ?? "").trim() || "Service recording",
-        occurredAt: row.created_at as string,
+        occurredAt: recordingDateInstant((row.recording_started_at ?? row.created_at) as string, timeZone, row.service_date as string | null),
         durationSeconds: duration === null ? null : Math.max(0, Math.round(duration)),
         state,
         visibility: (row.mobile_visibility as MobileVisibility) ?? "none",

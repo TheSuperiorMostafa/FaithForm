@@ -12,11 +12,13 @@ import { Label } from "@/components/ui/label";
 import { describeRecordingUploadError, MIN_RECORDING_OPTIMIZE_BYTES, validateRecordingUpload } from "@/lib/stream/recording-upload";
 import { uploadRecordingWithProgress, type RecordingTransferProgress } from "@/lib/stream/upload-recording-browser";
 import { RecordingUploadProgress, type RecordingUploadPhase } from "@/components/live-streaming/recordings/recording-upload-progress";
+import { isRecordingServiceDate, recordingDateValue } from "@/lib/stream/recording-date";
 
-export function UploadRecording() {
+export function UploadRecording({ timeZone = "America/New_York" }: { timeZone?: string } = {}) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
+  const [serviceDate, setServiceDate] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<RecordingUploadPhase | null>(null);
@@ -32,6 +34,7 @@ export function UploadRecording() {
   function upload() {
     if (uploadInFlight.current) return;
     if (!file) { setError("Choose a video to upload."); return; }
+    if (!isRecordingServiceDate(serviceDate)) { setError("Choose the date this service was recorded."); return; }
     const invalid = validateRecordingUpload({ title, filename: file.name, size: file.size });
     if (invalid) { setError(invalid); return; }
     uploadInFlight.current = true;
@@ -73,7 +76,7 @@ export function UploadRecording() {
             }
           }
           setPhase("preparing");
-          const prepared = await prepareRecordingUpload({ title, filename: file.name, size: video.size, durationSec });
+          const prepared = await prepareRecordingUpload({ title, filename: file.name, size: video.size, durationSec, serviceDate });
           if (!prepared.ok) { setError(prepared.error); return; }
           id = prepared.recordingId;
           setPhase("uploading");
@@ -113,7 +116,7 @@ export function UploadRecording() {
   return <>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <p className="text-[15px] text-muted-foreground">Streamed services and videos you upload.</p>
-      <Button onClick={() => { setTitle(""); setFile(null); setError(null); setPhase(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
+      <Button onClick={() => { setTitle(""); setServiceDate(recordingDateValue(new Date().toISOString(), timeZone)); setFile(null); setError(null); setPhase(null); setUploadedId(null); setOpen(true); }}><Upload className="size-4" aria-hidden />Upload recording</Button>
     </div>
     <Dialog open={open} onOpenChange={(next) => { if (!pending) setOpen(next); }}>
       <DialogContent aria-labelledby="upload-recording-title" onRequestClose={() => !pending}>
@@ -123,6 +126,7 @@ export function UploadRecording() {
         <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col" aria-busy={pending}>
           <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
             <div className="space-y-2"><Label htmlFor="recording-upload-title">Recording title</Label><Input id="recording-upload-title" required maxLength={120} value={title} disabled={pending || Boolean(uploadedId)} onChange={(event) => setTitle(event.target.value)} /></div>
+            <div className="space-y-2"><Label htmlFor="recording-upload-date">Service date</Label><Input id="recording-upload-date" type="date" required min="0001-01-01" max="9999-12-31" value={serviceDate} disabled={pending || Boolean(uploadedId)} onChange={(event) => setServiceDate(event.target.value)} aria-describedby="recording-upload-date-hint" /><p id="recording-upload-date-hint" className="text-sm text-muted-foreground">The day the service happened. This date appears on your website and in the app.</p></div>
             <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setPhase(null); }} /></div>
             {phase && file ? (
               <RecordingUploadProgress phase={phase} filename={file.name} loaded={transfer.loaded} total={transfer.total}

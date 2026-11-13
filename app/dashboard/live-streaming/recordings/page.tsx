@@ -42,7 +42,7 @@ export default async function RecordingsPage({
   const query = await searchParams;
   const filter = parseRecordingFilter(query.show);
   const search = (Array.isArray(query.q) ? query.q[0] : query.q)?.trim() ?? "";
-  const upload = auth.isAdmin ? <UploadRecording /> : null;
+  const upload = auth.isAdmin ? <UploadRecording timeZone={auth.churchTimezone} /> : null;
 
   if (filter === "series") {
     let library: Awaited<ReturnType<typeof loadLibraryBrowse>>;

@@ -72,6 +72,7 @@ function harness() {
       tree,
       submit() { (find(tree, el => el.type === "form")!.props.onSubmit as (event: unknown) => void)({ preventDefault() {} }); },
       populate() {
+        (find(tree, el => el.props.id === "recording-upload-date")!.props.onChange as (event: unknown) => void)({ target: { value: "2026-11-08" } });
         (find(tree, el => el.props.id === "recording-upload-title")!.props.onChange as (event: unknown) => void)({ target: { value: "QA recording" } });
         (find(tree, el => el.props.id === "recording-upload-file")!.props.onChange as (event: unknown) => void)({ target: { files: [file] } });
       },

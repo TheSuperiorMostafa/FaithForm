@@ -14,6 +14,7 @@ import {
   type RecordingFilter,
 } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
+import { formatRecordingDate } from "@/lib/stream/recording-date";
 
 /**
  * Every recording as a big row: picture, title, date, one status in the
@@ -59,13 +60,7 @@ function RecordingRow({
   timeZone: string;
   isAdmin: boolean;
 }) {
-  const date = new Intl.DateTimeFormat("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    timeZone,
-  }).format(new Date(recording.recordedAt));
+  const date = formatRecordingDate(recording.recordedAt, timeZone, recording.serviceDate);
   const action = recordingNextAction(recording, isAdmin);
   const phase = recording.phase.phase;
   const badge = (

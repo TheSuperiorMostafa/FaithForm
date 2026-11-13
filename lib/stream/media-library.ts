@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { artworkFromRow, EMPTY_ARTWORK, type ArtworkSet } from "@/lib/media/artwork";
+import { recordingDateInstant } from "@/lib/stream/recording-date";
 
 export type MediaVisibility = "public" | "unlisted";
 export type MediaViewKind = "live" | "replay";
@@ -27,6 +28,8 @@ export type MediaItem = {
   id: string;
   title: string | null;
   createdAt: string;
+  /** The service day, with the real recorder time as the legacy fallback. */
+  recordedAt?: string;
   durationSec: number | null;
   visibility: MediaVisibility;
   storagePath: string;
@@ -76,6 +79,9 @@ type RecordingRow = ArtworkColumns & {
   id: string;
   title: string | null;
   created_at: string;
+  recording_started_at?: string | null;
+  service_date?: string | null;
+  churches?: { timezone: string } | { timezone: string }[] | null;
   duration_sec: number | null;
   storage_path: string;
   visibility: string | null;
@@ -99,11 +105,13 @@ function relatedSeries(related: RecordingRow["media_series"]): RelatedSeries | n
 
 function toMediaItem(row: RecordingRow): MediaItem {
   const series = relatedSeries(row.media_series);
+  const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
 
   return {
     id: row.id,
     title: row.title,
     createdAt: row.created_at,
+    recordedAt: recordingDateInstant(row.recording_started_at ?? row.created_at, church?.timezone ?? "America/New_York", row.service_date),
     durationSec: row.duration_sec,
     storagePath: row.storage_path,
     visibility: row.visibility === "unlisted" ? "unlisted" : "public",
@@ -122,16 +130,18 @@ function toMediaItem(row: RecordingRow): MediaItem {
 }
 
 /**
- * Three column sets, newest first, so an unmigrated database degrades instead
+ * Four column sets, newest first, so an unmigrated database degrades instead
  * of failing outright.
  *
- * `MEDIA_COLUMNS` needs migration 0080 (artwork), `MEDIA_COLUMNS_TAGGED` needs
+ * `MEDIA_COLUMNS_DATED` needs 0165 (service day). `MEDIA_COLUMNS` needs
+ * migration 0080 (artwork), `MEDIA_COLUMNS_TAGGED` needs
  * 0047 (series, tags, visibility), and `MEDIA_COLUMNS_LEGACY` needs neither.
  * Each fallback loses features rather than breaking the page, which matters
  * because this table is what a church looks at on a Monday morning.
  */
 const MEDIA_COLUMNS =
   "id, title, created_at, duration_sec, storage_path, visibility, series_id, speaker_tags, chapter_tags, topic_tags, stream_session_id, mobile_poster_url, artwork_poster_url, artwork_wide_url, artwork_banner_url, media_series(name, slug, artwork_poster_url, artwork_wide_url, artwork_banner_url)";
+const MEDIA_COLUMNS_DATED = `${MEDIA_COLUMNS}, recording_started_at, service_date, churches(timezone)`;
 const MEDIA_COLUMNS_TAGGED =
   "id, title, created_at, duration_sec, storage_path, visibility, series_id, speaker_tags, chapter_tags, topic_tags, stream_session_id, media_series(name)";
 const MEDIA_COLUMNS_LEGACY =
@@ -153,7 +163,11 @@ async function selectWithFallback<T>(
   run: (columns: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
   label: string,
 ): Promise<T[] | null> {
-  let { data, error } = await run(MEDIA_COLUMNS);
+  let { data, error } = await run(MEDIA_COLUMNS_DATED);
+
+  if (error && /recording_started_at|service_date/i.test(error.message)) {
+    ({ data, error } = await run(MEDIA_COLUMNS));
+  }
 
   if (error && MISSING_ARTWORK.test(error.message)) {
     ({ data, error } = await run(MEDIA_COLUMNS_TAGGED));
