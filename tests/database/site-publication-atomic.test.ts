@@ -36,6 +36,10 @@ test("website publish and unpublish change both records atomically", suiteOption
       "insert into public.site_settings (church_id, is_published) values ($1, false)",
       [church.id],
     );
+    await client.query(
+      "insert into public.site_sections (church_id, page_id, type, props) select $1, id, 'hero', '{}'::jsonb from public.site_pages where church_id = $1 and path = '/'",
+      [church.id],
+    );
 
     assert.equal(await asServiceRole(client, () => publish(client, church.id, true)), "published");
     let state = await one<{ status: string; is_published: boolean }>(client,
@@ -80,8 +84,26 @@ test("website publish and unpublish change both records atomically", suiteOption
 test("website publication refuses a church without a home page", suiteOptions, async () => {
   await withChurch(async (client, church) => {
     assert.equal(await asServiceRole(client, () => publish(client, church.id, true)), "no_page");
+    assert.equal(await asServiceRole(client, () => publish(client, church.id, false)), "no_page");
     const settings = await one<{ count: string }>(client,
       "select count(*)::text as count from public.site_settings where church_id = $1", [church.id]);
     assert.equal(settings.count, "0");
+  });
+});
+
+test("website publication refuses an empty first draft without writing settings or page statuses", suiteOptions, async () => {
+  await withChurch(async (client, church) => {
+    await client.query("insert into public.site_pages (church_id, path, status) values ($1, '/', 'draft'), ($1, '/about', 'draft')", [church.id]);
+    assert.equal(await asServiceRole(client, () => publish(client, church.id, true)), "no_sections");
+    assert.equal((await one<{ count: string }>(client, "select count(*)::text as count from public.site_settings where church_id = $1", [church.id])).count, "0");
+    assert.deepEqual((await client.query("select path, status from public.site_pages where church_id = $1 order by path", [church.id])).rows,
+      [{ path: "/", status: "draft" }, { path: "/about", status: "draft" }]);
+
+    // Empty or damaged content must never prevent taking a site offline.
+    await client.query("insert into public.site_settings (church_id, is_published) values ($1, true)", [church.id]);
+    await client.query("update public.site_pages set status = 'published' where church_id = $1", [church.id]);
+    assert.equal(await asServiceRole(client, () => publish(client, church.id, false)), "unpublished");
+    assert.equal((await one<{ is_published: boolean }>(client, "select is_published from public.site_settings where church_id = $1", [church.id])).is_published, false);
+    assert.equal((await one<{ count: string }>(client, "select count(*)::text as count from public.site_pages where church_id = $1 and status <> 'draft'", [church.id])).count, "0");
   });
 });

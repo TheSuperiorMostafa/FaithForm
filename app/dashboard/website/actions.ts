@@ -476,12 +476,18 @@ export async function setPublished(published: boolean): Promise<ActionResult> {
   if (!auth.ok) return fail(auth.error);
 
   if (typeof published !== "boolean") return fail("Choose whether your website should be online.");
-  const { error } = await createAdminClient().rpc("set_site_publication", {
+  const { data, error } = await createAdminClient().rpc("set_site_publication", {
     p_church_id: auth.churchId, p_published: published,
   });
   if (error) return fail(toUserError(error, published
     ? "We couldn't put your website online. Build your website first, then try again."
     : "We couldn't take your website offline. Try again."));
+  if (data === "no_page" || data === "no_sections") {
+    return fail("Your website isn't ready to publish. Open Pages and finish building your home page, then try again.");
+  }
+  if (data !== (published ? "published" : "unpublished")) {
+    return fail("We couldn't confirm your website's status. Refresh the page to check it before trying again.");
+  }
 
   refresh();
   return ok;

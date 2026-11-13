@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 type Result = { ok: true } | { ok: false; error: string };
-type ActionModule = { saveDesign: (input: unknown) => Promise<Result> };
+type ActionModule = { saveDesign: (input: unknown) => Promise<Result>; setPublished: (published: boolean) => Promise<Result> };
 type State = {
   auth: { churchId: string; userId: string; isAdmin: boolean } | null;
   featureError: string | null; platform: boolean;
@@ -84,14 +84,17 @@ const design = { themeKey: "wood", brandTokens: { "--site-accent": "#C8961E" } }
 test("actual design action denies signed-out, feature-blocked and non-admin callers before database access", async t => {
   configure(t);
   const fetch = t.mock.method(globalThis, "fetch", async () => { throw new Error("Unexpected database access"); });
-  const { saveDesign } = await actions();
+  const { saveDesign, setPublished } = await actions();
   state.auth = null;
   assert.equal((await saveDesign(design)).ok, false);
+  assert.equal((await setPublished(true)).ok, false);
   assert.deepEqual(state.features, []);
   state.auth = { churchId, userId, isAdmin: true }; state.featureError = "Website access is disabled.";
   assert.equal((await saveDesign(design)).ok, false);
+  assert.equal((await setPublished(true)).ok, false);
   state.featureError = null; state.auth.isAdmin = false;
   assert.equal((await saveDesign(design)).ok, false);
+  assert.equal((await setPublished(true)).ok, false);
   assert.equal(fetch.mock.callCount(), 0);
   assert.deepEqual(state.platformChecks, []);
 });
@@ -164,4 +167,39 @@ test("a failed privileged CSS read performs no write, returns safe feedback and 
   assert.equal((await saveDesign({ ...design, customCss: current })).ok, true);
   assert.equal(db.writes.length, 1);
   assert.equal(Object.hasOwn(db.writes[0], "custom_css"), false);
+});
+
+test("actual publication action refuses missing or empty websites without claiming success", async t => {
+  configure(t);
+  let status = "no_page";
+  t.mock.method(globalThis, "fetch", async (resource: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(resource instanceof Request ? resource.url : String(resource));
+    assert.equal(url.hostname, "design-permissions.example.test");
+    assert.equal(url.pathname, "/rest/v1/rpc/set_site_publication");
+    assert.deepEqual(JSON.parse(String(init?.body)), { p_church_id: churchId, p_published: true });
+    return Response.json(status);
+  });
+  const { setPublished } = await actions();
+  for (status of ["no_page", "no_sections", "unknown"]) {
+    const result = await setPublished(true);
+    assert.equal(result.ok, false);
+    if (!result.ok) assert.match(result.error, /home page|confirm your website's status/);
+  }
+  assert.deepEqual(state.revalidated, []);
+});
+
+test("actual publication action confirms both online and offline outcomes for the authenticated church", async t => {
+  configure(t);
+  const writes: Record<string, unknown>[] = [];
+  t.mock.method(globalThis, "fetch", async (resource: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(resource instanceof Request ? resource.url : String(resource));
+    assert.equal(url.pathname, "/rest/v1/rpc/set_site_publication");
+    const input = JSON.parse(String(init?.body)); writes.push(input);
+    return Response.json(input.p_published ? "published" : "unpublished");
+  });
+  const { setPublished } = await actions();
+  assert.equal((await setPublished(true)).ok, true);
+  assert.equal((await setPublished(false)).ok, true);
+  assert.deepEqual(writes, [{ p_church_id: churchId, p_published: true }, { p_church_id: churchId, p_published: false }]);
+  assert.ok(state.revalidated.includes("/sites"));
 });

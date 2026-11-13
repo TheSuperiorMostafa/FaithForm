@@ -73,12 +73,6 @@ const CopySchema = z.object({
       z.object({ when: z.string(), title: z.string(), body: z.string() }),
     ),
   }),
-  visit: z.object({
-    eyebrow: z.string(),
-    headline: z.string(),
-    body: z.string(),
-    facts: z.array(z.object({ title: z.string(), body: z.string() })),
-  }),
   give: z.object({
     eyebrow: z.string(),
     headlineLead: z.string(),
@@ -101,7 +95,9 @@ renders in a serif italic, so it should be one evocative word or a very short
 phrase that reads well emphasised — "welcome.", "glad", "table." — not a clause.
 
 Only state facts you were given. Do not invent service times, staff names,
-ministries, history, or numbers. If you do not know something, write around it.`;
+ministries, history, or numbers. Do not assume childcare, refreshments, a dress
+code, accessibility, parking, or other visitor facilities. If you do not know
+something, write around it.`;
 
 function profileBrief(profile: SiteProfile): string {
   const lines: string[] = [`Church name: ${profile.name}`];
@@ -160,16 +156,15 @@ Notes:
   cannot support any. Never invent a founding year or a congregation size.
 - Programs should reflect the service times listed above, plus any ministries
   the description mentions. Do not invent programs that were not mentioned.
-- Visit facts are practical things a first-time visitor wants to know. Generic
-  hospitality points are fine here (arriving early, dress, kids, coffee) as long
-  as they do not assert specifics you were not told. Give exactly four.
+- Visitor guidance is provided separately. Do not write practical visitor claims
+  or infer facilities, childcare, clothing expectations, or refreshments.
 
 Lengths (guidance, not hard limits — the layout is built for roughly these):
 - eyebrows: 2-5 words
 - headline leads: under 8 words; accents: one or two words
 - hero and section intros: 1-2 sentences
 - about paragraphs: 2-4 sentences each, at most two paragraphs
-- card and fact bodies: one sentence
+- card bodies: one sentence
 - meta description: around 150 characters`;
 }
 
@@ -440,20 +435,10 @@ export function buildSections(
       isVisible: true,
       props: {
         anchor: "visit",
-        ...(copy
-          ? {
-              eyebrow: copy.visit.eyebrow,
-              headline: { lead: copy.visit.headline },
-              body: copy.visit.body,
-              facts: copy.visit.facts.slice(0, 4).map((fact, i) => ({
-                // The model writes the words; the icons stay ours so the design
-                // holds regardless of what it returns.
-                icon: ["⌚", "★", "♥", "☕"][i] ?? "•",
-                title: fact.title,
-                body: fact.body,
-              })),
-            }
-          : {}),
+        // The profile has no structured visitor facilities or policies to
+        // substantiate AI-written practical advice. Leave the master defaults
+        // and profile-derived contact endpoint in charge. Pastors can still
+        // add verified points through the existing editable facts list.
       },
     },
     {

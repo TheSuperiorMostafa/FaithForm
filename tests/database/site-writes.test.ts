@@ -25,7 +25,7 @@ test("website writes commit atomically and keep tenant content intact", options,
       create table public.church_staff(id uuid primary key,church_id uuid references churches(id) on delete cascade,full_name text not null,title text,bio text,photo_url text,is_public boolean,sort_order integer,email text,phone text,is_senior_pastor boolean default false,updated_at timestamptz);
     `);
     await db.exec(readFileSync("supabase/migrations/0002_rls_policies.sql","utf8").split("-- ENABLE RLS")[0]);
-    for (const name of ["0041_team_access_and_feature_flags.sql","0042_church_sites.sql","0044_site_domain_requests.sql","0112_site_layout_mode.sql","0161_website_atomic_writes.sql","0162_website_server_writes.sql"]) {
+    for (const name of ["0041_team_access_and_feature_flags.sql","0042_church_sites.sql","0044_site_domain_requests.sql","0112_site_layout_mode.sql","0161_website_atomic_writes.sql","0162_website_server_writes.sql","0164_site_publication_refusals.sql"]) {
       // Production already has this signature returning text. Replacing it
       // must retain its contract rather than require dropping a live RPC.
       if(name==="0161_website_atomic_writes.sql") await db.exec("create function public.set_site_publication(p_church_id uuid,p_published boolean) returns text language sql as $$ select 'legacy'::text $$;");
@@ -58,6 +58,22 @@ test("website writes commit atomically and keep tenant content intact", options,
       assert.equal((await db.query("select is_published from site_settings where church_id=$1",[church])).rows[0].is_published,true);
       assert.equal((await db.query("select set_site_publication($1,false) as result",[church])).rows[0].result,"unpublished");
       assert.equal((await db.query("select count(*)::int as n from site_sections where church_id=$1",[church])).rows[0].n,2);
+    });
+    await t.test("missing and empty Home refuse without writes; foreign sections do not make a draft publishable",async()=>{
+      for(const published of [true,false]) assert.equal((await db.query("select set_site_publication($1,$2) as result",[other,published])).rows[0].result,"no_page");
+      assert.equal((await db.query("select count(*)::int as n from site_settings where church_id=$1",[other])).rows[0].n,0);
+      const home=(await db.query("insert into site_pages(church_id,path,status) values($1,'/','draft') returning id",[other])).rows[0].id;
+      assert.equal((await db.query("select set_site_publication($1,true) as result",[other])).rows[0].result,"no_sections");
+      const foreign=(await db.query("insert into site_sections(church_id,page_id,type) values($1,$2,'hero') returning id",[church,home])).rows[0].id;
+      assert.equal((await db.query("select set_site_publication($1,true) as result",[other])).rows[0].result,"no_sections");
+      await db.query("delete from site_sections where id=$1",[foreign]);
+      assert.equal((await db.query("select count(*)::int as n from site_settings where church_id=$1",[other])).rows[0].n,0);
+      assert.equal((await db.query("select status from site_pages where id=$1",[home])).rows[0].status,"draft");
+      await db.query("insert into site_settings(church_id,is_published) values($1,true)",[other]);
+      await db.query("update site_pages set status='published' where id=$1",[home]);
+      assert.equal((await db.query("select set_site_publication($1,false) as result",[other])).rows[0].result,"unpublished");
+      assert.equal((await db.query("select is_published from site_settings where church_id=$1",[other])).rows[0].is_published,false);
+      assert.equal((await db.query("select status from site_pages where id=$1",[home])).rows[0].status,"draft");
     });
     await t.test("reorder refuses partial/duplicate/cross-church sets without changing any position",async()=>{
       await assert.rejects(db.query("select reorder_site_sections($1,$2)",[church,[ids[0]]]));

@@ -295,7 +295,7 @@ export function DetailsForm({
           >
             {times.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No services yet. Add one and the times strip appears on your site.
+                No services yet. Add one, then turn on Service times strip in Pages when hidden.
               </p>
             ) : (
               times.map((row, i) => (
@@ -381,7 +381,7 @@ export function DetailsForm({
           >
             {staff.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No one added yet. People marked public appear in your team section.
+                No one added yet. Add public people here, then turn on Our team in Pages when hidden.
               </p>
             ) : (
               staff.map((row, i) => {
@@ -461,7 +461,7 @@ export function DetailsForm({
             )}
           </Panel>
 
-          <Panel title="Vision and mission" description="The website shows a shortened version of these.">
+          <Panel title="Vision and mission" description="Used when this section has no saved wording. Show or hide the section in Pages.">
             <Field label="Vision statement">
               <Textarea
                 rows={3}
