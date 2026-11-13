@@ -10,7 +10,7 @@ Object.assign(globalThis, { React });
 test("the real person panel names the existing care tab Notes and reserves a loading state for group memberships", () => {
   const html = renderToStaticMarkup(createElement(MemberFormPanel, {
     member: { id: "12345678-1234-1234-1234-123456789abc", first_name: "Avery", last_name: "Lee", phone: null, email: "avery@example.invalid", photo_url: null, is_active: true, attendance_count: 0 },
-    isAdmin: true, onClose() {}, onSaved() {},
+    isAdmin: true, showAppStatus: true, appConnection: null, onClose() {}, onSaved() {},
   }));
   assert.match(html, />Notes<\/span>/);
   assert.doesNotMatch(html, />Care<\/span>/);
@@ -18,6 +18,7 @@ test("the real person panel names the existing care tab Notes and reserves a loa
   assert.match(html, /aria-label="Loading groups"/);
   assert.doesNotMatch(html, /Not in any groups yet/);
   assert.match(html, /avery@example.invalid/);
+  assert.match(html, /href="\/dashboard\/app#find-and-join"/);
 });
 
 test("existing group names and archive status render as reachable group links, with a truthful empty state", () => {

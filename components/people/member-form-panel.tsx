@@ -93,7 +93,7 @@ function MemberAppSection({
           <p className="text-muted-foreground">
             When {member.first_name} joins your church in the app, they&apos;re
             connected here and their check-ins count automatically.{" "}
-            <Link href="/dashboard/app" className="font-semibold text-primary underline-offset-4 hover:underline dark:text-accent">
+            <Link href="/dashboard/app#find-and-join" className="font-semibold text-primary underline-offset-4 hover:underline dark:text-accent">
               Share an invitation link
             </Link>
           </p>
