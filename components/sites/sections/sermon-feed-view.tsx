@@ -42,7 +42,7 @@ export function SermonFeedView({ content, ctx }: SectionComponentProps<SermonFee
       {head}
       <div className="site-sermon-layout">
         <div>
-          <div className="site-sermon-stage site-ph" data-ph="sermon still">
+          <div className="site-sermon-stage site-ph">
             {featured.thumbnail?.src ? (
               <ResilientImage
                 src={featured.thumbnail.src}

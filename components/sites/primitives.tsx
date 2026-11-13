@@ -91,9 +91,8 @@ export function Headline({
 }
 
 /**
- * Renders the image, or the mock's striped placeholder block when a church has
- * not supplied one yet. A missing photo should still leave a page that reads as
- * designed rather than a collapsed empty div.
+ * A missing photo keeps its decorative geometry without showing editor hints
+ * to visitors. A supplied photo retains its accessible failure fallback.
  */
 export function Media({
   image,
@@ -121,7 +120,6 @@ export function Media({
     return (
       <div
         className={cn("site-ph", className, wrapperClassName)}
-        data-ph={image.placeholder ?? ""}
         aria-hidden="true"
       />
     );
