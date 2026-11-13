@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -101,7 +101,10 @@ export function RecordingReview({
   websiteSermonsUrl,
 }: Props) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [transitionPending, startTransition] = useTransition();
+  const [publishPending, setPublishPending] = useState(false);
+  const publishing = useRef(false);
+  const pending = transitionPending || publishPending;
 
   const [title, setTitle] = useState(recording.title);
   const [speaker, setSpeaker] = useState(recording.speaker ?? "");
@@ -198,47 +201,72 @@ export function RecordingReview({
       }
     });
 
-  const publish = () =>
-    startTransition(async () => {
-      if (!toApp && !toWebsite) {
-        toast.error(
-          appEnabled
-            ? "Choose where to publish it: the app, your website, or both."
-            : "Tick “Show it on your church website” to publish it.",
-        );
-        return;
-      }
+  const publish = async () => {
+    if (publishing.current || pending) return;
+    if (!toApp && !toWebsite) {
+      toast.error(
+        appEnabled
+          ? "Choose where to publish it: the app, your website, or both."
+          : "Tick “Show it on your church website” to publish it.",
+      );
+      return;
+    }
+    publishing.current = true;
+    setPublishPending(true);
+    const finishPublishing = () => {
+      publishing.current = false;
+      setPublishPending(false);
+    };
+    // ConfirmHost must receive this request outside a transition. Otherwise
+    // React can hold its dialog update behind the answer we are awaiting.
+    try {
       if (toWebsite && !recording.website.published && !(await confirmAction({
         title: "Publish this recording on your website?",
         description: "Visitors will be able to watch this video. This also shows your existing Sermons section, including its saved content. If your website is live, its Sermons page will be published. Other draft pages and an offline website stay as they are.",
         confirmLabel: "Publish recording and show Sermons",
         cancelLabel: "Go back",
-      }))) return;
-      if (!(await saveDetails())) return;
-      const result = await publishRecordingAction({
-        recordingId: recording.id,
-        appVisibility: toApp && appEnabled ? audience : null,
-        website: toWebsite,
-        notifyMembers: toApp && appEnabled && notify,
-      });
-      if (!result.ok) {
-        toast.error(result.error);
-        router.refresh();
+      }))) {
+        finishPublishing();
         return;
       }
-      const where = {
-        app: result.data?.app.published ?? toApp,
-        website: result.data?.website.published ?? toWebsite,
-      };
-      const name = title.trim() || recording.title;
-      if (published) {
-        toast.success(`Publishing for “${name}” updated.`);
-      } else {
-        setJustPublished(where);
-        toast.success(`“${name}” is published. ${publishedWhereSentence(where, appEnabled)}`);
+    } catch {
+      toast.error("The publish confirmation could not open. Your recording is still saved. Try again.");
+      finishPublishing();
+      return;
+    }
+    startTransition(async () => {
+      try {
+        if (!(await saveDetails())) return;
+        const result = await publishRecordingAction({
+          recordingId: recording.id,
+          appVisibility: toApp && appEnabled ? audience : null,
+          website: toWebsite,
+          notifyMembers: toApp && appEnabled && notify,
+        });
+        if (!result.ok) {
+          toast.error(result.error);
+          router.refresh();
+          return;
+        }
+        const where = {
+          app: result.data?.app.published ?? toApp,
+          website: result.data?.website.published ?? toWebsite,
+        };
+        const name = title.trim() || recording.title;
+        if (published) {
+          toast.success(`Publishing for “${name}” updated.`);
+        } else {
+          setJustPublished(where);
+          toast.success(`“${name}” is published. ${publishedWhereSentence(where, appEnabled)}`);
+        }
+        router.refresh();
+      } catch {
+        toast.error("We couldn't confirm publishing. Your entries are still here. Try again.");
+      } finally {
+        finishPublishing();
       }
-      router.refresh();
     });
+  };
 
   const unpublish = async () => {
     const ok = await confirmAction({

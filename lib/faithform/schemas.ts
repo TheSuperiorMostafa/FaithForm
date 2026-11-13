@@ -182,7 +182,7 @@ export const claimResolutionSchema = z.object({
 
 export const invitationSchema = z.object({
   purpose: z.enum(["join", "people_claim"]),
-  memberId: z.string().uuid().optional(),
+  memberId: z.guid().optional(),
   invitedEmail: z.string().trim().max(200).optional(),
   invitedLabel: z.string().trim().max(120).optional(),
   expiresInDays: z.coerce.number().int().min(1).max(90).default(14),
