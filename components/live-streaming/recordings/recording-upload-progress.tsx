@@ -1,4 +1,6 @@
-import React, { type ReactNode } from "react";
+"use client";
+
+import React, { type ReactNode, useEffect, useRef } from "react";
 import { Check, CloudUpload, FileVideo, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +23,8 @@ export function RecordingUploadProgress({ phase, filename, loaded, total, origin
   error: string | null;
   children?: ReactNode;
 }) {
+  const panel = useRef<HTMLElement>(null);
+  useEffect(() => { panel.current?.scrollIntoView({ block: "start", behavior: "auto" }); }, []);
   const step = phase === "checking" ? 2 : phase === "uploading" ? 1 : 0;
   const transferred = phase === "checking" ? total : Math.min(total, Math.max(0, loaded));
   const uploadPercent = total > 0 ? Math.min(100, Math.floor(transferred / total * 100)) : 0;
@@ -34,7 +38,8 @@ export function RecordingUploadProgress({ phase, filename, loaded, total, origin
       : phase === "optimizing" ? "Optimizing the video before the upload starts." : "Reading the video and preparing your upload.";
   const stateText = error ? "Needs attention" : phase === "checking" ? "Checking video" : phase === "uploading" ? "Uploading video" : "Preparing video";
 
-  return <section aria-label="Recording upload progress" className="overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/10 via-card to-card shadow-sm">
+  // The constrained dialog body must scroll this card, never compress it.
+  return <section ref={panel} aria-label="Recording upload progress" className="shrink-0 overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/10 via-card to-card shadow-sm">
     <div className="space-y-5 p-5">
       <div className="flex items-start gap-3">
         <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/15 text-primary dark:text-accent"><FileVideo className="size-5" aria-hidden /></div>
