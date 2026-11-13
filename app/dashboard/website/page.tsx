@@ -41,6 +41,16 @@ export default async function WebsiteOverviewPage() {
   const published = site.settings?.isPublished === true && site.page.status === "published";
   const layoutMode = parseSiteLayoutMode(site.settings?.layoutMode);
   const previewUrl = `${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`;
+  // router.refresh preserves this client component when its URL is unchanged.
+  // Reload its iframe when saved website settings change, rather than leaving
+  // the old layout or design visible after a successful save.
+  const previewRefreshToken = JSON.stringify([
+    layoutMode,
+    published,
+    site.theme,
+    site.settings?.brandTokens ?? {},
+    site.settings?.customCss ?? null,
+  ]);
 
   const rootHost = process.env.NEXT_PUBLIC_SITE_ROOT_HOST?.trim().toLowerCase();
   const faithformAddress = rootHost && site.slug ? `${site.slug}.${rootHost}` : null;
@@ -141,7 +151,7 @@ export default async function WebsiteOverviewPage() {
         </ul>
       </section>
 
-      <SitePreview previewUrl={previewUrl} />
+      <SitePreview previewUrl={previewUrl} refreshToken={previewRefreshToken} />
     </div>
   );
 }
