@@ -54,6 +54,7 @@ export async function scheduledDetailsPatch(form: FormData, churchId: string, db
     seriesId = series.id;
   }
   return { title: details.title, seriesId, speaker: details.speaker,
+    ...(details.speakers !== undefined ? { speakers: details.speakers } : {}),
     description: details.description, chapters: details.chapters, topics: details.topics,
     ...(details.recordingAppVisibility !== undefined ? { recordingAppVisibility: details.recordingAppVisibility, recordingPublishToWebsite: details.recordingPublishToWebsite, recordingNotifyMembers: details.recordingNotifyMembers, publicAccess: details.publicAccess } : {}), ...artwork };
 }

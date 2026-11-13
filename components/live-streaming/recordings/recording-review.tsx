@@ -39,6 +39,7 @@ import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SuccessState } from "@/components/ui/success-state";
 import { RecordingPrimaryFields, RecordingExtraFields } from "@/components/media/recording-details-fields";
+import { createRecordingTagsValue, recordingTagItems } from "@/components/media/recording-tags-field";
 import { RecordingVisibilityChoice as Check } from "@/components/media/recording-visibility-choice";
 import { formatClock, parseClock } from "@/lib/stream/format";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
@@ -107,7 +108,7 @@ export function RecordingReview({
   const pending = transitionPending || publishPending;
 
   const [title, setTitle] = useState(recording.title);
-  const [speaker, setSpeaker] = useState(recording.speaker ?? "");
+  const [speakers, setSpeakers] = useState(createRecordingTagsValue(recording.speakers ?? (recording.speaker ? [recording.speaker] : [])));
   const [description, setDescription] = useState(recording.description ?? "");
   // Pre-filled: its own series, or the church's usual one for a recording
   // that hasn't been published yet.
@@ -116,8 +117,8 @@ export function RecordingReview({
       (recording.app.published || recording.website.published ? "" : (settings.defaultSeriesId ?? "")),
   );
   const [newSeries, setNewSeries] = useState("");
-  const [chapters, setChapters] = useState(recording.chapters.join(", "));
-  const [topics, setTopics] = useState(recording.topics.join(", "));
+  const [chapters, setChapters] = useState(createRecordingTagsValue(recording.chapters));
+  const [topics, setTopics] = useState(createRecordingTagsValue(recording.topics));
 
   // With the app switched off, a new publish goes to the website only.
   const [toApp, setToApp] = useState(
@@ -150,11 +151,11 @@ export function RecordingReview({
   const posterDirty = poster !== originalPoster;
   const detailsDirty =
     title.trim() !== recording.title ||
-    speaker.trim() !== (recording.speaker ?? "") ||
+    JSON.stringify(recordingTagItems(speakers)) !== JSON.stringify(recording.speakers ?? (recording.speaker ? [recording.speaker] : [])) ||
     description.trim() !== (recording.description ?? "") ||
     (seriesChoice === NEW_SERIES ? newSeries.trim().length > 0 : seriesChoice !== (recording.seriesId ?? "")) ||
-    chapters !== recording.chapters.join(", ") ||
-    topics !== recording.topics.join(", ");
+    JSON.stringify(recordingTagItems(chapters)) !== JSON.stringify(recording.chapters) ||
+    JSON.stringify(recordingTagItems(topics)) !== JSON.stringify(recording.topics);
   const dirty = detailsDirty || posterDirty;
   const publishingChange =
     (toApp && !recording.app.published) ||
@@ -162,8 +163,6 @@ export function RecordingReview({
     (recording.app.published &&
       recording.app.visibility !== null &&
       audience !== currentAudience(recording.app.visibility));
-
-  const splitTags = (value: string) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
 
   async function saveDetails(): Promise<boolean> {
     if (posterDirty) {
@@ -179,12 +178,12 @@ export function RecordingReview({
       recordingId: recording.id,
       title,
       description,
-      speaker,
+      speakers: recordingTagItems(speakers),
       seriesId: seriesChoice && seriesChoice !== NEW_SERIES ? seriesChoice : null,
       newSeriesName: seriesChoice === NEW_SERIES ? newSeries : undefined,
       listedOnWebsite: true,
-      chapters: splitTags(chapters),
-      topics: splitTags(topics),
+      chapters: recordingTagItems(chapters),
+      topics: recordingTagItems(topics),
     });
     if (!result.ok) {
       toast.error(result.error);
@@ -660,7 +659,7 @@ export function RecordingReview({
                     />
                   </>
                 ) : null}
-                <RecordingExtraFields speaker={speaker} onSpeakerChange={setSpeaker} description={description} onDescriptionChange={setDescription}
+                <RecordingExtraFields speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription}
                   chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
               </fieldset>
             </AdvancedSection>

@@ -392,7 +392,7 @@ export function PeopleManager({
                   }
                   title={fullName(member)}
                   subtitle={
-                    <span className={cn(!hasPhone && "text-amber-800 dark:text-amber-300")}>
+                    <span className={cn("break-words [overflow-wrap:anywhere]", !hasPhone && "text-amber-800 dark:text-amber-300")}>
                       {personContext(member)}
                     </span>
                   }

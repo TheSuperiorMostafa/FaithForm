@@ -19,6 +19,7 @@ export type StreamEvent = {
   youtubePrivacy: "public" | "unlisted" | "private";
   artworkUrl: string | null;
   speaker?: string | null;
+  speakers?: string[];
   description?: string | null;
   chapters?: string[];
   topics?: string[];
@@ -90,6 +91,7 @@ function mapEvent(row: EventRow): StreamEvent {
     youtubePrivacy: row.youtube_privacy,
     artworkUrl: row.artwork_url,
     speaker: row.speaker_tags?.[0] ?? null,
+    speakers: [...(row.speaker_tags ?? [])],
     description: row.description ?? null,
     chapters: row.chapter_tags ?? [],
     topics: row.topic_tags ?? [],
@@ -228,6 +230,7 @@ export async function createStreamEvent(
     title: string;
     startsAt: string;
     speaker?: string | null;
+    speakers?: string[];
     description?: string | null;
     chapters?: string[];
     topics?: string[];
@@ -260,7 +263,7 @@ export async function createStreamEvent(
       church_id: input.churchId,
       title: input.title.trim(),
       starts_at: input.startsAt,
-      speaker_tags: input.speaker ? [input.speaker] : [],
+      speaker_tags: input.speakers ?? (input.speaker ? [input.speaker] : []),
       description: input.description ?? null,
       chapter_tags: input.chapters ?? [],
       topic_tags: input.topics ?? [],
@@ -308,6 +311,7 @@ export async function updateStreamEvent(
     recordingPublishToWebsite: boolean | null;
     recordingNotifyMembers: boolean | null;
     speaker: string | null;
+    speakers: string[];
     description: string | null;
     chapters: string[];
     topics: string[];
@@ -336,7 +340,15 @@ export async function updateStreamEvent(
   if (patch.recordingNotifyMembers !== undefined) updates.recording_notify_members = patch.recordingNotifyMembers;
   if (patch.startsAt !== undefined) updates.starts_at = patch.startsAt;
 
-  if (patch.speaker !== undefined) updates.speaker_tags = patch.speaker ? [patch.speaker] : [];
+  if (patch.speakers !== undefined) updates.speaker_tags = patch.speakers;
+  else if (patch.speaker !== undefined) {
+    const { data: current, error } = await client.from("stream_events")
+      .select("speaker_tags").eq("id", eventId).eq("church_id", churchId).maybeSingle();
+    if (error || !current) throw new Error("We couldn't load the saved speaker names. Nothing was changed. Please try again.");
+    const rest = ((current.speaker_tags as string[] | null) ?? []).slice(1);
+    const speaker = patch.speaker?.trim() ?? "";
+    updates.speaker_tags = speaker ? [speaker, ...rest.filter(name => name !== speaker)] : rest;
+  }
   if (patch.description !== undefined) updates.description = patch.description;
   if (patch.chapters !== undefined) updates.chapter_tags = patch.chapters;
   if (patch.topics !== undefined) updates.topic_tags = patch.topics;

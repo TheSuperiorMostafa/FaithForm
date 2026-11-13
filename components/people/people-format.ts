@@ -107,8 +107,7 @@ export function getInitials(firstName: string, lastName: string): string {
 /** The one line under a person's name. */
 export function personContext(person: Pick<PersonLike, "phone" | "email">): string {
   const phone = person.phone?.trim() ? formatPhoneDisplay(person.phone) ?? person.phone : null;
-  if (phone) return phone;
-  return "No phone yet";
+  return [phone ?? "No phone yet", person.email?.trim()].filter(Boolean).join(" · ");
 }
 
 /**

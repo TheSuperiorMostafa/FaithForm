@@ -131,7 +131,8 @@ export async function saveRecordingDetailsAction(input: {
   recordingId: string;
   title: string;
   description: string;
-  speaker: string;
+  speaker?: string;
+  speakers?: string[];
   seriesId: string | null;
   newSeriesName?: string;
   listedOnWebsite?: boolean;
@@ -149,11 +150,12 @@ export async function saveRecordingDetailsAction(input: {
     title: input.title,
     description: input.description,
     speaker: input.speaker,
+    speakers: input.speakers,
     seriesId: input.seriesId,
     newSeriesName: input.newSeriesName ?? null,
     listedOnWebsite: input.listedOnWebsite,
-    chapters: Array.isArray(input.chapters) ? input.chapters.map(String) : undefined,
-    topics: Array.isArray(input.topics) ? input.topics.map(String) : undefined,
+    chapters: input.chapters,
+    topics: input.topics,
   });
   revalidate(input.recordingId);
   if (!result.ok) return result;

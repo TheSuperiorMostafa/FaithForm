@@ -4,6 +4,7 @@ import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RecordingExtraFields, RecordingPrimaryFields } from "@/components/media/recording-details-fields";
 import { RecordingVisibilityChoice } from "@/components/media/recording-visibility-choice";
+import { createRecordingTagsValue } from "@/components/media/recording-tags-field";
 
 Object.assign(globalThis, { React });
 const change = () => {};
@@ -30,11 +31,13 @@ test("creating a series uses the same required name field in either editor", () 
 
 test("the shared more-options editor retains every recording detail", () => {
   const html = renderToStaticMarkup(createElement(RecordingExtraFields, {
-    speaker: "Pastor John", onSpeakerChange: change, description: "Grace and hope", onDescriptionChange: change,
-    chapters: "John 3, Romans 8", onChaptersChange: change, topics: "Grace, Prayer", onTopicsChange: change,
+    speakers: createRecordingTagsValue(["Pastor John", "Doe, Jane"]), onSpeakersChange: change, description: "Grace and hope", onDescriptionChange: change,
+    chapters: createRecordingTagsValue(["John 3, Romans 8"]), onChaptersChange: change, topics: createRecordingTagsValue(["Grace", "Prayer"]), onTopicsChange: change,
   }));
-  for (const field of ["speaker", "description", "chapters", "topics"]) assert.ok(html.includes(`name="${field}"`));
-  for (const value of ["Pastor John", "Grace and hope", "John 3, Romans 8", "Grace, Prayer"]) assert.ok(html.includes(value));
+  for (const field of ["speakers_json", "description", "chapters_json", "topics_json"]) assert.ok(html.includes(`name="${field}"`));
+  for (const value of ["Pastor John", "Doe, Jane", "Grace and hope", "John 3, Romans 8", "Grace", "Prayer"]) assert.ok(html.includes(value));
+  assert.match(html, /aria-label="Remove Doe, Jane"/);
+  assert.match(html, /press Enter to add/);
 });
 
 test("upcoming and recording publication controls visibly retain the saved checked choice", () => {

@@ -60,6 +60,7 @@ export type StaffRecording = {
   title: string;
   description: string | null;
   speaker: string | null;
+  speakers?: string[];
   chapters: string[];
   topics: string[];
   seriesId: string | null;
@@ -155,6 +156,7 @@ function toStaffRecording(row: StaffRow, slug: string | null): StaffRecording {
     title: ((row.title as string | null) ?? "").trim() || "Service recording",
     description: (row.mobile_summary as string | null) ?? null,
     speaker: speakers[0] ?? null,
+    speakers: [...speakers],
     chapters: (row.chapter_tags as string[] | null) ?? [],
     topics: (row.topic_tags as string[] | null) ?? [],
     seriesId: (row.series_id as string | null) ?? null,
@@ -394,6 +396,7 @@ export async function updateRecordingDetails(
     title?: string;
     description?: string | null;
     speaker?: string | null;
+    speakers?: string[];
     seriesId?: string | null;
     newSeriesName?: string | null;
     listedOnWebsite?: boolean;
@@ -404,6 +407,21 @@ export async function updateRecordingDetails(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const db = admin(client);
   const updates: Record<string, unknown> = {};
+  const cleanTags = (values: unknown, maxLength = 80): string[] | null => {
+    if (!Array.isArray(values) || values.some(value => typeof value !== "string")) return null;
+    const tags = [...new Set(values.map(value => value.trim()).filter(Boolean))] as string[];
+    return tags.length <= 20 && tags.every(tag => tag.length <= maxLength) ? tags : null;
+  };
+  for (const [key, column, label, maxLength] of [
+    ["speakers", "speaker_tags", "speaker names", 120],
+    ["chapters", "chapter_tags", "Scripture references", 80],
+    ["topics", "topic_tags", "topics", 80],
+  ] as const) {
+    if (input[key] === undefined) continue;
+    const tags = cleanTags(input[key], maxLength);
+    if (!tags) return { ok: false, error: `Use up to 20 ${label}, each ${maxLength} characters or fewer.` };
+    updates[column] = tags;
+  }
 
   if (input.title !== undefined) {
     const title = input.title.trim();
@@ -413,15 +431,19 @@ export async function updateRecordingDetails(
   if (input.description !== undefined) {
     updates.mobile_summary = input.description?.trim() ? input.description.trim().slice(0, 2000) : null;
   }
-  if (input.speaker !== undefined) {
-    const { data: current } = await db
+  if (input.speakers === undefined && input.speaker !== undefined) {
+    if (input.speaker !== null && (typeof input.speaker !== "string" || input.speaker.trim().length > 120)) {
+      return { ok: false, error: "Keep the speaker name to 120 characters or fewer." };
+    }
+    const { data: current, error } = await db
       .from("stream_recordings")
       .select("speaker_tags")
       .eq("id", input.recordingId)
       .eq("church_id", input.churchId)
       .maybeSingle();
+    if (error || !current) return { ok: false, error: "We couldn't load the saved speaker names. Nothing was changed. Please try again." };
     const rest = ((current?.speaker_tags as string[] | null) ?? []).slice(1);
-    const speaker = input.speaker?.trim().slice(0, 120) ?? "";
+    const speaker = input.speaker?.trim() ?? "";
     updates.speaker_tags = speaker ? [speaker, ...rest.filter((name) => name !== speaker)] : rest;
   }
   if (input.newSeriesName?.trim()) {
@@ -443,11 +465,6 @@ export async function updateRecordingDetails(
   if (input.listedOnWebsite !== undefined) {
     updates.visibility = input.listedOnWebsite ? "public" : "unlisted";
   }
-  const cleanTags = (values: string[]) =>
-    Array.from(new Set(values.map((value) => value.trim().slice(0, 80)).filter(Boolean))).slice(0, 20);
-  if (input.chapters !== undefined) updates.chapter_tags = cleanTags(input.chapters);
-  if (input.topics !== undefined) updates.topic_tags = cleanTags(input.topics);
-
   if (Object.keys(updates).length === 0) return { ok: true };
   const { data, error } = await db
     .from("stream_recordings")

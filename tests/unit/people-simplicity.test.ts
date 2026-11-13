@@ -70,9 +70,11 @@ test("the person panel offers Call, Text and Email", () => {
 // The list
 // ---------------------------------------------------------------------------
 
-test("a row says the phone or 'No phone yet', and never promises a text", () => {
+test("a row shows the existing email beside the phone without promising a text", () => {
   assert.equal(personContext({ phone: "+15025551234", email: null }), "502-555-1234");
-  assert.equal(personContext({ phone: null, email: "a@b.co" }), "No phone yet");
+  assert.equal(personContext({ phone: null, email: "a@b.co" }), "No phone yet · a@b.co");
+  assert.equal(personContext({ phone: "+15025551234", email: " ann@example.org " }), "502-555-1234 · ann@example.org");
+  assert.equal(personContext({ phone: null, email: null }), "No phone yet");
   assert.deepEqual(personStatus({ is_active: false }, true), { tone: "neutral", label: "Inactive" });
   assert.deepEqual(personStatus({ is_active: true }, true), { tone: "ready", label: "On the app" });
   assert.equal(personStatus({ is_active: true }, false), null);
@@ -127,7 +129,7 @@ test("adding a person offers the next steps", () => {
   assert.match(panel, /Phone \(optional\)/);
   // Buttons name what they save.
   assert.match(panel, /"Save details"/);
-  assert.match(read("components/people/member-care-panel.tsx"), /"Save care notes"/);
+  assert.match(read("components/people/member-care-panel.tsx"), /"Save notes"/);
 });
 
 // ---------------------------------------------------------------------------

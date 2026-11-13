@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import test from "node:test";
 import ts from "typescript";
 import type { RecordingReview } from "@/components/live-streaming/recordings/recording-review";
+import { createRecordingTagsValue, recordingTagItems, type RecordingTagsValue } from "@/components/media/recording-tags-field";
 
 type Props = Parameters<typeof RecordingReview>[0];
 type Element = { props: Record<string, unknown> };
@@ -24,7 +25,7 @@ const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(
 // Invoke handlers from the real component. Only React's render scheduling,
 // confirmation UI, router and server-action I/O are substituted. The fake
 // transition records its boundary so a confirmation inside it fails this test.
-function harness() {
+function harness(recordingPatch: Partial<Props["recording"]> = {}) {
   const props: Props = {
     recording: {
       id: "qa-recording", title: "QA recording", description: null, speaker: null, chapters: [], topics: [],
@@ -40,6 +41,7 @@ function harness() {
     settings: { autoPublish: false, defaultVisibility: "public", defaultSeriesId: null, publishToWebsite: true, notifyOnLive: false, notifyOnPublish: false },
     isAdmin: true, appEnabled: false, timeZone: "UTC", stats: null,
   };
+  Object.assign(props.recording, recordingPatch);
   const state = {
     dialog: deferred<boolean>(), dialogs: 0, transitions: 0, insideTransition: false, dialogInTransition: false,
     saves: [] as Record<string, unknown>[], publishes: [] as Record<string, unknown>[],
@@ -66,6 +68,7 @@ function harness() {
   };
   const providers: Record<string, unknown> = {
     react,
+    "@/components/media/recording-tags-field": { createRecordingTagsValue, recordingTagItems },
     "next/navigation": { useRouter: () => ({ refresh() { state.refreshes++; }, push() {} }) },
     sonner: { toast: { error(message: string) { state.errors.push(message); }, success(message: string) { state.successes.push(message); } } },
     "@/components/ui/confirm-dialog": { confirmAction: () => {
@@ -91,7 +94,14 @@ function harness() {
     const tree = compiled.exports.RecordingReview(props);
     const primary = find(tree, element => element.props.size === "lg" && typeof element.props.onClick === "function")!;
     return { primary, click: primary.props.onClick as () => Promise<void> | void,
-      editTitle(title: string) { (find(tree, element => typeof element.props.onTitleChange === "function")!.props.onTitleChange as (value: string) => void)(title); } };
+      editTitle(title: string) { (find(tree, element => typeof element.props.onTitleChange === "function")!.props.onTitleChange as (value: string) => void)(title); },
+      editTags(values: { speakers: RecordingTagsValue; chapters: RecordingTagsValue; topics: RecordingTagsValue }) {
+        const fields = find(tree, element => typeof element.props.onSpeakersChange === "function")!;
+        for (const [key, value] of Object.entries(values)) {
+          const callback = { speakers: "onSpeakersChange", chapters: "onChaptersChange", topics: "onTopicsChange" }[key as keyof typeof values];
+          (fields.props[callback] as (value: RecordingTagsValue) => void)(value);
+        }
+      } };
   };
   return { state, render, async finish() { await settle(); await Promise.all(work); } };
 }
@@ -146,4 +156,18 @@ test("a details save failure never publishes and leaves the form available for r
   assert.deepEqual(review.state.publishes, []); assert.deepEqual(review.state.successes, []);
   assert.equal(review.render().primary.props.disabled, false);
   assert.match(review.state.errors[0], /Details could not save/);
+});
+
+test("publishing includes pending tags and every saved speaker even when the options section is folded", async () => {
+  const review = harness({ speaker: "Pastor A", speakers: ["Pastor A", "Pastor B"], chapters: ["John 1"], topics: ["Hope"] });
+  review.render().editTags({
+    speakers: { items: ["Pastor A", "Pastor B"], draft: "Doe, Jane" },
+    chapters: { items: ["John 1"], draft: "Romans 8:1, 3" },
+    topics: { items: ["Hope"], draft: "Grace, mercy" },
+  });
+  const click = review.render().click(); review.state.dialog.resolve(true); await click; await review.finish();
+  assert.deepEqual(review.state.saves[0].speakers, ["Pastor A", "Pastor B", "Doe, Jane"]);
+  assert.deepEqual(review.state.saves[0].chapters, ["John 1", "Romans 8:1, 3"]);
+  assert.deepEqual(review.state.saves[0].topics, ["Hope", "Grace, mercy"]);
+  assert.equal(review.state.publishes.length, 1);
 });

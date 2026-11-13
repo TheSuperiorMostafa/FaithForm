@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { updateScheduledStream } from "@/app/dashboard/live-streaming/actions";
 import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
 import { RecordingExtraFields, RecordingPrimaryFields } from "@/components/media/recording-details-fields";
+import { createRecordingTagsValue, recordingTagItems } from "@/components/media/recording-tags-field";
 import { RecordingVisibilityChoice } from "@/components/media/recording-visibility-choice";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
@@ -27,10 +28,10 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
   const [title, setTitle] = useState(event.title);
   const [seriesId, setSeriesId] = useState(event.seriesId ?? "");
   const [newSeries, setNewSeries] = useState("");
-  const [speaker, setSpeaker] = useState(event.speaker ?? "");
+  const [speakers, setSpeakers] = useState(createRecordingTagsValue(event.speakers ?? (event.speaker ? [event.speaker] : [])));
   const [description, setDescription] = useState(event.description ?? "");
-  const [chapters, setChapters] = useState(event.chapters?.join(", ") ?? "");
-  const [topics, setTopics] = useState(event.topics?.join(", ") ?? "");
+  const [chapters, setChapters] = useState(createRecordingTagsValue(event.chapters));
+  const [topics, setTopics] = useState(createRecordingTagsValue(event.topics));
   const [toWebsite, setToWebsite] = useState(event.recordingPublishToWebsite ?? (event.publicAccess && (settings.publishToWebsite || !appEnabled)));
   const [toApp, setToApp] = useState(appEnabled && event.recordingAppVisibility !== "none");
   const [audience, setAudience] = useState(event.recordingAppVisibility && event.recordingAppVisibility !== "none" ? event.recordingAppVisibility : settings.defaultVisibility);
@@ -42,7 +43,10 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
   function save() {
     const data = new FormData();
     // Keep folded More options in the save, exactly as recording review does.
-    for (const [key, value] of Object.entries({ event_id: event.id, title, series_id: seriesId, new_series_name: newSeries, speaker, description, chapters, topics })) data.set(key, value);
+    for (const [key, value] of Object.entries({ event_id: event.id, title, series_id: seriesId, new_series_name: newSeries, description })) data.set(key, value);
+    data.set("speakers_json", JSON.stringify(recordingTagItems(speakers)));
+    data.set("chapters_json", JSON.stringify(recordingTagItems(chapters)));
+    data.set("topics_json", JSON.stringify(recordingTagItems(topics)));
     data.set("app_visibility", appEnabled && toApp ? audience : "none");
     if (toWebsite) data.set("publish_to_website", "on");
     if (appEnabled && toApp && notify) data.set("notify_members", "on");
@@ -91,7 +95,7 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
                 <div className="flex flex-col gap-2"><Label htmlFor="upcoming-audience">Who can watch it in the app</Label><Select id="upcoming-audience" value={audience === "members" ? "followers" : audience} onChange={e => setAudience(e.target.value as typeof audience)}><option value="public">Everyone</option><option value="followers">People who follow your church</option></Select></div>
                 <RecordingVisibilityChoice checked={notify} onChange={setNotify} label="Let members know it's available" hint="Used when the recording is published." />
               </> : null}
-              <RecordingExtraFields idPrefix="upcoming" speaker={speaker} onSpeakerChange={setSpeaker} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
+              <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
             </fieldset>
           </AdvancedSection>
           <div className="flex flex-col gap-3 border-t border-border pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image.</p></div>

@@ -118,7 +118,7 @@ test("upcoming metadata update keeps unrelated scheduling and platform fields un
     async single() { return { data: { id: "event", church_id: "church", series_id: "series", artwork_url: "wide", speaker_tags: ["Pastor John"], description: "Hope", chapter_tags: ["John 3"], topic_tags: ["Grace"] }, error: null }; },
   };
   const db = { from(table: string) { assert.equal(table, "stream_events"); return query; } };
-  const event = await updateStreamEvent("event", "church", { title: "New title", seriesId: "series", artworkUrl: "wide", speaker: "Pastor John", description: "Hope", chapters: ["John 3"], topics: ["Grace"] }, db as never, "scheduled");
+  const event = await updateStreamEvent("event", "church", { title: "New title", seriesId: "series", artworkUrl: "wide", speakers: ["Pastor John"], description: "Hope", chapters: ["John 3"], topics: ["Grace"] }, db as never, "scheduled");
   assert.deepEqual(updates, { title: "New title", series_id: "series", artwork_url: "wide", speaker_tags: ["Pastor John"], description: "Hope", chapter_tags: ["John 3"], topic_tags: ["Grace"] });
   assert.deepEqual(filters, [["id", "event"], ["church_id", "church"], ["status", "scheduled"]]);
   assert.equal(event.seriesId, "series");
@@ -128,3 +128,4 @@ test("upcoming metadata update keeps unrelated scheduling and platform fields un
   assert.deepEqual(event.chapters, ["John 3"]);
   assert.deepEqual(event.topics, ["Grace"]);
 });
+

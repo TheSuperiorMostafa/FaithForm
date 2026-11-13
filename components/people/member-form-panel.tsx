@@ -14,6 +14,7 @@ import {
 import { moveAppConnectionToPerson } from "@/app/dashboard/people/claim-actions";
 import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
 import { ContactActions } from "@/components/people/contact-actions";
+import { MemberGroups } from "@/components/people/member-groups";
 import {
   MemberCareSection,
   MemberDocumentsSection,
@@ -211,7 +212,7 @@ const inputClassName =
  * One person.
  *
  * The title is their name. Under it: Call, Text and Email, when those exist.
- * Then four tabs — Details, Care, Documents, Family — each with a button that
+ * Then four tabs — Details, Notes, Documents, Family — each with a button that
  * says exactly what it saves, so nobody wonders whether "Save" on one tab
  * also saved the other.
  */
@@ -571,7 +572,7 @@ export function MemberFormPanel({
         >
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="details"><span className="text-[15px]">Details</span></TabsTrigger>
-            <TabsTrigger value="care"><span className="text-[15px]">Care</span></TabsTrigger>
+            <TabsTrigger value="care"><span className="text-[15px]">Notes</span></TabsTrigger>
             <TabsTrigger value="documents">
               <span className="text-[15px]">
                 Documents{documentCount != null && documentCount > 0 ? ` (${documentCount})` : ""}
@@ -600,6 +601,7 @@ export function MemberFormPanel({
                 onMoved={onAppConnectionMoved}
               />
             ) : null}
+            <MemberGroups memberId={member.id} />
             {detailsForm}
           </TabsContent>
           <TabsContent value="care" className="mt-6">

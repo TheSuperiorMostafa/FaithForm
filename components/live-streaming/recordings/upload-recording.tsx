@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Upload } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { prepareRecordingUpload, finishRecordingUpload, cancelRecordingUpload } from "@/app/dashboard/live-streaming/upload-actions";
 import { Button } from "@/components/ui/button";
@@ -22,14 +22,17 @@ export function UploadRecording() {
   const [stage, setStage] = useState("");
   const [optimizing, setOptimizing] = useState(false);
   const optimizationRef = useRef<AbortController | null>(null);
+  const uploadInFlight = useRef(false);
   const [pending, startTransition] = useTransition();
   // Keep the completed upload for a finalize retry: never send gigabytes twice.
   const [uploadedId, setUploadedId] = useState<string | null>(null);
 
   function upload() {
+    if (uploadInFlight.current) return;
     if (!file) { setError("Choose a video to upload."); return; }
     const invalid = validateRecordingUpload({ title, filename: file.name, size: file.size });
     if (invalid) { setError(invalid); return; }
+    uploadInFlight.current = true;
     setError(null);
     startTransition(async () => {
       let id = uploadedId;
@@ -93,8 +96,10 @@ export function UploadRecording() {
       } catch {
         setError("We couldn't finish the upload. Please try again.");
       } finally {
-        await releaseVideo?.();
-        setStage("");
+        try { await releaseVideo?.(); } finally {
+          uploadInFlight.current = false;
+          setStage("");
+        }
       }
     });
   }
@@ -109,15 +114,22 @@ export function UploadRecording() {
         <DialogHeader>
           <DialogTitle id="upload-recording-title">Upload recording</DialogTitle>
         </DialogHeader>
-        <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col">
+        <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col" aria-busy={pending}>
           <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
             <div className="space-y-2"><Label htmlFor="recording-upload-title">Recording title</Label><Input id="recording-upload-title" required maxLength={120} value={title} disabled={pending || Boolean(uploadedId)} onChange={(event) => setTitle(event.target.value)} /></div>
             <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); }} /></div>
             {pending && (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p role="status" className="text-sm text-muted-foreground">{stage}</p>
+              <div className="rounded-xl border border-border bg-muted/30 p-4">
+                <div role="status" aria-live="polite" className="flex items-start gap-3">
+                  <Loader2 className="mt-0.5 size-5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-medium">{stage || "Preparing your upload…"}</p>
+                    <p className="break-words text-sm text-muted-foreground">{file?.name}</p>
+                    <p className="text-sm text-muted-foreground">Keep this window open until your recording is ready to review.</p>
+                  </div>
+                </div>
                 {optimizing && (
-                  <Button type="button" variant="outline" onClick={() => {
+                  <Button className="mt-3" type="button" variant="outline" onClick={() => {
                     optimizationRef.current?.abort();
                     setOptimizing(false);
                   }}>

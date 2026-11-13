@@ -24,11 +24,12 @@ export async function getLocationSuggestions(
   const suggestions: LocationSuggestion[] = [];
   
   // Get church's own address
-  const { data: church } = await db
+  const { data: church, error: churchError } = await db
     .from("churches")
     .select("name, address, city, state, zip")
     .eq("id", churchId)
     .maybeSingle();
+  if (churchError) throw churchError;
   
   if (church) {
     const churchAddress = formatChurchAddress(church);
@@ -44,13 +45,14 @@ export async function getLocationSuggestions(
   
   // Get saved locations (filtered by query if provided)
   const searchQuery = query.trim().toLowerCase();
-  const { data: saved } = await db
+  const { data: saved, error: savedError } = await db
     .from("saved_event_locations")
     .select("id, name, full_address, use_count")
     .eq("church_id", churchId)
     .order("use_count", { ascending: false })
     .order("last_used_at", { ascending: false, nullsFirst: false })
     .limit(20);
+  if (savedError) throw savedError;
   
   if (saved) {
     for (const location of saved) {

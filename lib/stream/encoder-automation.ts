@@ -26,12 +26,24 @@ export async function authorizeEncoderSource(churchId: string, id: unknown) {
   const source = sourceIdSchema.safeParse(id);
   if (!source.success) return;
 
-  const { error } = await createAdminClient()
+  const client = createAdminClient();
+  // Keep the authenticated connection even while the pastor checks video
+  // privately. Enabling automation later must work on its next heartbeat,
+  // without requiring an otherwise unexplained OBS/ATEM restart.
+  // Ignore conflicts so this cannot reset an existing enabled setting.
+  const { error: insertError } = await client
+    .from("stream_encoder_automation")
+    .upsert({ church_id: churchId }, { onConflict: "church_id", ignoreDuplicates: true });
+  if (insertError) throw insertError;
+
+  const { data, error } = await client
     .from("stream_encoder_automation")
     .update({ authorized_source_id: source.data, authorized_at: new Date().toISOString() })
     .eq("church_id", churchId)
-    .or("enabled.eq.true,stop_after.not.is.null");
+    .select("church_id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Could not register encoder source.");
 }
 
 async function readState(churchId: string, client: SupabaseClient) {
@@ -158,3 +170,4 @@ export async function endDisconnectedEncoderBroadcasts(client = createAdminClien
     }
   }
 }
+

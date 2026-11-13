@@ -185,7 +185,7 @@ export function MemberCareSection({
             toast.error(result.error);
             return;
           }
-          toast.success(`Care notes saved for ${memberName}.`);
+          toast.success(`Notes saved for ${memberName}.`);
         });
       }}
     >
@@ -236,7 +236,7 @@ export function MemberCareSection({
 
       {isAdmin ? (
         <Button type="submit" size="lg" className="self-start" disabled={pending}>
-          {pending ? "Saving…" : "Save care notes"}
+          {pending ? "Saving…" : "Save notes"}
         </Button>
       ) : (
         <p className="text-[15px] text-muted-foreground">

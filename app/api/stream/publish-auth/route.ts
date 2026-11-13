@@ -85,9 +85,16 @@ export async function POST(request: Request) {
   }
 
   if (staticOk && (body.protocol === "rtmp" || body.protocol === "rtmps")) {
-    await authorizeEncoderSource(parsedPath.churchId, body.id).catch(() => {
+    try {
+      await authorizeEncoderSource(parsedPath.churchId, body.id);
+    } catch {
       console.error("Could not register authorized encoder source", parsedPath.churchId);
-    });
+      // A ready callback contains no church key. If its authenticated source
+      // was not saved here, every later callback will correctly refuse it.
+      // Let the encoder reconnect/retry instead of accepting an ingest which
+      // can never perform the enabled automatic Go Live operation.
+      return NextResponse.json({ error: "Encoder authorization is temporarily unavailable. Please reconnect." }, { status: 503 });
+    }
   }
 
   const destinations = getStreamDestinationsFromMetadata(
@@ -99,3 +106,4 @@ export async function POST(request: Request) {
     destinationCount: destinations.length,
   });
 }
+
