@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 
 import { PublicRecordingPlayer } from "@/components/live-streaming/public-recording-player";
 import { getChurchBySlug } from "@/lib/queries/giving";
+import { formatLongDate } from "@/lib/sites/format";
 import { formatDuration } from "@/lib/stream/format";
 import { getWebRecording } from "@/lib/stream/web-recordings";
 
@@ -56,11 +57,7 @@ export default async function PublicRecordingPage({ params }: PageProps) {
       <header className="flex flex-col gap-1">
         <h1 className="font-heading text-2xl font-bold">{recording.title}</h1>
         <p className="text-sm text-muted-foreground">
-          {new Date(recording.recordedAt).toLocaleDateString(undefined, {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
+          {formatLongDate(recording.recordedAt, church.timeZone)}
           {recording.durationSec ? ` · ${formatDuration(recording.durationSec)}` : ""}
           {recording.seriesName ? ` · ${recording.seriesName}` : ""}
         </p>

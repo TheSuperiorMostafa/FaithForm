@@ -568,8 +568,8 @@ export function RecordingReview({
                         appEnabled,
                       )
                     : appEnabled
-                      ? `Members will find it in the ${MEMBER_APP} under Services.`
-                      : "Anyone can watch it on your church website."}
+                      ? "Choose where to share this recording: the app, your website, or both."
+                      : "Publish this recording on your church website so visitors can watch it."}
                 </p>
               </div>
             </div>

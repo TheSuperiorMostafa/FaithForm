@@ -68,7 +68,7 @@ export function PublishCard({
     const ok = await confirmAction({
       title: "Take your website offline?",
       description:
-        "Your site will no longer open for visitors. Search engines may take time to remove it. Your pages and changes are kept, and you can publish again at any time.",
+        "Your website's pages and contact form will close to visitors. Your content stays saved so you can publish again. Published recording links stay available until you unpublish them in Live → Recordings. Search engines may take time to remove these pages.",
       confirmLabel: "Take website offline",
       destructive: true,
     });
