@@ -27,16 +27,13 @@ test("the upload object identity is derived from the authorized church and recor
   assert.notEqual(recordingUploadPath("church-a", "recording-a"), recordingUploadPath("church-a", "recording-b"));
 });
 
-test("upload completion checks ownership, object identity and bytes before canonical verification", () => {
+test("upload actions authorize admins and pass the authorized church into finalization", () => {
   const source = readFileSync("app/dashboard/live-streaming/upload-actions.ts", "utf8");
   assert.match(source, /featureActionError\("live_stream"\)/);
   assert.match(source, /if \(!auth\?\.isAdmin\)/);
   assert.match(source, /createSignedUploadUrl\(path, \{ upsert: false \}\)/);
   const finish = source.slice(source.indexOf("export async function finishRecordingUpload"), source.indexOf("export async function cancelRecordingUpload"));
   assert.match(finish, /await uploadAuth\(\)/);
-  assert.match(finish, /\.eq\("church_id", auth.churchId\)\.eq\("storage_path", path\)/);
-  assert.match(finish, /Number\(object.size\) !== Number\(row.total_bytes\)/);
-  assert.ok(finish.indexOf("Number(object.size)") < finish.indexOf('status: "ready"'));
-  assert.match(finish, /await verifyRecording\(\{ recordingId, churchId: auth.churchId, storagePath: path \}, admin\)/);
+  assert.match(finish, /finalizeUploadedRecording\(\{ churchId: auth.churchId, recordingId \}, createAdminClient\(\)\)/);
   assert.doesNotMatch(finish, /publishRecording|mobile_visibility|web_published_at/);
 });

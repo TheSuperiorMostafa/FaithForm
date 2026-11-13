@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { getCanonicalSiteUrl } from "@/lib/site-url";
 
 /**
  * Tenant resolution: incoming hostname -> which church's site to render.
@@ -15,7 +16,6 @@ function isReservedPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
-    pathname.startsWith("/sites/") ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml"
@@ -46,13 +46,17 @@ const RESERVED_SUBDOMAINS = new Set([
 
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
-function hostOf(request: NextRequest): string {
-  return (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
+export function siteHostname(host: string): string {
+  try {
+    return new URL(`http://${host.trim()}`).hostname.toLowerCase().replace(/\.$/, "");
+  } catch {
+    return "";
+  }
 }
 
 /** The app's own hostnames, which must keep serving the dashboard. */
 function platformHosts(): string[] {
-  const hosts: string[] = [];
+  const hosts: string[] = [new URL(getCanonicalSiteUrl()).hostname.toLowerCase()];
 
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
   if (siteUrl) {
@@ -66,12 +70,22 @@ function platformHosts(): string[] {
   const giveHost = process.env.NEXT_PUBLIC_GIVE_HOST?.trim().toLowerCase();
   if (giveHost) hosts.push(giveHost.split(":")[0]);
 
-  hosts.push("localhost", "127.0.0.1");
+  hosts.push("localhost", "127.0.0.1", "[::1]");
+
+  const rootHost = siteHostname(process.env.NEXT_PUBLIC_SITE_ROOT_HOST ?? "");
+  if (rootHost) hosts.push(rootHost, `www.${rootHost}`);
 
   const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.toLowerCase();
   if (vercelUrl) hosts.push(vercelUrl.split(":")[0]);
+  const deploymentUrl = process.env.VERCEL_URL?.toLowerCase();
+  if (deploymentUrl) hosts.push(deploymentUrl.split(":")[0]);
 
   return hosts;
+}
+
+/** Only configured app hosts may choose a church using a URL parameter. */
+export function isPlatformSiteHost(host: string): boolean {
+  return platformHosts().includes(siteHostname(host));
 }
 
 /**
@@ -105,8 +119,8 @@ type CacheEntry = { slug: string | null; expiresAt: number };
  * that is not ours becomes a database query per request.
  */
 const domainCache = new Map<string, CacheEntry>();
-const HIT_TTL_MS = 5 * 60 * 1000;
-const MISS_TTL_MS = 60 * 1000;
+const HIT_TTL_MS = 30 * 1000;
+const MISS_TTL_MS = 15 * 1000;
 const MAX_CACHE_ENTRIES = 500;
 
 function readCache(host: string): CacheEntry | null {
@@ -148,11 +162,14 @@ async function lookupCustomDomain(host: string): Promise<string | null> {
     const endpoint = new URL("/rest/v1/site_domains", url);
     endpoint.searchParams.set("select", "churches(slug)");
     endpoint.searchParams.set("hostname", `eq.${host}`);
+    endpoint.searchParams.set("status", "eq.live");
+    endpoint.searchParams.set("verified_at", "not.is.null");
     endpoint.searchParams.set("limit", "1");
 
     const response = await fetch(endpoint, {
       headers: { apikey: key, Authorization: `Bearer ${key}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(5000),
     });
 
     if (!response.ok) {
@@ -173,6 +190,13 @@ async function lookupCustomDomain(host: string): Promise<string | null> {
   }
 }
 
+/** One hostname authority shared by page routing and visitor submissions. */
+export async function churchSlugForHost(host: string): Promise<string | null> {
+  const hostname = siteHostname(host);
+  if (!hostname || isPlatformSiteHost(hostname)) return null;
+  return subdomainSlug(hostname) ?? lookupCustomDomain(hostname);
+}
+
 // ---------------------------------------------------------------------------
 // REWRITE
 // ---------------------------------------------------------------------------
@@ -190,13 +214,16 @@ export async function rewriteChurchSite(
   request: NextRequest,
 ): Promise<NextResponse | null> {
   const { pathname } = request.nextUrl;
+  const host = siteHostname(request.headers.get("host") ?? "");
+  if (isPlatformSiteHost(host)) return null;
   if (isReservedPath(pathname)) return null;
 
-  const host = hostOf(request);
-  if (!host || platformHosts().includes(host)) return null;
-
-  const slug = subdomainSlug(host) ?? (await lookupCustomDomain(host));
-  if (!slug) return null;
+  const slug = await churchSlugForHost(host);
+  // A foreign hostname must never fall through to the app or serve another
+  // church through /sites/<slug>. A removed/pending domain fails closed too.
+  if (!slug || pathname === "/sites" || pathname.startsWith("/sites/")) {
+    return new NextResponse("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
 
   const url = request.nextUrl.clone();
   url.pathname = `/sites/${slug}${pathname === "/" ? "" : pathname}`;

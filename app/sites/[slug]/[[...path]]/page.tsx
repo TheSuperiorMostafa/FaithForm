@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { cache } from "react";
 import { headers } from "next/headers";
+import { getChurchAuth } from "@/lib/auth/church";
+import { canAccessFeature, getFeatureAccess } from "@/lib/features/access";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
-import { canViewChurchSitePage, churchSiteBasePath, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
+import { availableWebsitePaths, canViewChurchSitePage, churchSiteBasePath, filterUnavailableSiteLinks, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
-import { getChurchAuth } from "@/lib/auth/church";
-import { isPublicFeatureEnabled } from "@/lib/features/public-access";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import {
   composeWebsiteSections,
   normalizeSitePath,
@@ -15,9 +15,9 @@ import {
   websiteSupportingPaths,
   websitePageDefForPath,
 } from "@/lib/sites/layout-mode";
-import { canPreviewDraftSite, isPublicSitePublication } from "@/lib/sites/preview-access";
 import { formatCityLine, formatServiceTime } from "@/lib/sites/format";
-import { getSiteBundle } from "@/lib/sites/queries";
+import { getSiteBundle, getSiteNavigationPages } from "@/lib/sites/queries";
+import { canPreviewDraftSite } from "@/lib/sites/preview-access";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
 
@@ -31,18 +31,16 @@ type PageProps = {
  *
  * Reachable two ways: rewritten here by middleware from the church's own
  * hostname, and directly at /sites/<slug>/… on the app domain. The second is
- * what gives church staff a preview before it has a domain pointed at it.
+ * what makes an unpublished site previewable before it has a domain pointed
+ * at it.
  *
  * Landing mode only serves `/` (hash tabs on one scroll). Website mode also
  * serves `/about`, `/visit`, and the other section pages; each subpage pulls
  * nav/footer chrome from the home page at render time.
  */
-// Draft authorization and unpublishing must be checked on every request.
-// A shared five-minute page cache could serve one staff preview to the public
-// or keep a taken-down site visible after its church withdraws it.
 export const dynamic = "force-dynamic";
 
-const loadPage = cache(async function loadPage(slug: string, path: string) {
+async function loadPage(slug: string, path: string) {
   const home = await getSiteBundle(slug, "/");
   if (!home) return null;
 
@@ -59,6 +57,8 @@ const loadPage = cache(async function loadPage(slug: string, path: string) {
 
   const page = await getSiteBundle(slug, path);
   if (!page) return null;
+  const primaryType = websitePageDefForPath(path)?.type;
+  if (primaryType && !page.sections.some(section => section.type === primaryType && section.isVisible)) return null;
 
   return {
     bundle: page,
@@ -71,25 +71,14 @@ const loadPage = cache(async function loadPage(slug: string, path: string) {
     homeStatus: home.page.status,
     sectionPageIds: Object.fromEntries(home.sections.map(section => [section.id, home.page.id])),
   };
-});
-
-const siteIsVisible = cache(async function siteIsVisible(
-  bundle: NonNullable<Awaited<ReturnType<typeof getSiteBundle>>>,
-  previewRequested: boolean,
-): Promise<boolean> {
-  if (!(await isPublicFeatureEnabled(bundle.churchId, "website"))) return false;
-  if (isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)) return true;
-  if (!previewRequested) return false;
-  return canPreviewDraftSite(bundle.churchId, await getChurchAuth());
-});
+}
 
 async function canReadPage(loaded: NonNullable<Awaited<ReturnType<typeof loadPage>>>, previewRequested: boolean) {
   let previewAuthorized = false;
   if (previewRequested) {
     const auth = await getChurchAuth();
-    previewAuthorized = canPreviewDraftSite(loaded.bundle.churchId, auth);
+    previewAuthorized = canPreviewDraftSite(loaded.bundle.churchId, auth) && canAccessFeature(await getFeatureAccess(), "website");
   }
-  if (!(await siteIsVisible(loaded.bundle, previewRequested))) return false;
   return canViewChurchSitePage({
     previewRequested, previewAuthorized,
     published: loaded.bundle.settings?.isPublished === true,
@@ -107,9 +96,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   const query = await searchParams;
   if (!(await canReadPage(loaded, query.preview === "1"))) return { title: "Not found", robots: { index: false, follow: false } };
 
-  // Match the page guard so draft content cannot leak through titles, previews,
-  // or Open Graph metadata when a visitor adds ?preview=1.
-  if (!(await siteIsVisible(bundle, query.preview === "1"))) {
+  // Matches the page's own check, so a disabled site does not leak the church's
+  // name and description through the tab title of a 404.
+  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
     return { title: "Not found", robots: { index: false, follow: false } };
   }
 
@@ -134,11 +123,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
         ? [bundle.profile.coverImageUrl]
         : undefined,
     },
-    robots:
-      query.preview === "1" ||
-      !isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)
-        ? { index: false, follow: false }
-        : undefined,
+    // An unpublished site is still reachable at its preview URL, so it has to
+    // tell crawlers to stay away rather than relying on obscurity.
+    robots: query.preview === "1" || !bundle.settings?.isPublished ? { index: false, follow: false } : undefined,
   };
 }
 
@@ -149,6 +136,16 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
   if (!loaded) notFound();
 
   const { bundle, sections } = loaded;
+
+  // Turning Website off in the control center takes the public site down, not
+  // just the church's editor. A feature that is "disabled" while still serving
+  // visitors on a custom domain is not disabled, and the control center says
+  // it is — so this is where that promise is kept. Preview does not bypass it:
+  // an off feature is off for everyone.
+  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
+    notFound();
+  }
+
   const isPreview = query.preview === "1";
   if (!(await canReadPage(loaded, isPreview))) notFound();
 
@@ -168,7 +165,7 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     // survive when that content also supports another page.
     const supporting = await Promise.all(websiteSupportingPaths(path).map(async (relatedPath) => {
       const related = await getSiteBundle(slug, relatedPath);
-      if (!related || !(await siteIsVisible(related, isPreview))) return [];
+      if (!related || (related.page.status !== "published" && !isPreview)) return [];
       return resolvePage({
         page: related.page,
         theme: related.theme,
@@ -193,10 +190,18 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     process.env.NEXT_PUBLIC_SITE_ROOT_HOST ?? "",
     process.env.VERCEL_URL ?? "", process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "",
   ]);
+  const availablePaths = loaded.layoutMode === "website"
+    ? availableWebsitePaths(await getSiteNavigationPages(bundle.churchId), isPreview)
+    : undefined;
+  const availableAnchors = loaded.layoutMode === "landing"
+    ? page.sections.flatMap(section => [section.ctx.anchor,
+        ...(section.type === "visit_cta" && (section.content.form as { enabled?: boolean } | undefined)?.enabled ? [`${section.ctx.anchor}-form`] : []),
+      ])
+    : undefined;
   page.sections = page.sections.map((section) => ({
     ...section,
     content: {
-      ...rewriteSiteNavigation(section.content, { slug, basePath, preview: isPreview }) as Record<string, unknown>,
+      ...rewriteSiteNavigation(filterUnavailableSiteLinks(section.content, { slug, availablePaths, availableAnchors }), { slug, basePath, preview: isPreview }) as Record<string, unknown>,
       ...(section.type === "site_nav" ? { homeHref: `${basePath || "/"}${isPreview ? "?preview=1" : ""}` } : {}),
     },
   }));

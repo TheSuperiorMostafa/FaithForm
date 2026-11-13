@@ -330,15 +330,22 @@ async function vercelFetch(
   path: string,
   init?: RequestInit,
 ): Promise<{ ok: boolean; status: number; body: Record<string, unknown> }> {
-  const response = await fetch(vercelUrl(config, path), {
-    ...init,
-    headers: {
-      authorization: `Bearer ${config.token}`,
-      "content-type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(vercelUrl(config, path), {
+      ...init,
+      headers: {
+        authorization: `Bearer ${config.token}`,
+        "content-type": "application/json",
+        ...(init?.headers ?? {}),
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch (error) {
+    console.error("[sites] domain provider unavailable", error);
+    return { ok: false, status: 503, body: {} };
+  }
 
   let body: Record<string, unknown> = {};
   try {
@@ -357,6 +364,7 @@ function vercelError(body: Record<string, unknown>, fallback: string): string {
 
 function makeVercelProvider(config: VercelConfig): DomainProvider {
   const base = `/v10/projects/${encodeURIComponent(config.projectId)}/domains`;
+  const existingDomainPath = (hostname: string) => `/v9/projects/${encodeURIComponent(config.projectId)}/domains/${encodeURIComponent(hostname)}`;
 
   /** Whether Vercel considers the hostname correctly pointed and serving. */
   async function serving(hostname: string): Promise<boolean> {
@@ -373,27 +381,34 @@ function makeVercelProvider(config: VercelConfig): DomainProvider {
     automated: true,
 
     async register(hostname) {
-      const { ok, status, body } = await vercelFetch(config, base, {
+      let { ok, status, body } = await vercelFetch(config, base, {
         method: "POST",
         body: JSON.stringify({ name: hostname }),
       });
 
-      // 409 means it is already on the project, which is the state we wanted.
-      if (!ok && status !== 409) {
+      // An existing domain may return 400 or 409. Neither proves that it is
+      // attached to *our* project; confirm that through the project-scoped read
+      // before treating a retry as success.
+      if (!ok && (status === 400 || status === 409)) {
+        const existing = await vercelFetch(config, existingDomainPath(hostname));
+        if (existing.ok) ({ ok, status, body } = existing);
+      }
+      if (!ok) {
         return { ok: false, error: vercelError(body, "Vercel rejected the domain.") };
       }
 
       return {
         ok: true,
         providerDomainId: (body.name as string | undefined) ?? hostname,
-        serving: await serving(hostname),
+        // Correct DNS alone does not complete a domain ownership challenge.
+        serving: body.verified === true && await serving(hostname),
       };
     },
 
     async status(hostname) {
       const { ok, body } = await vercelFetch(
         config,
-        `${base}/${encodeURIComponent(hostname)}`,
+        existingDomainPath(hostname),
       );
 
       if (!ok) {
@@ -403,14 +418,14 @@ function makeVercelProvider(config: VercelConfig): DomainProvider {
       return {
         ok: true,
         providerDomainId: (body.name as string | undefined) ?? hostname,
-        serving: await serving(hostname),
+        serving: body.verified === true && await serving(hostname),
       };
     },
 
     async remove(hostname) {
       const { ok, status, body } = await vercelFetch(
         config,
-        `${base}/${encodeURIComponent(hostname)}`,
+        existingDomainPath(hostname),
         { method: "DELETE" },
       );
 

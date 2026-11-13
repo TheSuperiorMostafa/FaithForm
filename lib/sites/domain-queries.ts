@@ -169,12 +169,7 @@ export async function getChurchDomains(
     ({ data, error } = await query(DOMAIN_COLUMNS_LEGACY));
   }
 
-  if (error) {
-    if (!isMissingDomainTable(error.message)) {
-      console.error("getChurchDomains:", error.message);
-    }
-    return [];
-  }
+  if (error) throw error;
 
   return ((data ?? []) as unknown as Row[]).map(toDomain);
 }
@@ -188,12 +183,7 @@ export async function getChurchDomainRequests(
     .eq("church_id", churchId)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    if (!isMissingDomainTable(error.message)) {
-      console.error("getChurchDomainRequests:", error.message);
-    }
-    return [];
-  }
+  if (error) throw error;
 
   return (data ?? []).map(toRequest);
 }
@@ -214,12 +204,7 @@ export async function getOpenDomainRequest(
     .limit(1)
     .maybeSingle();
 
-  if (error) {
-    if (!isMissingDomainTable(error.message)) {
-      console.error("getOpenDomainRequest:", error.message);
-    }
-    return null;
-  }
+  if (error) throw error;
 
   return data ? toRequest(data) : null;
 }
@@ -236,11 +221,13 @@ export async function hostnameClaim(
 ): Promise<{ churchId: string; churchName: string } | null> {
   const supabase = createAdminClient();
 
-  const { data: domain } = await supabase
+  const { data: domain, error: domainError } = await supabase
     .from("site_domains")
     .select("church_id, churches(name)")
     .eq("hostname", hostname)
     .maybeSingle();
+
+  if (domainError) throw domainError;
 
   if (domain?.church_id) {
     const church = domain.churches as { name?: string } | null;
@@ -250,13 +237,15 @@ export async function hostnameClaim(
     };
   }
 
-  const { data: request } = await supabase
+  const { data: request, error: requestError } = await supabase
     .from("site_domain_requests")
     .select("church_id, churches(name)")
     .eq("hostname", hostname)
     .in("status", OPEN_REQUEST_STATUSES)
     .limit(1)
     .maybeSingle();
+
+  if (requestError) throw requestError;
 
   if (request?.church_id) {
     const church = request.churches as { name?: string } | null;

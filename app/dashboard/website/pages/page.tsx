@@ -12,7 +12,7 @@ import {
   websiteSupportingPaths,
 } from "@/lib/sites/layout-mode";
 import { websitePageIntroField } from "@/lib/sites/page-intro";
-import { isPublicSitePublication } from "@/lib/sites/preview-access";
+import { sectionEditorFields } from "@/lib/sites/editor-fields";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { getWebsiteForChurch } from "@/lib/sites/queries";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -90,14 +90,7 @@ export default async function WebsitePagesPage({
       const master = SECTION_REGISTRY[row.type];
       const content = contentById.get(row.id);
       if (!master || !content) return [];
-
-      // Light uses this photo behind the hero, rather than as a thin strip.
-      // A banner crop would discard most of the photo before it is enlarged.
-      const fields = master.fields?.map((field) =>
-        row.type === "hero" && site.theme.key === "light" && field.type === "image" && field.key === "image"
-          ? { ...field, label: "Background photo", aspect: "background" as const, help: undefined }
-          : field,
-      ) ?? null;
+      const fields = sectionEditorFields(master.fields, row.type, site.theme.key);
 
       return [
         {
@@ -159,9 +152,11 @@ export default async function WebsitePagesPage({
 
   return (
     <PagesWorkspace
+      key={`${auth.userId}:${auth.churchId}`}
+      recoveryScope={{ userId: auth.userId, churchId: auth.churchId }}
       sections={sections}
       canEdit={auth.isAdmin}
-      isLive={isPublicSitePublication(site.page.status, site.settings?.isPublished)}
+      isLive={site.page.status === "published"}
       initialOpenId={openId}
       linkTargets={linkTargets}
       previewUrl={previewUrl}

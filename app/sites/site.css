@@ -22,9 +22,9 @@
 }
 
 [data-site] {
-  --site-fg: var(--site-ink);
-  --site-fg-soft: var(--site-body);
-  --site-fg-faint: var(--site-muted);
+  --site-fg: var(--site-on-canvas, var(--site-ink));
+  --site-fg-soft: var(--site-on-canvas-body, var(--site-body));
+  --site-fg-faint: var(--site-on-canvas-muted, var(--site-muted));
   --site-eyebrow: var(--site-gold);
   --site-rule: color-mix(in srgb, var(--site-ink) 10%, transparent);
   --site-card-bg: var(--site-surface);
@@ -33,9 +33,10 @@
   margin: 0 auto;
   max-width: var(--site-max-width);
   background: var(--site-canvas);
-  color: var(--site-ink);
+  color: var(--site-on-canvas, var(--site-ink));
   font-family: var(--site-font-body);
   -webkit-font-smoothing: antialiased;
+  overflow-wrap: anywhere;
 }
 
 [data-site] *,
@@ -60,15 +61,15 @@
 
 .site-surface-ink,
 .site-surface-ink-strong {
-  --site-fg: #fff;
-  --site-fg-soft: rgba(255, 255, 255, 0.78);
-  --site-fg-faint: rgba(255, 255, 255, 0.55);
-  --site-eyebrow: var(--site-accent);
+  --site-fg: var(--site-on-ink, #fff);
+  --site-fg-soft: var(--site-on-ink-body, rgba(255, 255, 255, 0.78));
+  --site-fg-faint: var(--site-on-ink-muted, rgba(255, 255, 255, 0.55));
+  --site-eyebrow: var(--site-on-ink-accent, var(--site-accent));
   --site-rule: rgba(255, 255, 255, 0.14);
   --site-card-bg: rgba(255, 255, 255, 0.05);
   --site-card-border: rgba(255, 255, 255, 0.1);
 
-  color: #fff;
+  color: var(--site-fg);
 }
 
 .site-surface-ink {
@@ -76,21 +77,25 @@
 }
 
 .site-surface-ink-strong {
+  --site-fg: var(--site-on-ink-strong, #fff);
+  --site-fg-soft: var(--site-on-ink-strong-body, rgba(255, 255, 255, 0.78));
+  --site-fg-faint: var(--site-on-ink-strong-muted, rgba(255, 255, 255, 0.55));
+  --site-eyebrow: var(--site-on-ink-strong-accent, var(--site-accent));
   background: var(--site-ink-strong);
 }
 
 .site-surface-canvas,
 .site-surface-canvas-alt,
 .site-surface-surface {
-  --site-fg: var(--site-ink);
-  --site-fg-soft: var(--site-body);
-  --site-fg-faint: var(--site-muted);
-  --site-eyebrow: var(--site-gold);
+  --site-fg: var(--site-on-canvas, var(--site-ink));
+  --site-fg-soft: var(--site-on-canvas-body, var(--site-body));
+  --site-fg-faint: var(--site-on-canvas-muted, var(--site-muted));
+  --site-eyebrow: var(--site-on-canvas-accent, var(--site-gold));
   --site-rule: color-mix(in srgb, var(--site-ink) 10%, transparent);
   --site-card-bg: var(--site-surface);
   --site-card-border: color-mix(in srgb, var(--site-ink) 8%, transparent);
 
-  color: var(--site-ink);
+  color: var(--site-fg);
 }
 
 .site-surface-canvas {
@@ -98,24 +103,32 @@
 }
 
 .site-surface-canvas-alt {
+  --site-fg: var(--site-on-canvas-alt, var(--site-ink));
+  --site-fg-soft: var(--site-on-canvas-alt-body, var(--site-body));
+  --site-fg-faint: var(--site-on-canvas-alt-muted, var(--site-muted));
+  --site-eyebrow: var(--site-on-canvas-alt-accent, var(--site-gold));
   background: var(--site-canvas-alt);
 }
 
 .site-surface-surface {
+  --site-fg: var(--site-on-surface, var(--site-ink));
+  --site-fg-soft: var(--site-on-surface-body, var(--site-body));
+  --site-fg-faint: var(--site-on-surface-muted, var(--site-muted));
+  --site-eyebrow: var(--site-on-surface-accent, var(--site-gold));
   background: var(--site-surface);
 }
 
 .site-surface-accent {
-  --site-fg: var(--site-accent-ink);
-  --site-fg-soft: var(--site-ink-soft);
-  --site-fg-faint: color-mix(in srgb, var(--site-accent-ink) 62%, transparent);
-  --site-eyebrow: color-mix(in srgb, var(--site-accent-ink) 60%, transparent);
+  --site-fg: var(--site-on-accent, var(--site-accent-ink));
+  --site-fg-soft: var(--site-on-accent-body, var(--site-ink-soft));
+  --site-fg-faint: var(--site-on-accent-muted, color-mix(in srgb, var(--site-accent-ink) 62%, transparent));
+  --site-eyebrow: var(--site-on-accent-accent, color-mix(in srgb, var(--site-accent-ink) 60%, transparent));
   --site-rule: color-mix(in srgb, var(--site-accent-ink) 14%, transparent);
   --site-card-bg: var(--site-surface);
   --site-card-border: color-mix(in srgb, var(--site-accent-ink) 8%, transparent);
 
   background: var(--site-accent);
-  color: var(--site-accent-ink);
+  color: var(--site-on-accent, var(--site-accent-ink));
 }
 
 /* --------------------------------------------------------------------------
@@ -171,7 +184,7 @@
 
 .site-surface-ink .site-accent-text,
 .site-surface-ink-strong .site-accent-text {
-  color: var(--site-accent);
+  color: var(--site-eyebrow);
 }
 
 .site-lede {
@@ -259,13 +272,13 @@
 
 .site-btn-solid {
   background: var(--site-accent);
-  color: var(--site-accent-ink);
+  color: var(--site-on-accent, var(--site-accent-ink));
 }
 
 /* On an accent-coloured section the accent button would vanish, so it flips. */
 .site-surface-accent .site-btn-solid {
   background: var(--site-ink);
-  color: #fff;
+  color: var(--site-on-ink, #fff);
 }
 
 .site-btn-outline {
@@ -351,6 +364,7 @@
 }
 
 .site-nav-brand {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -367,10 +381,11 @@
 }
 
 .site-nav-title {
+  overflow-wrap: anywhere;
   font-family: var(--site-font-display);
   font-weight: 700;
   font-size: 18px;
-  color: #fff;
+  color: var(--site-on-ink, #fff);
   letter-spacing: -0.01em;
   line-height: 1.02;
 }
@@ -378,7 +393,7 @@
 .site-nav-sub {
   font-size: 9.5px;
   letter-spacing: 0.2em;
-  color: var(--site-accent);
+  color: var(--site-on-ink-accent, var(--site-accent));
   text-transform: uppercase;
   margin-top: 2px;
 }
@@ -388,7 +403,7 @@
   align-items: center;
   gap: 30px;
   font-size: 14.5px;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--site-on-ink, rgba(255, 255, 255, 0.85));
   font-weight: 500;
 }
 
@@ -411,7 +426,7 @@
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  color: var(--site-on-ink, #fff);
   font: 600 13px/1 inherit;
   font-family: inherit;
   letter-spacing: 0.04em;
@@ -456,7 +471,7 @@
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #fff;
+  color: var(--site-on-ink, #fff);
   font-size: 16px;
   font-weight: 600;
   text-decoration: none;
@@ -528,9 +543,7 @@
  * comp inset this by 12px; edge-to-edge reads as intentional where the inset
  * read as a misaligned bar. */
 .site-hero-media {
-  /* Preserve the wide crop at phone widths as well as the 1280px preview. */
-  height: auto;
-  aspect-ratio: 1280 / 220;
+  height: 220px;
   margin: 0;
   overflow: hidden;
 }
@@ -544,7 +557,7 @@
  * this top rule. Either section can still be reordered independently. */
 .site-strip {
   display: grid;
-  grid-template-columns: repeat(var(--site-cols, 4), 1fr);
+  grid-template-columns: repeat(var(--site-cols, 4), minmax(0, 1fr));
   border-top: 1px solid var(--site-rule);
 }
 
@@ -595,7 +608,7 @@
 
 .site-grid {
   display: grid;
-  grid-template-columns: repeat(var(--site-cols, 3), 1fr);
+  grid-template-columns: repeat(var(--site-cols, 3), minmax(0, 1fr));
   gap: 22px;
 }
 
@@ -752,7 +765,7 @@
   font-family: var(--site-font-display);
   font-size: 20px;
   font-weight: 700;
-  color: var(--site-ink);
+  color: var(--site-on-surface, var(--site-ink));
 }
 
 .site-staff-role {
@@ -782,24 +795,24 @@
   border-radius: var(--site-radius-panel);
   padding: 34px 36px;
   box-shadow: 0 26px 60px -28px color-mix(in srgb, var(--site-ink) 55%, transparent);
-  color: var(--site-ink);
+  color: var(--site-on-surface, var(--site-ink));
 }
 
 .site-panel-ink {
   background: var(--site-ink);
-  color: #fff;
+  color: var(--site-on-ink, #fff);
 }
 
 .site-panel-title {
   font-family: var(--site-font-display);
   font-size: 22px;
   font-weight: 700;
-  color: var(--site-ink);
+  color: var(--site-on-surface, var(--site-ink));
   margin-bottom: 22px;
 }
 
 .site-panel-ink .site-panel-title {
-  color: #fff;
+  color: var(--site-on-ink, #fff);
 }
 
 .site-fact {
@@ -826,7 +839,7 @@
 .site-fact-title {
   font-weight: 600;
   font-size: 15.5px;
-  color: var(--site-ink);
+  color: var(--site-on-surface, var(--site-ink));
 }
 
 .site-fact-body {
@@ -850,7 +863,7 @@
   font-family: var(--site-font-display);
   font-size: 19px;
   font-weight: 700;
-  color: var(--site-ink);
+  color: var(--site-on-surface, var(--site-ink));
 }
 
 .site-form-desc {
@@ -1128,7 +1141,7 @@
   font-weight: 700;
   font-size: 20px;
   background: transparent;
-  color: #fff;
+  color: var(--site-on-ink, #fff);
   border: 1px solid color-mix(in srgb, var(--site-accent) 30%, transparent);
   cursor: pointer;
   transition: transform 0.18s ease, background 0.18s;
@@ -1728,9 +1741,31 @@
 [data-layout="website"] .site-nav-title { overflow-wrap: anywhere; }
 [data-layout="website"] .site-nav-menu { flex: none; }
 /* Wood's gold label was designed for its dark home strip. Visit uses canvas. */
-[data-layout="website"][data-page="/visit"] .site-strip-label { color: var(--site-gold); }
+[data-layout="website"][data-page="/visit"] .site-strip-label { color: var(--site-on-canvas-alt-accent, var(--site-gold)); }
+[data-layout="website"][data-page="/visit"] .site-strip { color: var(--site-on-canvas-alt, var(--site-ink)); }
 /* A full website can have eight destinations; switch before they squeeze the name. */
 @media (max-width: 1100px) {
   [data-layout="website"] .site-nav-links { display: none; }
   [data-layout="website"] .site-nav-menu { display: block; }
 }
+
+/* Grid children must shrink before long church names, URLs or translated copy
+ * can wrap. This also covers one-page layouts, not just separate pages. */
+[data-site] :where(.site-split,.site-grid,.site-strip,.site-footer-grid,.site-visit-grid) > * { min-width: 0; }
+.site-panel { --site-fg: var(--site-on-surface, var(--site-ink)); --site-fg-soft: var(--site-on-surface-body, var(--site-body)); --site-fg-faint: var(--site-on-surface-muted, var(--site-muted)); }
+.site-panel-ink { --site-fg: var(--site-on-ink, #fff); --site-fg-soft: var(--site-on-ink-body, rgba(255,255,255,.78)); --site-fg-faint: var(--site-on-ink-muted, rgba(255,255,255,.55)); }
+.site-staff-bio { color: var(--site-on-surface-muted, var(--site-muted)); }
+.site-staff-role { color: var(--site-on-surface-accent, var(--site-gold)); }
+.site-amount[aria-pressed="true"] { color: var(--site-on-accent, var(--site-accent-ink)); }
+.site-give-note { color: var(--site-on-ink-muted, rgba(255,255,255,.55)); }
+/* The Light landing header/hero are over a permanently dark photo overlay. */
+[data-layout="landing"][data-theme="light"] .site-hero { --site-fg: #fff; --site-fg-soft: rgba(255,255,255,.9); }
+[data-layout="landing"][data-theme="light"] :is(.site-nav-title,.site-nav-links,.site-nav-menu-btn) { color: #fff; }
+[data-layout="website"][data-theme="light"] :is(.site-nav-title,.site-nav-links,.site-nav-menu-btn) { color: var(--site-on-canvas, var(--site-ink)); }
+[data-layout="website"][data-theme="light"] .site-nav-sub { color: var(--site-on-canvas-accent, var(--site-gold)); }
+
+.site-fact-icon { color: var(--site-on-accent, var(--site-accent-ink)); }
+.site-fact-body, .site-form-desc, .site-label, .site-form-note, .site-map-sub { color: var(--site-on-surface-muted, var(--site-muted)); }
+.site-input, .site-textarea, .site-map-card, .site-map-card .site-btn-quiet { color: var(--site-on-surface, var(--site-ink)); }
+.site-panel-label, .site-footer-sub, .site-footer-col-head { color: var(--site-eyebrow); }
+[data-layout="landing"][data-theme="light"] .site-nav-sub { color: #fff; }

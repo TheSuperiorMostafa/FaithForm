@@ -10,6 +10,9 @@ import {
   saveSectionContent,
   setSectionVisible,
 } from "@/app/dashboard/website/actions";
+import { isRecoveryRecord, websiteRecoveryKey, type WebsiteRecoveryScope } from "@/components/website-admin/draft-recovery";
+import { DraftRecoveryNotice } from "@/components/website-admin/draft-recovery-notice";
+import { flushWebsiteEdits } from "@/components/website-admin/editor-save-guard";
 import { SaveStatus } from "@/components/website-admin/save-status";
 import {
   SectionFieldsForm,
@@ -62,6 +65,7 @@ function siteHeadline(content: Record<string, unknown>): string | null {
 
 export function SectionList({
   sections,
+  recoveryScope,
   canEdit,
   isLive,
   initialOpenId = null,
@@ -69,6 +73,7 @@ export function SectionList({
   onSaved,
 }: {
   sections: EditableSection[];
+  recoveryScope: WebsiteRecoveryScope;
   canEdit: boolean;
   /** Whether edits reach visitors straight away, for honest confirm copy. */
   isLive: boolean;
@@ -98,13 +103,19 @@ export function SectionList({
     setOrder(next);
 
     startTransition(async () => {
-      const result = await reorderSections(next.map((s) => s.id));
-      if (!result.ok) {
+      try {
+        const result = await reorderSections(next.map((s) => s.id));
+        if (!result.ok) {
+          setOrder(order);
+          toast.error(result.error);
+          return;
+        }
+        onSaved?.();
+      } catch (cause) {
+        console.error("[website] Section order request failed:", cause);
         setOrder(order);
-        toast.error(result.error);
-        return;
+        toast.error("We couldn’t confirm the section order. Refresh to check it, then try moving the section again.");
       }
-      onSaved?.();
     });
   }
 
@@ -114,22 +125,28 @@ export function SectionList({
     );
 
     startTransition(async () => {
-      const result = await setSectionVisible(section.id, visible);
-      if (!result.ok) {
-        setOrder((current) =>
-          current.map((s) =>
-            s.id === section.id ? { ...s, isVisible: !visible } : s,
-          ),
+      try {
+        const result = await setSectionVisible(section.id, visible);
+        if (!result.ok) {
+          setOrder((current) =>
+            current.map((s) =>
+              s.id === section.id ? { ...s, isVisible: !visible } : s,
+            ),
+          );
+          toast.error(result.error);
+          return;
+        }
+        toast.success(
+          visible
+            ? `${section.label} is showing on your website.`
+            : `${section.label} is hidden from your website.`,
         );
-        toast.error(result.error);
-        return;
+        onSaved?.();
+      } catch (cause) {
+        console.error("[website] Section visibility request failed:", cause);
+        setOrder(current => current.map(row => row.id === section.id ? { ...row, isVisible: section.isVisible } : row));
+        toast.error("We couldn’t confirm whether that section is showing. Refresh to check it, then try again.");
       }
-      toast.success(
-        visible
-          ? `${section.label} is showing on your website.`
-          : `${section.label} is hidden from your website.`,
-      );
-      onSaved?.();
     });
   }
 
@@ -139,13 +156,16 @@ export function SectionList({
         <SectionRow
           key={section.id}
           section={section}
+          recoveryScope={recoveryScope}
           index={index}
           total={order.length}
           open={openId === section.id}
           scrollOnMount={initialOpenId === section.id}
-          onToggleOpen={() =>
-            setOpenId(openId === section.id ? null : section.id)
-          }
+          onToggleOpen={async () => {
+            if (await flushWebsiteEdits()) {
+              setOpenId(openId === section.id ? null : section.id);
+            }
+          }}
           onMove={move}
           onToggleVisible={toggleVisible}
           onSaved={onSaved}
@@ -161,6 +181,7 @@ export function SectionList({
 
 function SectionRow({
   section,
+  recoveryScope,
   index,
   total,
   open,
@@ -175,6 +196,7 @@ function SectionRow({
   busy,
 }: {
   section: EditableSection;
+  recoveryScope: WebsiteRecoveryScope;
   index: number;
   total: number;
   open: boolean;
@@ -190,7 +212,13 @@ function SectionRow({
 }) {
   const [draft, setDraft] = useState(section.content);
   const [saving, startSaving] = useTransition();
+  const [restoring, setRestoring] = useState(false);
   const rowRef = useRef<HTMLDivElement | null>(null);
+  const editorMounted = useRef(true);
+  useEffect(() => {
+    editorMounted.current = true;
+    return () => { editorMounted.current = false; };
+  }, []);
   const locked = section.fields === null;
   const headline = siteHeadline(section.content);
 
@@ -204,15 +232,34 @@ function SectionRow({
   // Only autosave while the editor is actually open. A closed section keeps its
   // draft in state, and saving it in the background would write content the
   // church is not looking at.
-  const { status, acceptSavedValue, runExclusive } = useAutosave(
+  const { status, saveNow, adoptSaved, hasUnsavedChanges, recovery, recoveryWarning, restoreRecovered, discardRecovered, backupDraft } = useAutosave(
     draft,
     async (content) => {
       const result = await saveSectionContent({ sectionId: section.id, content });
       if (result.ok) onSaved?.();
       return result;
     },
-    { enabled: open && canEdit && !locked },
+    {
+      enabled: open && canEdit && !locked,
+      recoveryKey: canEdit && !locked ? websiteRecoveryKey(recoveryScope, `section:${section.id}`) : undefined,
+      validateRecovery: isRecoveryRecord,
+      autosaveRecovered: () => canEdit && !locked,
+    },
   );
+
+  const lastServerContent = useRef(section.content);
+
+  // A refresh can carry a reset or a just-saved value after a workspace
+  // remount. Follow it only while this row has no unsaved local work.
+  useEffect(() => {
+    if (lastServerContent.current === section.content) return;
+    lastServerContent.current = section.content;
+    if (hasUnsavedChanges() || recovery) return;
+    adoptSaved(section.content);
+    setDraft(section.content);
+    // Only a new server value triggers adoption; local typing stays local.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section.content]);
 
   async function reset() {
     const ok = await confirmAction({
@@ -230,44 +277,47 @@ function SectionRow({
 
     startSaving(async () => {
       try {
-        const result = await runExclusive(async () => {
-          const restored = await resetSection(section.id);
-          if (restored.ok) {
-            acceptSavedValue(restored.content);
-            setDraft(restored.content);
-          }
-          return restored;
-        });
+        // Finish any old write before deleting its override; otherwise its late
+        // response could put the removed edits straight back.
+        if (!(await flushWebsiteEdits())) return;
+        const result = await resetSection(section.id);
         if (!result.ok) {
           toast.error(result.error);
           return;
         }
+        // Adopt what the server restored, so the fields show the default the
+        // church just asked for instead of the edits it threw away. Without this
+        // autosave would write the old edits straight back.
+        adoptSaved(result.content);
+        setDraft(result.content);
         onSaved?.();
 
         undoToast(
           `${section.label} is back to how it started.`,
           async () => {
-            const undo = runExclusive(async () => {
-              const restored = await saveSectionContent({ sectionId: section.id, content: previous });
-              if (restored.ok) {
-                acceptSavedValue(previous);
-                setDraft(previous);
-                onSaved?.();
-              }
-              return restored;
-            });
-            startSaving(async () => { await undo; });
+            setRestoring(true);
             try {
-              const restored = await undo;
+              if (!(await flushWebsiteEdits())) return "Your changes have not saved. Try saving again before restoring this section.";
+              const restored = await saveSectionContent({
+                sectionId: section.id,
+                content: previous,
+              });
               if (!restored.ok) return restored.error;
-            } catch {
-              return "We couldn't restore those changes. Please try again.";
-            }
-          },
-          { undoneMessage: `Your changes to ${section.label} are back.` },
-        );
-      } catch {
-        toast.error("We couldn't reset this section. Please try again.");
+              adoptSaved(previous);
+              setDraft(previous);
+              onSaved?.();
+          } catch (cause) {
+            console.error("[website] Section restore request failed:", cause);
+            return "We couldn’t restore your changes. Keep this page open and try again.";
+          } finally {
+            setRestoring(false);
+          }
+        },
+        { undoneMessage: `Your changes to ${section.label} are back.` },
+      );
+      } catch (cause) {
+        console.error("[website] Section reset request failed:", cause);
+        toast.error("We couldn’t confirm the reset. Refresh to check this section before trying again.");
       }
     });
   }
@@ -276,11 +326,11 @@ function SectionRow({
     <div
       ref={rowRef}
       className={cn(
-        "scroll-mt-4 rounded-xl border border-border bg-card shadow-sm",
+        "scroll-mt-6 rounded-2xl border border-border bg-card shadow-card",
         !section.isVisible && "bg-muted/40",
       )}
     >
-      <div className="flex flex-wrap items-center gap-3 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
         {/* Room for a heading to read on one line: when the card is narrow the
          * buttons drop below it instead of squeezing it into a column. */}
         <div className="min-w-0 flex-[1_1_16rem]">
@@ -318,26 +368,24 @@ function SectionRow({
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             aria-label={`Move ${section.label} up`}
             disabled={index === 0 || busy || !canEdit}
             onClick={() => onMove(index, -1)}
           >
-            <ArrowUp className="size-4" aria-hidden /> <span className="hidden sm:inline">Up</span>
+            <ArrowUp className="size-4" aria-hidden /> Move up
           </Button>
           <Button
             type="button"
             variant="ghost"
-            size="sm"
             aria-label={`Move ${section.label} down`}
             disabled={index === total - 1 || busy || !canEdit}
             onClick={() => onMove(index, 1)}
           >
-            <ArrowDown className="size-4" aria-hidden /> <span className="hidden sm:inline">Down</span>
+            <ArrowDown className="size-4" aria-hidden /> Move down
           </Button>
           <label className="flex min-h-11 items-center gap-2 px-2 text-[15px] font-medium">
             <Switch
@@ -351,9 +399,12 @@ function SectionRow({
           {!locked ? (
             <Button
               type="button"
-              size="sm"
               variant={open ? "default" : "outline"}
-              onClick={onToggleOpen}
+              disabled={saving || restoring || Boolean(recovery)}
+              onClick={async () => {
+                if (open && !(await saveNow()).ok) return;
+                onToggleOpen();
+              }}
               aria-expanded={open}
             >
               {open ? "Done" : "Edit"}
@@ -362,28 +413,35 @@ function SectionRow({
         </div>
       </div>
 
+      {canEdit && (recovery || recoveryWarning) ? <div className="px-4 pb-4 sm:px-5">
+        <DraftRecoveryNotice available={Boolean(recovery)} warning={recoveryWarning} onRestore={() => {
+          const restored = restoreRecovered();
+          if (restored) setDraft(restored);
+        }} onDiscard={discardRecovered} />
+      </div> : null}
+
       {open && section.fields ? (
-        <div className="border-t border-border p-3 sm:p-4">
-          <fieldset disabled={saving || !canEdit} className="min-w-0">
+        <div className="border-t border-border p-4 sm:p-6">
+          <fieldset disabled={!canEdit || saving || restoring || Boolean(recovery)} className="min-w-0">
             <SectionFieldsForm
               fields={section.fields}
               value={draft}
               onChange={setDraft}
+              onRecoverChange={content => { if (!editorMounted.current) backupDraft(content); }}
               idPrefix={section.id}
               linkTargets={linkTargets}
             />
           </fieldset>
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-            <SaveStatus status={status} />
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+            <SaveStatus status={status} onRetry={() => void saveNow()} />
             <Button
               type="button"
-              size="sm"
               variant="ghost"
               onClick={() => void reset()}
-              disabled={saving || !canEdit || !section.hasOverride}
+              disabled={saving || restoring || !canEdit || !section.hasOverride}
             >
-              <RotateCcw className="size-4" aria-hidden /> <span className="hidden sm:inline">Reset</span>
+              <RotateCcw className="size-4" aria-hidden /> Reset to original
             </Button>
           </div>
 

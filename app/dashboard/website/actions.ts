@@ -4,21 +4,20 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { requireChurchAuth } from "@/lib/auth/church";
 import { isPlatformAdminUserId } from "@/lib/auth/superadmin";
 import { customCssWrite } from "@/lib/sites/design-write";
-import { requireChurchAuth } from "@/lib/auth/church";
 import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
-import {
-  getChurchProfile,
-  profileToFormState,
-  upsertChurchProfile,
-} from "@/lib/queries/church-profile";
-import type { ChurchProfile } from "@/types/church-profile";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { applySiteLayoutMode } from "@/lib/sites/apply-layout-mode";
 import { generateSite } from "@/lib/sites/generate";
+import { siteDetailsRowId } from "@/lib/sites/details-identity";
+import { editableSectionContent } from "@/lib/sites/section-input";
+import { websitePageIntroField } from "@/lib/sites/page-intro";
+import { websitePageDefForType } from "@/lib/sites/layout-mode";
+import type { SectionField } from "@/lib/sites/contract";
 import {
   isSiteLayoutMode,
   type SiteLayoutMode,
@@ -28,6 +27,7 @@ import {
   diffPatch,
   resolveSectionBaseline,
   sanitizeTokens,
+  deepMerge,
 } from "@/lib/sites/resolve";
 import { buildSiteProfile, getSiteBundle } from "@/lib/sites/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -136,14 +136,19 @@ export async function createWebsite(
 
   // Guard against a double-click or two admins building at once — the unique
   // index on (church_id, path) would otherwise surface as a raw database error.
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("site_pages")
-    .select("id")
+    .select("id, status")
     .eq("church_id", auth.churchId)
     .eq("path", "/")
     .maybeSingle();
 
-  if (existing) return fail("Your website has already been built.");
+  if (existingError) return fail(toUserError(existingError, "Your website could not be checked. Try again."));
+  if (existing) {
+    const { count, error } = await supabase.from("site_sections").select("id", {count:"exact", head:true}).eq("church_id",auth.churchId);
+    if (error) return fail(toUserError(error, "Your website could not be checked. Try again."));
+    if ((count ?? 0)>0 || existing.status === "published") return fail("Your website has already been built. Refresh this page to open it.");
+  }
 
   const profile = await buildSiteProfile(auth.churchId);
   if (!profile) return fail("Your church profile could not be loaded.");
@@ -154,51 +159,15 @@ export async function createWebsite(
 
   const draft = await generateSite(auth.churchId, profile);
 
-  const { error: settingsError } = await supabase.from("site_settings").upsert(
-    {
-      church_id: auth.churchId,
-      theme_key: themeKey,
-      is_published: false,
-      layout_mode: "landing",
-      contact_email: profile.email,
-    },
-    { onConflict: "church_id" },
-  );
-  if (settingsError) return fail(toUserError(settingsError, "We couldn't save your website settings."));
-
-  const { data: page, error: pageError } = await supabase
-    .from("site_pages")
-    .insert({
-      church_id: auth.churchId,
-      path: "/",
-      title: draft.title,
-      meta_description: draft.metaDescription,
-      status: "draft",
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (pageError || !page) {
-    return fail(toUserError(pageError, "We couldn't create your website."));
-  }
-
-  const { error: sectionsError } = await supabase.from("site_sections").insert(
-    draft.sections.map((section, index) => ({
-      page_id: page.id as string,
-      church_id: auth.churchId,
-      type: section.type,
-      sort_order: index * 10,
-      is_visible: section.isVisible,
-      props: section.props,
-    })),
-  );
-
-  if (sectionsError) {
-    // Leaving a page with no sections behind would render an empty site and
-    // block a retry on the "already built" check above.
-    await supabase.from("site_pages").delete().eq("id", page.id as string);
-    return fail(toUserError(sectionsError, "We couldn't create your website."));
-  }
+  const { data: created, error } = await supabase.rpc("create_site_draft", {
+    p_church_id: auth.churchId,
+    p_theme: themeKey,
+    p_draft: draft,
+    // Follow the shared church email unless a separate recipient was explicitly set.
+    p_contact_email: null,
+  });
+  if (error) return fail(toUserError(error, "We couldn't create your website. Your existing content is safe. Try again."));
+  if (!created) return fail("Your website has already been built. Refresh this page to open it.");
 
   refresh();
   return { ok: true, aiCopyUsed: draft.aiCopyUsed };
@@ -223,7 +192,7 @@ async function sectionBaseline(
   sectionId: string,
   churchId: string,
 ): Promise<
-  { ok: true; content: Record<string, unknown> } | { ok: false; error: string }
+  { ok: true; content: Record<string, unknown>; fields: SectionField[] } | { ok: false; error: string }
 > {
   const supabase = createAdminClient();
 
@@ -249,6 +218,7 @@ async function sectionBaseline(
 
   return {
     ok: true,
+    fields: [...(websitePageDefForType(row.type)?.path ? [websitePageIntroField(websitePageDefForType(row.type)!.path)] : []), ...(master.fields ?? [])],
     content: resolveSectionBaseline({
       row: {
         id: row.id as string,
@@ -290,32 +260,20 @@ export async function saveSectionContent(
   const baseline = await sectionBaseline(sectionId, auth.churchId);
   if (!baseline.ok) return fail(baseline.error);
 
-  const patch = diffPatch(baseline.content, content);
-
-  // Keep the previous edit intact when a write fails. Delete-then-insert
-  // discarded it before the replacement was accepted. The partial unique
-  // index cannot be targeted by PostgREST upsert, so update existing rows.
-  if (Object.keys(patch).length === 0) {
-    const { error } = await supabase.from("site_overrides").delete()
-      .eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId);
-    if (error) return fail(toUserError(error, "That change could not be saved."));
-  } else {
-    const { data: existing, error: readError } = await supabase.from("site_overrides")
-      .select("section_id").eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId).maybeSingle();
-    if (readError) return fail(toUserError(readError, "That change could not be saved."));
-    const write = existing
-      ? supabase.from("site_overrides").update({ patch }).eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId)
-      : supabase.from("site_overrides").insert({
-      church_id: auth.churchId,
-      scope: "section",
-      section_id: sectionId,
-      patch,
-    });
-    const { error } = await write;
-    if (error) {
-      return fail(toUserError(error, "That change could not be saved."));
-    }
+  const { data: existing, error: readError } = await supabase.from("site_overrides")
+    .select("patch").eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId).maybeSingle();
+  if (readError) return fail(toUserError(readError, "That change could not be saved."));
+  let patch: Record<string, unknown>;
+  try {
+    const current = deepMerge(baseline.content, existing?.patch);
+    patch = diffPatch(baseline.content, editableSectionContent(baseline.fields, current, content));
+  } catch {
+    return fail("Some section details could not be saved. Check the text, images and links, then try again.");
   }
+  const { error } = await supabase.rpc("save_site_section_patch", {
+    p_church_id: auth.churchId, p_section_id: sectionId, p_patch: patch,
+  });
+  if (error) return fail(toUserError(error, "That change could not be saved. Your previous content is safe. Try again."));
 
   refresh();
   return ok;
@@ -343,18 +301,12 @@ export async function resetSection(
     return fail("That section does not belong to your church.");
   }
 
-  // Resolve first: a failed profile/content read must leave the existing edit
-  // intact. The baseline already excludes this section's hand edits.
   const baseline = await sectionBaseline(sectionId, auth.churchId);
   if (!baseline.ok) return fail(baseline.error);
-
-  const { error } = await createAdminClient()
-    .from("site_overrides")
-    .delete()
-    .eq("church_id", auth.churchId)
-    .eq("scope", "section")
-    .eq("section_id", sectionId);
-  if (error) return fail(toUserError(error, "That section could not be reset."));
+  const { error } = await createAdminClient().rpc("save_site_section_patch", {
+    p_church_id: auth.churchId, p_section_id: sectionId, p_patch: {},
+  });
+  if (error) return fail(toUserError(error, "That section could not be reset. Try again."));
 
   refresh();
   return { ok: true, content: baseline.content };
@@ -397,29 +349,11 @@ export async function reorderSections(
   const auth = await guardAdmin();
   if (!auth.ok) return fail(auth.error);
 
-  const supabase = createAdminClient();
-
-  const { data: rows } = await supabase
-    .from("site_sections")
-    .select("id, church_id")
-    .in("id", sectionIds);
-
-  if (
-    !rows ||
-    rows.length !== sectionIds.length ||
-    rows.some((r) => r.church_id !== auth.churchId)
-  ) {
-    return fail("Those sections do not belong to your church.");
-  }
-
-  for (let index = 0; index < sectionIds.length; index += 1) {
-    const { error } = await supabase
-      .from("site_sections")
-      .update({ sort_order: index * 10 })
-      .eq("id", sectionIds[index]);
-
-    if (error) return fail(toUserError(error, "The new order could not be saved."));
-  }
+  if (!z.array(z.string().uuid()).min(1).max(100).safeParse(sectionIds).success) return fail("That section order could not be read.");
+  const { error } = await createAdminClient().rpc("reorder_site_sections", {
+    p_church_id: auth.churchId, p_ids: sectionIds,
+  });
+  if (error) return fail(toUserError(error, "The order could not be saved. Refresh the page and try again."));
 
   refresh();
   return ok;
@@ -468,8 +402,8 @@ export async function saveDesign(
   const css = customCssWrite({ requested: parsed.data.customCss, current: currentCss, platformAdmin });
   if (!css.ok) return fail("Only FaithForm platform admins can change custom CSS.");
 
-  // Structured colours are church-editable. Privileged CSS is omitted from
-  // ordinary saves so hidden existing CSS cannot be cleared or overwritten.
+  // Ordinary color/style saves preserve hidden platform CSS. Even a forged
+  // church-admin action cannot introduce, replace or clear that stylesheet.
   const { error } = await supabase.from("site_settings").upsert(
     {
       church_id: auth.churchId,
@@ -541,27 +475,13 @@ export async function setPublished(published: boolean): Promise<ActionResult> {
   const auth = await guardAdmin();
   if (!auth.ok) return fail(auth.error);
 
-  const supabase = createAdminClient();
-
-  const { data: outcome, error } = await supabase.rpc("set_site_publication", {
-    p_church_id: auth.churchId,
-    p_published: published,
+  if (typeof published !== "boolean") return fail("Choose whether your website should be online.");
+  const { error } = await createAdminClient().rpc("set_site_publication", {
+    p_church_id: auth.churchId, p_published: published,
   });
-
-  if (error) {
-    return fail(
-      toUserError(
-        error,
-        published
-          ? "We couldn't put your website online."
-          : "We couldn't take your website offline.",
-      ),
-    );
-  }
-  if (outcome === "no_page") return fail("Your website could not be loaded. Refresh the page and try again.");
-  if (outcome !== (published ? "published" : "unpublished")) {
-    return fail("We couldn't confirm the website's status. Refresh the page and try again.");
-  }
+  if (error) return fail(toUserError(error, published
+    ? "We couldn't put your website online. Build your website first, then try again."
+    : "We couldn't take your website offline. Try again."));
 
   refresh();
   return ok;
@@ -731,16 +651,16 @@ export async function uploadSiteImage(formData: FormData): Promise<UploadResult>
 // ---------------------------------------------------------------------------
 
 const serviceTimeRow = z.object({
-  clientId: z.string(),
-  id: z.string().optional(),
+  clientId: z.string().min(1).max(120),
+  id: z.string().uuid().optional(),
   label: z.string().trim().min(1, "Every service needs a name.").max(120),
   dayOfWeek: z.number().int().min(0).max(6),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use a time like 10:30."),
+  startTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/, "Use a time like 10:30."),
 });
 
 const staffRow = z.object({
-  clientId: z.string(),
-  id: z.string().optional(),
+  clientId: z.string().min(1).max(120),
+  id: z.string().uuid().optional(),
   fullName: z.string().trim().min(1, "Every person needs a name.").max(120),
   title: z.string().max(120),
   bio: z.string().max(2000),
@@ -792,9 +712,8 @@ export type SaveSiteDetailsResult =
  * times and the same address. Overriding them per-surface would let a church
  * publish 10:30 on the website while the assistant kept telling callers 10:00.
  *
- * The merge is deliberate. `upsertChurchProfile` replaces the whole profile,
- * so the current state is loaded and only these fields are changed — otherwise
- * saving from here would blank out office hours, AI knowledge and socials.
+ * One transaction updates only this form's columns. Office hours, AI
+ * knowledge, private staff contacts, and other profile fields stay untouched.
  */
 export async function saveSiteDetails(
   input: SiteDetailsInput,
@@ -808,103 +727,26 @@ export async function saveSiteDetails(
   }
 
   const v = parsed.data;
-  const admin = createAdminClient();
+  const withIds = {
+    ...v,
+    serviceTimes: v.serviceTimes.map(row => ({ ...row, id: siteDetailsRowId(auth.churchId, "serviceTimes", row) })),
+    staff: v.staff.map(row => ({ ...row, id: siteDetailsRowId(auth.churchId, "staff", row) })),
+  };
+  const { error } = await createAdminClient().rpc("save_site_details", {
+    p_church_id: auth.churchId, p_details: withIds,
+  });
+  if (error) return fail(toUserError(error, "Those details could not be saved. Your previous details are safe. Try again."));
 
-  const current = await getChurchProfile(auth.churchId, admin);
-  if (!current) return fail("Your church profile could not be loaded.");
-
-  const form = profileToFormState(current);
-
-  let saved: ChurchProfile;
-  try {
-    saved = await upsertChurchProfile(
-      auth.churchId,
-      {
-        ...form,
-        name: v.name,
-        denomination: v.denomination,
-        logoUrl: v.logoUrl,
-        coverImageUrl: v.coverImageUrl,
-        address: v.address,
-        city: v.city,
-        state: v.state,
-        zip: v.zip,
-        phone: v.phone,
-        email: v.email,
-        googleMapsUrl: v.googleMapsUrl,
-        missionStatement: v.missionStatement,
-        visionStatement: v.visionStatement,
-        // Existing rows keep their id, so end_time, kind, notes and the
-        // AI-priority flags on staff survive a save made from here.
-        serviceTimes: v.serviceTimes.map((row) => {
-          const existing = form.serviceTimes.find((s) => s.id && s.id === row.id);
-          return {
-            ...(existing ?? {
-              clientId: row.clientId,
-              endTime: "",
-              kind: "regular" as const,
-              notes: "",
-            }),
-            id: row.id,
-            clientId: row.clientId,
-            label: row.label,
-            dayOfWeek: row.dayOfWeek,
-            startTime: row.startTime,
-          };
-        }),
-        staff: v.staff.map((row) => {
-          const existing = form.staff.find((s) => s.id && s.id === row.id);
-          return {
-            ...(existing ?? {
-              clientId: row.clientId,
-              email: "",
-              phone: "",
-              isSeniorPastor: false,
-              isExecutivePastor: false,
-              aiContactPriority: 0,
-            }),
-            id: row.id,
-            clientId: row.clientId,
-            fullName: row.fullName,
-            title: row.title,
-            bio: row.bio,
-            photoUrl: row.photoUrl,
-            isPublic: row.isPublic,
-          };
-        }),
-      },
-      admin,
-    );
-  } catch (error) {
-    return fail(toUserError(error, "Those details could not be saved."));
-  }
-
-  // Service times drive attendance too: a moved or deleted service must
-  // replace its upcoming services rather than leave them standing.
-  await syncChurchOccurrencesAfterChange(auth.churchId);
-
-  // Rows with a blank name are skipped on the way in, so the saved rows line
-  // up one-for-one with the non-blank submitted rows, in order.
-  const savedState = profileToFormState(saved);
-  const pairUp = <T extends { clientId: string }, U extends { id?: string }>(
-    submitted: T[],
-    persisted: U[],
-  ): SavedRowIds =>
-    submitted
-      .map((row, i) => ({ clientId: row.clientId, id: persisted[i]?.id }))
-      .filter((pair): pair is { clientId: string; id: string } => Boolean(pair.id));
+  // Attendance reconciliation follows the committed profile save. Its failure
+  // must not claim the save failed or cause duplicate row creation on retry.
+  try { await syncChurchOccurrencesAfterChange(auth.churchId); }
+  catch (error) { console.error("[sites] service reconciliation failed", error); }
 
   refresh();
   return {
     ok: true,
-    serviceTimes: pairUp(
-      v.serviceTimes.filter((r) => r.label.trim()),
-      savedState.serviceTimes,
-    ),
-    staff: pairUp(
-      v.staff.filter((r) => r.fullName.trim()),
-      savedState.staff,
-    ),
+    serviceTimes: withIds.serviceTimes.map(({ clientId, id }) => ({ clientId, id })),
+    staff: withIds.staff.map(({ clientId, id }) => ({ clientId, id })),
   };
 }
 
@@ -919,6 +761,7 @@ export async function setSubmissionStatus(
 ): Promise<ActionResult> {
   const auth = await guard();
   if (!auth.ok) return fail(auth.error);
+  if (!z.enum(["new", "read", "archived"]).safeParse(status).success) return fail("Choose a message status and try again.");
 
   if (!(await ownsRow("site_contact_submissions", id, auth.churchId))) {
     return fail("That message does not belong to your church.");
@@ -946,4 +789,28 @@ async function slugFor(churchId: string): Promise<string> {
     .maybeSingle();
 
   return (data?.slug as string | null) ?? "";
+}
+
+
+/** Read the next bounded inbox page. The browser never chooses the church. */
+export async function loadOlderContactSubmissions(input: unknown): Promise<
+  | ({ ok: true } & import("@/lib/sites/queries").ContactSubmissionPage)
+  | { ok: false; error: string }
+> {
+  const auth = await guard();
+  if (!auth.ok) return fail(auth.error);
+  const parsed = z.object({
+    cursor: z.object({
+      createdAt: z.string().max(64).datetime({ offset: true }),
+      id: z.string().uuid(),
+    }).strict(),
+  }).strict().safeParse(input);
+  if (!parsed.success) return fail("We couldn't read where to continue. Refresh the inbox and try again.");
+  try {
+    const { getContactSubmissionsPage } = await import("@/lib/sites/queries");
+    const page = await getContactSubmissionsPage(auth.churchId, parsed.data.cursor);
+    return { ok: true, ...page };
+  } catch (error) {
+    return fail(toUserError(error, "We couldn't load older messages. Your current messages are kept. Try again."));
+  }
 }

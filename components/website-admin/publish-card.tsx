@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Eye, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { setPublished } from "@/app/dashboard/website/actions";
-import { Button } from "@/components/ui/button";
+import { flushWebsiteEdits } from "@/components/website-admin/editor-save-guard";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -33,21 +34,33 @@ export function PublishCard({
   const [published, setPublishedState] = useState(initialPublished);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  useEffect(() => setPublishedState(initialPublished), [initialPublished]);
 
   function apply(next: boolean) {
     startTransition(async () => {
-      const result = await setPublished(next);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+      try {
+        if (!(await flushWebsiteEdits())) {
+          toast.error("Your changes have not saved yet. Fix the save error, then try publishing again.");
+          return;
+        }
+        const result = await setPublished(next);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        setPublishedState(next);
+        toast.success(
+          next
+            ? "Your website is live. Anyone can visit it now."
+            : "Your website is offline. Your team can still use the preview.",
+        );
+        router.refresh();
+      } catch (cause) {
+        console.error("[website] Publishing request failed:", cause);
+        toast.error(next
+          ? "We couldn’t confirm that your website is online. Refresh to check its status, then try again."
+          : "We couldn’t confirm that your website is offline. Refresh to check its status, then try again.");
       }
-      setPublishedState(next);
-      toast.success(
-        next
-          ? "Your website is live. Anyone can visit it now."
-          : "Your website is offline. Only you can see it, in the preview.",
-      );
-      router.refresh();
     });
   }
 
@@ -55,7 +68,7 @@ export function PublishCard({
     const ok = await confirmAction({
       title: "Take your website offline?",
       description:
-        "Visitors will see a “page not found” message, and search engines will stop showing your site. Your pages and changes are kept, and you can publish again at any time.",
+        "Your site will no longer open for visitors. Search engines may take time to remove it. Your pages and changes are kept, and you can publish again at any time.",
       confirmLabel: "Take website offline",
       destructive: true,
     });
@@ -76,8 +89,8 @@ export function PublishCard({
           </div>
           <p className="text-[15px] text-muted-foreground">
             {published
-              ? "Anyone can visit it, and search engines can find it. Changes you make go live as you type."
-              : "Only you can see it, using the preview. Publish when you're happy with it."}
+              ? "Anyone can visit it, and search engines can find it. Your changes go live after they save."
+              : "Your team can see it using the preview. Publish when you're happy with it."}
           </p>
           {summary ? <p className="text-sm text-muted-foreground">{summary}</p> : null}
         </div>
@@ -99,18 +112,14 @@ export function PublishCard({
 
       <div className="flex flex-wrap gap-3">
         {published && liveUrl ? (
-          <a href={liveUrl} target="_blank" rel="noopener noreferrer">
-            <Button variant="outline">
+          <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline" })}>
               <ExternalLink className="size-4" aria-hidden />
               Visit your website
-            </Button>
           </a>
         ) : null}
-        <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline">
+        <a href={previewUrl} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "outline" })}>
             <Eye className="size-4" aria-hidden />
             Open preview
-          </Button>
         </a>
       </div>
 

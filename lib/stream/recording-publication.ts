@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { verifyRecording } from "@/lib/media/v1/rendition-check";
 import { listPosterChoices, type PosterChoice } from "@/lib/media/v1/publication";
 import { getRecordingWatchUrl } from "@/lib/site-url";
+import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { ensureMediaSeries } from "@/lib/stream/media-library";
 import {
   MAX_PUBLISHABLE_SECONDS,
@@ -262,6 +263,30 @@ export async function getStaffRecording(
     slugFor(db, churchId),
   ]);
   return data ? toStaffRecording(data as unknown as StaffRow, slug) : null;
+}
+
+/** A direct route is available even when the church deliberately omitted a menu link. */
+export async function getWebsiteSermonsUrl(churchId: string, client?: SupabaseClient): Promise<string | null> {
+  const db = admin(client);
+  try {
+    const [slug, settings, pages, sections] = await Promise.all([
+      slugFor(db, churchId),
+      db.from("site_settings").select("layout_mode, is_published").eq("church_id", churchId).maybeSingle(),
+      db.from("site_pages").select("id, church_id, path, status").eq("church_id", churchId).in("path", ["/", "/sermons"]),
+      db.from("site_sections").select("church_id, page_id, is_visible").eq("church_id", churchId).eq("type", "sermon_feed").eq("is_visible", true),
+    ]);
+    if (!slug || settings.error || pages.error || sections.error || settings.data?.is_published !== true) return null;
+    const ownPages = (pages.data ?? []).filter(page => page.church_id === churchId);
+    const home = ownPages.find(page => page.path === "/" && page.status === "published");
+    if (!home) return null;
+    const website = settings.data.layout_mode === "website";
+    const destination = website ? ownPages.find(page => page.path === "/sermons" && page.status === "published") : home;
+    if (!destination || !(sections.data ?? []).some(section => section.church_id === churchId && section.page_id === destination.id && section.is_visible)) return null;
+    return `${getCanonicalSiteUrl()}/sites/${encodeURIComponent(slug)}${website ? "/sermons" : "#sermons"}`;
+  } catch (error) {
+    console.error("[recordings] website sermon address unavailable", error);
+    return null;
+  }
 }
 
 /** The recording made from a given broadcast, for the post-live screen. */
@@ -595,6 +620,7 @@ export async function publishRecording(
       { recordingId: recording.id, churchId: recording.churchId, storagePath: recording.storagePath },
       db,
     );
+    if (!rendition.verifiedAt) return { ok: false, reason: "unavailable", message: "Your video is saved, but we couldn't finish checking it. Choose Recheck video and try publishing again." };
     revision = rendition.revision;
     objectHash = rendition.identity.windowHash;
   }
@@ -602,7 +628,7 @@ export async function publishRecording(
   // Poster: the church's explicit choice, else the automatic frame.
   const poster = recording.mobilePosterUrl ?? recording.autoPosterUrl ?? null;
 
-  const { data, error } = await db.rpc("publish_recording", {
+  const { data, error } = await db.rpc(request.website && request.via === "staff" ? "publish_recording_on_site" : "publish_recording", {
     p_recording_id: recording.id,
     p_church_id: recording.churchId,
     p_app_visibility: request.appVisibility,

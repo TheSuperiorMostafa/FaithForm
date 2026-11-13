@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import { SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
@@ -7,7 +8,7 @@ export default function WebsiteInboxLoading() {
     <SkeletonContainer className="flex w-full flex-col gap-6" label="website inbox">
       <SectionHeader
         title="Inbox"
-        description="Messages visitors send through the contact form on your website. Each one is also emailed to your church."
+        description="Messages visitors send through your website. Read and reply to them here."
       />
 
       <div className="flex w-full max-w-xl gap-1 rounded-2xl border border-border bg-card p-1.5 shadow-sm">
@@ -50,6 +51,10 @@ export default function WebsiteInboxLoading() {
           </li>
         ))}
       </ul>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="button" variant="outline" disabled>Show older messages</Button>
+        <Skeleton className="h-5 w-56" />
+      </div>
     </SkeletonContainer>
   );
 }

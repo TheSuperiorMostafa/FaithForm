@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { SubmissionsInbox } from "@/components/website-admin/submissions-inbox";
 import { getChurchAuth } from "@/lib/auth/church";
-import { getContactSubmissions } from "@/lib/sites/queries";
+import { getContactSubmissionsPage } from "@/lib/sites/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
@@ -22,7 +22,7 @@ export default async function WebsiteInboxPage() {
   if (!auth) redirect("/login");
 
   const [submissions, church] = await Promise.all([
-    getContactSubmissions(auth.churchId),
+    getContactSubmissionsPage(auth.churchId),
     createAdminClient()
       .from("churches")
       .select("name")
@@ -33,7 +33,9 @@ export default async function WebsiteInboxPage() {
 
   return (
     <SubmissionsInbox
-      items={submissions}
+      key={`${auth.userId}:${auth.churchId}`}
+      items={submissions.items}
+      nextCursor={submissions.nextCursor}
       churchName={(church?.name as string | null) ?? null}
     />
   );

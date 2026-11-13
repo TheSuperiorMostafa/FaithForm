@@ -3,11 +3,14 @@
 import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 import { Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
+import type { WebsiteRecoveryScope } from "@/components/website-admin/draft-recovery";
+import { flushWebsiteEdits } from "@/components/website-admin/editor-save-guard";
 import { LiveEditsNote } from "@/components/website-admin/live-edits-note";
 import type { LinkTarget } from "@/components/website-admin/section-fields-form";
 import {
@@ -16,6 +19,7 @@ import {
 } from "@/components/website-admin/section-list";
 import { SitePreview } from "@/components/website-admin/site-preview";
 import { cn } from "@/lib/utils";
+import { websitePageDefForPath } from "@/lib/sites/layout-mode";
 
 export type PageTab = {
   path: string;
@@ -34,6 +38,7 @@ export type PageTab = {
  */
 export function PagesWorkspace({
   sections,
+  recoveryScope,
   canEdit,
   isLive,
   initialOpenId = null,
@@ -44,6 +49,7 @@ export function PagesWorkspace({
   relatedPages = [],
 }: {
   sections: EditableSection[];
+  recoveryScope: WebsiteRecoveryScope;
   canEdit: boolean;
   isLive: boolean;
   initialOpenId?: string | null;
@@ -62,10 +68,16 @@ export function PagesWorkspace({
     router.refresh();
   }
 
-  const onPreviewNavigate = useCallback((path: string) => {
-    if (path === currentPath || !pages.some(page => page.path === path)) return;
+  const onPreviewNavigate = useCallback(async (path: string) => {
+    if (path === currentPath) return true;
+    if (!pages.some(page => page.path === path)) return false;
+    if (!(await flushWebsiteEdits())) {
+      toast.error("Your changes have not saved. Keep this page open and try saving again before opening another page.");
+      return false;
+    }
     const href = path === "/" ? "/dashboard/website/pages" : `/dashboard/website/pages?path=${encodeURIComponent(path)}`;
     router.replace(href, { scroll: false });
+    return true;
   }, [currentPath, pages, router]);
 
   const isWebsite = pages.length > 1;
@@ -74,10 +86,8 @@ export function PagesWorkspace({
     (currentPath === "/" ? "Home" : currentPath);
 
   const workspace = (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-4 xl:grid-cols-[minmax(0,2fr)_380px]">
-      <div className="min-h-[600px] xl:min-h-[800px]">
-        <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky fillHeight={expanded} />
-      </div>
+    <div className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky fillHeight={expanded} hiddenPage={currentPath!=="/" && sections.some(section=>section.type===websitePageDefForPath(currentPath)?.type && !section.isVisible)} />
       <div className="flex min-w-0 flex-col gap-4">
         <LiveEditsNote isLive={isLive} />
 
@@ -137,6 +147,7 @@ export function PagesWorkspace({
           <SectionList
             key={currentPath}
             sections={sections}
+            recoveryScope={recoveryScope}
             canEdit={canEdit}
             isLive={isLive}
             initialOpenId={initialOpenId}
@@ -153,11 +164,14 @@ export function PagesWorkspace({
     <div className="flex w-full flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-[15px] text-muted-foreground">Preview your page, then choose a section to adjust its words and photos.</p>
-        <Button variant="outline" onClick={() => setExpanded(true)}><Maximize2 className="size-4" aria-hidden />Open full-screen editor</Button>
+        <Button variant="outline" onClick={async () => { if (await flushWebsiteEdits()) setExpanded(true); }}><Maximize2 className="size-4" aria-hidden />Open full-screen editor</Button>
       </div>
       {!expanded ? workspace : null}
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="h-[calc(100dvh-2rem)] max-w-none" aria-labelledby="website-editor-title">
+        <DialogContent className="h-[calc(100dvh-2rem)] max-w-none" aria-labelledby="website-editor-title" onRequestClose={() => {
+          void flushWebsiteEdits().then(saved => { if (saved) setExpanded(false); });
+          return false;
+        }}>
           <DialogHeader><DialogTitle id="website-editor-title">Edit your website</DialogTitle></DialogHeader>
           <div className="min-h-0 flex-auto overflow-y-auto p-4 sm:p-6">{expanded ? workspace : null}</div>
         </DialogContent>

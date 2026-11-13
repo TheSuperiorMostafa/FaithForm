@@ -184,6 +184,9 @@ async function generateCopy(
       prompt: copyPrompt(profile),
       schema: CopySchema,
       maxOutputTokens: 4096,
+      fast: true,
+      // Optional copy must not hold website creation open indefinitely.
+      abortSignal: AbortSignal.timeout(20_000),
     });
     return object;
   } catch (error) {
@@ -416,7 +419,9 @@ export function buildSections(
       isVisible: programItems.length > 0,
       props: {
         anchor: "programs",
-        items: programItems,
+        // Without authored copy, derive(profile) owns the weekly gatherings.
+        // A snapshot here would keep showing the old time after Details saves.
+        ...(copy ? { items: programItems } : {}),
         ...(copy
           ? {
               eyebrow: copy.programs.eyebrow,
@@ -453,8 +458,8 @@ export function buildSections(
     },
     {
       type: "sermon_feed",
-      // Hidden until there is something to show; the church turns it on from
-      // Website → Pages once they add their first message.
+      // Hidden until there is something to show. Explicit recording publication
+      // also enables this existing feed; Pages remains the visibility control.
       isVisible: profile.media.length > 0,
       props: { anchor: "sermons" },
     },

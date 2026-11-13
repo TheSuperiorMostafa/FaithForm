@@ -16,7 +16,7 @@ export type SaveFailure = {
 };
 
 export const GIVE_UP_MESSAGE =
-  "That change could not be saved. Reload the page and try again.";
+  "That change has not saved. Keep this page open, check your connection, and choose Try saving again.";
 
 function errorName(error: unknown): string {
   return error instanceof Error ? error.name : "";
@@ -40,7 +40,7 @@ export function describeSaveFailure(
   if (digest.startsWith("NEXT_REDIRECT")) {
     return {
       message:
-        "You have been signed out, so this change is not saved. Sign in again, then make the change once more.",
+        "You have been signed out, so this change is not saved. Open FaithForm in another tab to sign in, then try saving again here.",
       retry: false,
     };
   }
@@ -53,7 +53,7 @@ export function describeSaveFailure(
   ) {
     return {
       message:
-        "FaithForm was updated while this page was open. Reload the page, then make this change again.",
+        "FaithForm was updated while this page was open. Copy any wording you need to keep, then reload and make this change again.",
       retry: false,
     };
   }

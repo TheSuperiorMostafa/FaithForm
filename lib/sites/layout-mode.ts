@@ -230,10 +230,8 @@ export function normalizeWebsiteHrefs(value: unknown): unknown {
   }));
 }
 
-/** Manual page links must return to anchors after collapsing to one page.
- * Only href fields pointing at this church's known pages change; arbitrary
- * copy, other churches, downloads and external destinations stay untouched.
- */
+/** A one-page layout must also normalize older manual path links after the
+ * cascade, while preserving text, outside URLs and giving links. */
 export function normalizeLandingHrefs(value: unknown, slug: string): unknown {
   if (Array.isArray(value)) return value.map(entry => normalizeLandingHrefs(entry, slug));
   if (!value || typeof value !== "object") return value;

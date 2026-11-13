@@ -1,4 +1,4 @@
-import { normalizeLandingHrefs, normalizeWebsiteHrefs, parseSiteLayoutMode, websitePageDefForType } from "@/lib/sites/layout-mode";
+import { normalizeWebsiteHrefs, normalizeLandingHrefs, parseSiteLayoutMode, websitePageDefForType } from "@/lib/sites/layout-mode";
 import { websitePageIntroDefaults } from "@/lib/sites/page-intro";
 import type {
   ErasedSectionMaster,
@@ -13,6 +13,7 @@ import type {
   SiteSettingsRow,
   SiteThemeRow,
 } from "@/types/site";
+import { siteBrandLegibility } from "@/lib/sites/brand-legibility";
 
 /**
  * The cascade resolver.
@@ -248,11 +249,14 @@ export function resolveTokens(
   if (brand["--site-canvas"]) {
     shades["--site-canvas-alt"] = `color-mix(in srgb, ${brand["--site-canvas"]} 96%, ${brand["--site-ink"] ?? "var(--site-ink)"})`;
   }
-  return {
+  const tokens = {
     ...sanitizeTokens(theme.tokens),
     ...shades,
     ...brand,
   };
+  // Saved palette values stay intact; foreground roles retain their hue and
+  // adjust only enough to stay readable on the selected surface.
+  return {...tokens,...siteBrandLegibility(tokens)};
 }
 
 // ---------------------------------------------------------------------------
@@ -378,6 +382,10 @@ function runCascade(input: {
   // 4. the page config
   merged = deepMerge(merged, asRecord(withoutNullImageSrc(row.props)));
 
+  // Raw HTML is maintained by FaithForm in props, never by church overrides.
+  // Older direct database writes could put it in any override scope.
+  if (row.type === "custom_embed") return merged;
+
   // 5. hand edits, widest scope first so the narrowest wins
   merged = deepMerge(merged, scopedSectionPatch(overrides.church, row.type));
   merged = deepMerge(merged, scopedSectionPatch(overrides.page, row.type));
@@ -497,11 +505,11 @@ export function resolvePage(input: {
     customCss: sanitizeCustomCss(settings?.customCss),
     // Layout mode governs navigation after the full cascade. Older overrides
     // can retain landing anchors even when the stored page config uses paths.
-    sections: resolved.map((section) => ({
-      ...section,
-      content: (parseSiteLayoutMode(settings?.layoutMode) === "website"
-        ? normalizeWebsiteHrefs(section.content)
-        : normalizeLandingHrefs(section.content, profile.slug)) as Record<string, unknown>,
-    })),
+    sections: parseSiteLayoutMode(settings?.layoutMode) === "website"
+      ? resolved.map((section) => ({
+          ...section,
+          content: normalizeWebsiteHrefs(section.content) as Record<string, unknown>,
+        }))
+      : resolved.map((section) => ({ ...section, content: normalizeLandingHrefs(section.content, profile.slug) as Record<string, unknown> })),
   };
 }

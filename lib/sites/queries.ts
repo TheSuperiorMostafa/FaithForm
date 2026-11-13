@@ -2,7 +2,9 @@ import { cache } from "react";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseSiteLayoutMode } from "@/lib/sites/layout-mode";
+import type { SiteNavigationPage } from "@/lib/sites/public-navigation";
 import { isPublicSitePublication } from "@/lib/sites/preview-access";
+import { websiteSermonMedia } from "@/lib/sites/sermon-media";
 import type {
   SiteOverrideRow,
   SitePageRow,
@@ -28,6 +30,7 @@ const CHURCH_SELECT = `
   id,
   slug,
   name,
+  timezone,
   tagline,
   description,
   mission_statement,
@@ -82,6 +85,8 @@ export async function resolveChurchIdByHostname(
     .from("site_domains")
     .select("church_id, churches!inner(slug)")
     .eq("hostname", hostname.toLowerCase())
+    .eq("status", "live")
+    .not("verified_at", "is", null)
     .maybeSingle();
 
   if (error || !data) return null;
@@ -111,7 +116,8 @@ async function loadSiteBundle(
     .eq("slug", slug)
     .maybeSingle();
 
-  if (churchError || !churchRow) return null;
+  if (churchError) throw new Error("Website content could not be loaded. Try again.", { cause: churchError });
+  if (!churchRow) return null;
 
   const church = churchRow as ChurchRow;
   const churchId = church.id as string;
@@ -119,29 +125,25 @@ async function loadSiteBundle(
   const [
     settingsResult,
     pageResult,
-    overridesResult,
     serviceTimesResult,
     staffResult,
     eventsResult,
     mediaResult,
+    recordingsResult,
   ] = await Promise.all([
     supabase
       .from("site_settings")
       .select(
-        "theme_key, brand_tokens, custom_css, contact_email, is_published, layout_mode, site_themes(key, name, tokens, section_defaults)",
+        "theme_key, brand_tokens, custom_css, contact_email, is_published, layout_mode",
       )
       .eq("church_id", churchId)
       .maybeSingle(),
     supabase
       .from("site_pages")
-      .select("id, path, title, meta_description, status, site_sections(id, type, sort_order, is_visible, props)")
+      .select("id, path, title, meta_description, status")
       .eq("church_id", churchId)
       .eq("path", path)
       .maybeSingle(),
-    supabase
-      .from("site_overrides")
-      .select("scope, page_id, section_id, patch")
-      .eq("church_id", churchId),
     supabase
       .from("church_service_times")
       .select("label, day_of_week, start_time, end_time, kind, notes")
@@ -159,7 +161,8 @@ async function loadSiteBundle(
       .from("announcements")
       .select("event_title, event_date, event_location, notes")
       .eq("church_id", churchId)
-      .in("status", ["approved", "published"])
+      .eq("status", "published")
+      .eq("mobile_visibility", "public")
       .gte("event_date", new Date().toISOString())
       .order("event_date", { ascending: true })
       .limit(6),
@@ -173,20 +176,14 @@ async function loadSiteBundle(
       .order("published_at", { ascending: false, nullsFirst: false })
       .order("sort_order", { ascending: true })
       .limit(12),
+    supabase.rpc("web_recordings", { p_church_slug: slug, p_recording_id: null, p_limit: 12 }),
   ]);
 
-  // Publication is a two-record decision. If either read fails, never infer
-  // that an old published page should still be public.
-  if (settingsResult.error || pageResult.error) {
-    throw new Error("Website publication state unavailable");
+  for (const result of [settingsResult, pageResult, serviceTimesResult, staffResult, eventsResult, mediaResult]) {
+    if (result.error) throw new Error("Website content could not be loaded. Try again.", { cause: result.error });
   }
-  // Missing content and a failed read are different. In particular, treating
-  // failed override reads as [] would let the editor overwrite existing hand
-  // edits using an incomplete baseline on its next save.
-  if ([overridesResult, serviceTimesResult, staffResult, eventsResult, mediaResult]
-    .some(result => result.error)) {
-    throw new Error("Website content could not be loaded. Please try again.");
-  }
+  if (recordingsResult.error && recordingsResult.error.code !== "PGRST202" && recordingsResult.error.code !== "42883") throw new Error("Website content could not be loaded. Try again.", { cause: recordingsResult.error });
+
   const page = pageResult.data;
   if (!page) return null;
 
@@ -203,18 +200,31 @@ async function loadSiteBundle(
       }
     : null;
 
-  const joinedTheme = settingsRow?.site_themes;
-  const themeRow = Array.isArray(joinedTheme) ? joinedTheme[0] : joinedTheme;
-  const theme = themeRow
-    ? mapTheme(themeRow)
-    : await getTheme(settings?.themeKey ?? FALLBACK_THEME_KEY);
+  const theme = await getTheme(settings?.themeKey ?? FALLBACK_THEME_KEY);
   if (!theme) return null;
+
+  const [sectionsResult, overridesResult] = await Promise.all([
+    supabase
+      .from("site_sections")
+      .select("id, type, sort_order, is_visible, props")
+      .eq("page_id", page.id)
+      .eq("church_id", churchId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("site_overrides")
+      .select("scope, page_id, section_id, patch")
+      .eq("church_id", churchId),
+  ]);
+
+  if (sectionsResult.error) throw new Error("Website content could not be loaded. Try again.", { cause: sectionsResult.error });
+  if (overridesResult.error) throw new Error("Website content could not be loaded. Try again.", { cause: overridesResult.error });
 
   const profile = mapProfile(church, {
     serviceTimes: serviceTimesResult.data,
     staff: staffResult.data,
     events: eventsResult.data,
     media: mediaResult.data,
+    recordings: recordingsResult.data,
   });
 
   return {
@@ -229,15 +239,13 @@ async function loadSiteBundle(
       metaDescription: (page.meta_description as string | null) ?? null,
       status: (page.status as "draft" | "published") ?? "draft",
     },
-    sections: (page.site_sections ?? [])
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((row) => ({
-        id: row.id as string,
-        type: row.type as string,
-        sortOrder: (row.sort_order as number) ?? 0,
-        isVisible: row.is_visible !== false,
-        props: (row.props as Record<string, unknown> | null) ?? {},
-      })),
+    sections: (sectionsResult.data ?? []).map((row) => ({
+      id: row.id as string,
+      type: row.type as string,
+      sortOrder: (row.sort_order as number) ?? 0,
+      isVisible: row.is_visible !== false,
+      props: (row.props as Record<string, unknown> | null) ?? {},
+    })),
     overrides: (overridesResult.data ?? []).map((row) => ({
       scope: row.scope as SiteOverrideRow["scope"],
       pageId: (row.page_id as string | null) ?? null,
@@ -251,12 +259,32 @@ async function loadSiteBundle(
 /** Deduplicate page, metadata, and loading-layout reads within one render. */
 export const getSiteBundle = cache(loadSiteBundle);
 
+/** Visibility and publication determine which internal destinations visitors can reach. */
+export async function getSiteNavigationPages(churchId: string): Promise<SiteNavigationPage[]> {
+  const { data, error } = await createAdminClient()
+    .from("site_pages")
+    .select("path, status, site_sections(type, is_visible, church_id)")
+    .eq("church_id", churchId);
+  if (error) {
+    console.error("[sites] navigation pages unavailable:", error.message);
+    throw new Error("Website pages could not be loaded.");
+  }
+  return (data ?? []).map(row => ({
+    path: row.path as string,
+    status: row.status as string,
+    visibleTypes: ((row.site_sections ?? []) as { type: string; is_visible: boolean; church_id: string }[])
+      .filter(section => section.church_id === churchId && section.is_visible)
+      .map(section => section.type),
+  }));
+}
+
 
 type ProfileChildren = {
   serviceTimes: Record<string, unknown>[] | null;
   staff: Record<string, unknown>[] | null;
   events: Record<string, unknown>[] | null;
   media: Record<string, unknown>[] | null;
+  recordings?: Record<string, unknown>[] | null;
 };
 
 /** Shared by the public render path and the first-draft generator. */
@@ -264,6 +292,7 @@ function mapProfile(church: ChurchRow, children: ProfileChildren): SiteProfile {
   return {
     slug: (church.slug as string) ?? "",
     name: (church.name as string) ?? "",
+    timezone: text(church, "timezone") ?? "America/New_York",
     tagline: text(church, "tagline"),
     description: text(church, "description"),
     missionStatement: text(church, "mission_statement"),
@@ -304,17 +333,7 @@ function mapProfile(church: ChurchRow, children: ProfileChildren): SiteProfile {
       location: (row.event_location as string | null) ?? null,
       note: (row.notes as string | null) ?? null,
     })),
-    media: (children.media ?? []).map((row) => ({
-      id: row.id as string,
-      title: row.title as string,
-      series: (row.series as string | null) ?? null,
-      speaker: (row.speaker as string | null) ?? null,
-      date: (row.published_at as string | null) ?? null,
-      videoUrl: (row.video_url as string | null) ?? null,
-      thumbnail: row.thumbnail_url
-        ? { src: row.thumbnail_url as string, alt: row.title as string }
-        : null,
-    })),
+    media: websiteSermonMedia({ churchId: church.id as string, slug: church.slug as string, links: children.media, recordings: children.recordings ?? null }),
     givingEnabled: Boolean(church.stripe_charges_enabled),
   };
 }
@@ -336,9 +355,10 @@ export async function buildSiteProfile(
     .eq("id", churchId)
     .maybeSingle();
 
-  if (error || !churchRow) return null;
+  if (error) throw new Error("Your church’s website details could not be loaded. Try again.", { cause: error });
+  if (!churchRow) return null;
 
-  const [serviceTimes, staff, events, media] = await Promise.all([
+  const [serviceTimes, staff, events, media, recordings] = await Promise.all([
     supabase
       .from("church_service_times")
       .select("label, day_of_week, start_time, end_time, kind, notes")
@@ -354,7 +374,8 @@ export async function buildSiteProfile(
       .from("announcements")
       .select("event_title, event_date, event_location, notes")
       .eq("church_id", churchId)
-      .in("status", ["approved", "published"])
+      .eq("status", "published")
+      .eq("mobile_visibility", "public")
       .gte("event_date", new Date().toISOString())
       .order("event_date", { ascending: true })
       .limit(6),
@@ -364,16 +385,18 @@ export async function buildSiteProfile(
       .eq("church_id", churchId)
       .eq("is_published", true)
       .limit(12),
+    supabase.rpc("web_recordings", { p_church_slug: churchRow.slug, p_recording_id: null, p_limit: 12 }),
   ]);
 
-  if ([serviceTimes, staff, events, media].some(result => result.error)) {
-    throw new Error("Your church website details could not be loaded. Please try again.");
-  }
+  for (const result of [serviceTimes, staff, events, media]) { if (result.error) throw new Error("Your church’s website details could not be loaded. Try again.", { cause: result.error }); }
+  if (recordings.error && recordings.error.code !== "PGRST202" && recordings.error.code !== "42883") throw new Error("Your church’s website details could not be loaded. Try again.", { cause: recordings.error });
+
   return mapProfile(churchRow as ChurchRow, {
     serviceTimes: serviceTimes.data,
     staff: staff.data,
     events: events.data,
     media: media.data,
+    recordings: recordings.data,
   });
 }
 
@@ -386,17 +409,9 @@ async function getTheme(key: string): Promise<SiteThemeRow | null> {
     .eq("key", key)
     .maybeSingle();
 
-  if (error || !data) return null;
+  if (error) throw new Error("Your church’s website details could not be loaded. Try again.", { cause: error });
+  if (!data) return null;
 
-  return mapTheme(data);
-}
-
-function mapTheme(data: {
-  key: string;
-  name: string;
-  tokens: unknown;
-  section_defaults: unknown;
-}): SiteThemeRow {
   return {
     key: data.key as string,
     name: data.name as string,
@@ -440,13 +455,17 @@ export async function getWebsiteForChurch(
     .maybeSingle();
 
   const slug = (data?.slug as string | null) ?? null;
-  if (error || !slug) return null;
+  if (error) throw error;
+  if (!slug) return null;
 
   const [bundle, pages] = await Promise.all([
     getSiteBundle(slug, path),
     listSitePages(churchId),
   ]);
-  if (!bundle) return null;
+  if (!bundle) {
+    if (pages.some(page => page.path === path)) throw new Error("Your website could not be loaded. Try again.");
+    return null;
+  }
 
   return { ...bundle, slug, pages };
 }
@@ -455,11 +474,13 @@ export async function getWebsiteForChurch(
 export async function listSitePages(churchId: string): Promise<SitePageRow[]> {
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("site_pages")
     .select("id, path, title, meta_description, status")
     .eq("church_id", churchId)
     .order("path", { ascending: true });
+
+  if (error) throw error;
 
   const rows = (data ?? []).map((row) => ({
     id: row.id as string,
@@ -486,11 +507,13 @@ export type SiteDomainRow = {
 export async function getSiteDomains(churchId: string): Promise<SiteDomainRow[]> {
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("site_domains")
     .select("id, hostname, is_primary, verified_at")
     .eq("church_id", churchId)
     .order("is_primary", { ascending: false });
+
+  if (error) throw error;
 
   return (data ?? []).map((row) => ({
     id: row.id as string,
@@ -518,7 +541,7 @@ export async function getSiteMediaForChurch(
 ): Promise<SiteMediaRow[]> {
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("site_media")
     .select(
       "id, title, series, speaker, published_at, video_url, thumbnail_url, is_published, sort_order",
@@ -526,6 +549,8 @@ export async function getSiteMediaForChurch(
     .eq("church_id", churchId)
     .order("published_at", { ascending: false, nullsFirst: false })
     .order("sort_order", { ascending: true });
+
+  if (error) throw error;
 
   return (data ?? []).map((row) => ({
     id: row.id as string,
@@ -551,24 +576,12 @@ export type ContactSubmissionRow = {
   createdAt: string;
 };
 
-export async function getContactSubmissions(
-  churchId: string,
-  status?: "new" | "read" | "archived",
-): Promise<ContactSubmissionRow[]> {
-  const supabase = createAdminClient();
+export type ContactSubmissionCursor = { createdAt: string; id: string };
+export type ContactSubmissionPage = { items: ContactSubmissionRow[]; nextCursor: ContactSubmissionCursor | null };
+export const CONTACT_SUBMISSION_PAGE_SIZE = 200;
 
-  let query = supabase
-    .from("site_contact_submissions")
-    .select("id, name, email, phone, message, status, emailed_at, created_at")
-    .eq("church_id", churchId)
-    .order("created_at", { ascending: false })
-    .limit(200);
-
-  if (status) query = query.eq("status", status);
-
-  const { data } = await query;
-
-  return (data ?? []).map((row) => ({
+function mapContactSubmission(row: Record<string, unknown>): ContactSubmissionRow {
+  return {
     id: row.id as string,
     name: row.name as string,
     email: row.email as string,
@@ -577,36 +590,76 @@ export async function getContactSubmissions(
     status: (row.status as ContactSubmissionRow["status"]) ?? "new",
     emailedAt: (row.emailed_at as string | null) ?? null,
     createdAt: row.created_at as string,
-  }));
+  };
+}
+
+/** One bounded page; the tie-breaker retains rows with identical timestamps. */
+export async function getContactSubmissionsPage(
+  churchId: string,
+  cursor: ContactSubmissionCursor | null = null,
+  status?: ContactSubmissionRow["status"],
+): Promise<ContactSubmissionPage> {
+  let query = createAdminClient()
+    .from("site_contact_submissions")
+    .select("id, name, email, phone, message, status, emailed_at, created_at")
+    .eq("church_id", churchId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(CONTACT_SUBMISSION_PAGE_SIZE + 1);
+
+  if (status) query = query.eq("status", status);
+  if (cursor) {
+    query = query.or(`created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const items = (data ?? []).slice(0, CONTACT_SUBMISSION_PAGE_SIZE).map(mapContactSubmission);
+  const last = items[items.length - 1];
+  return {
+    items,
+    nextCursor: (data?.length ?? 0) > CONTACT_SUBMISSION_PAGE_SIZE && last ? { createdAt: last.createdAt, id: last.id } : null,
+  };
+}
+
+/** Compatibility for existing callers that need only the first page. */
+export async function getContactSubmissions(
+  churchId: string,
+  status?: ContactSubmissionRow["status"],
+): Promise<ContactSubmissionRow[]> {
+  return (await getContactSubmissionsPage(churchId, null, status)).items;
 }
 
 export async function countNewSubmissions(churchId: string): Promise<number> {
   const supabase = createAdminClient();
 
-  const { count } = await supabase
+  const { count, error } = await supabase
     .from("site_contact_submissions")
     .select("id", { count: "exact", head: true })
     .eq("church_id", churchId)
     .eq("status", "new");
 
+  if (error) throw error;
   return count ?? 0;
 }
 
-export type SiteThemeOption = { key: string; name: string; description: string | null };
+export type SiteThemeOption = { key: string; name: string; description: string | null; tokens?: Record<string, string> };
 
 export async function getSiteThemes(): Promise<SiteThemeOption[]> {
   const supabase = createAdminClient();
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("site_themes")
-    .select("key, name, description")
+    .select("key, name, description, tokens")
     .eq("is_active", true)
     .order("name", { ascending: true });
+
+  if (error) throw error;
 
   return (data ?? []).map((row) => ({
     key: row.key as string,
     name: row.name as string,
     description: (row.description as string | null) ?? null,
+    tokens: (row.tokens as Record<string, string> | null) ?? {},
   }));
 }
 
@@ -627,7 +680,7 @@ export async function getContactTargetBySlug(slug: string): Promise<{
 
   if (error || !data) return null;
 
-  const [settingsResult, pageResult] = await Promise.all([
+  const [settingsResult, homeResult] = await Promise.all([
     supabase
       .from("site_settings")
       .select("contact_email, is_published")
@@ -640,20 +693,17 @@ export async function getContactTargetBySlug(slug: string): Promise<{
       .eq("path", "/")
       .maybeSingle(),
   ]);
+  // An existing draft is testable only by its own authorized website staff.
+  // The route enforces that authorization before storing any submission.
+  if (settingsResult.error || homeResult.error || !settingsResult.data || !homeResult.data) return null;
+  const settings = settingsResult.data;
 
-  if (settingsResult.error || pageResult.error) {
-    throw new Error("Website contact publication state unavailable");
-  }
-  if (!pageResult.data) return null;
-  const configured = (settingsResult.data?.contact_email as string | null) ?? null;
+  const configured = (settings?.contact_email as string | null) ?? null;
 
   return {
     churchId: data.id as string,
     churchName: (data.name as string) ?? "",
     recipient: configured?.trim() || (data.email as string | null) || null,
-    isPublished: isPublicSitePublication(
-      pageResult.data.status,
-      settingsResult.data?.is_published as boolean | null | undefined,
-    ),
+    isPublished: isPublicSitePublication(homeResult.data.status, settings.is_published),
   };
 }

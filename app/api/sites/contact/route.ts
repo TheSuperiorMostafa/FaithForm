@@ -5,8 +5,8 @@ import { sendSiteContactEmail } from "@/lib/email/site-contact";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   isChurchFeatureEmailEnabled,
+  isChurchFeatureEnabled,
 } from "@/lib/features/access";
-import { isPublicFeatureEnabled } from "@/lib/features/public-access";
 import {
   assertRateLimit,
   getClientIp,
@@ -14,7 +14,7 @@ import {
 } from "@/lib/security/rate-limit";
 import { getContactTargetBySlug } from "@/lib/sites/queries";
 import { canPreviewDraftSite } from "@/lib/sites/preview-access";
-import { subdomainSlug } from "@/lib/sites/tenant";
+import { churchSlugForHost, isPlatformSiteHost } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 /**
@@ -46,21 +46,28 @@ function badRequest(message: string) {
  * preview domain; on a real church hostname the subdomain is authoritative and
  * wins, so a forged param cannot redirect a submission to another church.
  */
-function resolveSlug(request: NextRequest): string | null {
-  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
-  const fromHost = subdomainSlug(host);
-  if (fromHost) return fromHost;
+async function resolveSlug(request: NextRequest): Promise<string | null> {
+  const host = request.headers.get("host") ?? "";
+  // On both FaithForm subdomains and verified custom domains, the hostname
+  // owns the inbox. Unknown hosts never get to choose a church with ?site=.
+  if (!isPlatformSiteHost(host)) return churchSlugForHost(host);
 
   const fromQuery = request.nextUrl.searchParams.get("site")?.trim();
   return fromQuery && /^[a-z0-9-]{1,63}$/i.test(fromQuery) ? fromQuery : null;
 }
 
 export async function POST(request: NextRequest) {
-  const slug = resolveSlug(request);
+  const slug = await resolveSlug(request);
   if (!slug) return badRequest("Could not tell which church this is for.");
 
   const rate = await assertRateLimit(`site-contact:${getClientIp(request)}`, RATE_LIMIT);
-  if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
+  if (!rate.ok) {
+    if (rate.reason === "limited") return rateLimitResponse(rate.retryAfterSeconds);
+    return NextResponse.json(
+      { error: "We could not send that right now. Please try again shortly." },
+      { status: 503, headers: { "Retry-After": String(rate.retryAfterSeconds) } },
+    );
+  }
 
   let payload: unknown;
   try {
@@ -83,31 +90,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  let target: Awaited<ReturnType<typeof getContactTargetBySlug>>;
-  try {
-    target = await getContactTargetBySlug(slug);
-  } catch {
-    console.error("[sites] contact publication state unavailable");
-    return NextResponse.json(
-      { error: "We could not send that right now. Please try again shortly." },
-      { status: 503 },
-    );
+  const target = await getContactTargetBySlug(slug);
+  if (!target) return NextResponse.json({ error: "This website is not accepting messages right now. Please contact the church directly." }, { status: 404 });
+  if (!target.isPublished && !canPreviewDraftSite(target.churchId, await getChurchAuth().catch(() => null))) {
+    return NextResponse.json({ error: "This website is not accepting messages right now. Please contact the church directly." }, { status: 404 });
   }
-  if (!target) return badRequest("Could not tell which church this is for.");
 
   // The site that hosts this form is gone when Website is off, so a POST
   // arriving here is a stale tab or a direct call. Either way there is no
   // inbox to deliver to — /dashboard/website/messages is unreachable too.
-  if (!(await isPublicFeatureEnabled(target.churchId, "website"))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  // A direct POST must not turn an unpublished draft's private preview into a
-  // public contact endpoint. Staff can still test the form from their preview.
-  if (
-    !target.isPublished &&
-    !canPreviewDraftSite(target.churchId, await getChurchAuth())
-  ) {
+  if (!(await isChurchFeatureEnabled(target.churchId, "website"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

@@ -1,5 +1,7 @@
 import { sitePathForHref } from "@/lib/sites/active-link";
+import { hasUsableSiteLink } from "@/lib/sites/public-navigation";
 import React from "react";
+import { ResilientImage } from "./resilient-image";
 import type { ResolvedPage } from "@/lib/sites/contract";
 import { websitePageDefForPath, websitePageDefForType } from "@/lib/sites/layout-mode";
 import type { SiteLink } from "@/types/site";
@@ -21,6 +23,7 @@ export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame;
   const sectionIntro = page.sections.find(section => section.type === primaryType)?.content.pageIntro;
   const copy = (sectionIntro && typeof sectionIntro === "object" ? sectionIntro : websitePageIntroDefaults(website.path, website.coverImageUrl)) as WebsitePageIntroContent | null;
   if (!copy) return null;
+  const title=typeof copy.title === "string" ? copy.title.trim() : "";
   const basePath = website.basePath ?? (website.previewSlug ? `/sites/${encodeURIComponent(website.previewSlug)}` : "");
   const homeHref = `${basePath || "/"}${website.previewSlug ? "?preview=1" : ""}`;
   const seen = new Set<string>();
@@ -35,7 +38,7 @@ export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame;
       <div>
         <a className="site-link site-page-breadcrumb" href={homeHref}>Home</a>
         <div className="site-eyebrow">{website.churchName} · {websitePageDefForPath(website.path)?.title}</div>
-        <h1 className="site-display site-display-lg">{copy.title}</h1>
+        <h1 className={`site-display site-display-lg${title?"":" sr-only"}`}>{title || websitePageDefForPath(website.path)?.title || page.title}</h1>
         {copy.description ? <p className="site-page-intro-copy">{copy.description}</p> : null}
         {contents.length >= 3 ? (
           <nav className="site-page-contents" aria-label="On this page">
@@ -52,8 +55,7 @@ export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame;
           <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(website.location)}`} className="site-btn site-btn-solid" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden>↗</span></a>
         </aside>
       ) : website.path === "/about" && copy.image?.src ? (
-        // eslint-disable-next-line @next/next/no-img-element -- church-supplied photo
-        <img src={copy.image.src} alt={copy.image.alt} className="site-page-intro-photo" />
+        <ResilientImage src={copy.image.src} alt={copy.image.alt} className="site-page-intro-photo" />
       ) : null}
     </header>
   );
@@ -64,9 +66,9 @@ export function WebsitePageExplore({ page, website }: { page: ResolvedPage; webs
   // orientation cards on Home so task pages lead straight to their purpose.
   if (website.path !== "/") return null;
   const nav = page.sections.find((section) => section.type === "site_nav")?.content;
-  const links = [...(Array.isArray(nav?.links) ? nav.links as SiteLink[] : [])];
+  const links = [...(Array.isArray(nav?.links) ? nav.links as SiteLink[] : [])].filter(hasUsableSiteLink);
   const cta = nav?.cta as SiteLink | null | undefined;
-  if (cta) links.push(cta);
+  if (hasUsableSiteLink(cta)) links.push(cta);
   const prefix = website.basePath ?? (website.previewSlug ? `/sites/${encodeURIComponent(website.previewSlug)}` : "");
   const seen = new Set<string>();
   const preferredPaths = ["/visit", "/programs", "/sermons", "/about", "/events"];

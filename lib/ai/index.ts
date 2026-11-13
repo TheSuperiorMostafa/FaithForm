@@ -49,6 +49,7 @@ export async function aiGenerateObject<T extends z.ZodType>(opts: {
   maxOutputTokens?: number;
   /** Prefer the fast model when the church has no explicit model override. */
   fast?: boolean;
+  abortSignal?: AbortSignal;
 }) {
   const { model, label } = await resolveModelForChurch(opts.churchId, {
     fast: opts.fast,
@@ -59,6 +60,7 @@ export async function aiGenerateObject<T extends z.ZodType>(opts: {
     prompt: opts.prompt,
     schema: opts.schema,
     maxOutputTokens: opts.maxOutputTokens ?? 4096,
+    abortSignal: opts.abortSignal,
     experimental_repairText: async ({ text }) => {
       const repaired = stripJsonFences(text);
       return repaired !== text ? repaired : null;

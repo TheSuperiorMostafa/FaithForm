@@ -3,6 +3,7 @@
 import { Check, CircleAlert, Loader2 } from "lucide-react";
 
 import type { AutosaveStatus } from "@/components/website-admin/use-autosave";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
@@ -15,11 +16,13 @@ import { cn } from "@/lib/utils";
 export function SaveStatus({
   status,
   className,
+  onRetry,
 }: {
   status: AutosaveStatus;
   className?: string;
+  onRetry?: () => void;
 }) {
-  const base = "inline-flex items-center gap-1.5 text-xs";
+  const base = "inline-flex items-center gap-1.5 text-sm";
 
   switch (status.kind) {
     case "pending":
@@ -54,10 +57,13 @@ export function SaveStatus({
       );
     case "error":
       return (
-        <span className={cn(base, "text-destructive", className)} role="alert">
-          <CircleAlert className="size-3.5" aria-hidden />
-          {status.message}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn(base, "text-destructive", className)} role="alert">
+            <CircleAlert className="size-3.5 shrink-0" aria-hidden />
+            {status.message}
+          </span>
+          {onRetry ? <Button type="button" variant="outline" onClick={onRetry}>Try saving again</Button> : null}
+        </div>
       );
     default:
       return null;

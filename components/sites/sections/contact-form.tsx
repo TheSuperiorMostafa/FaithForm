@@ -71,7 +71,7 @@ export function ContactForm({ config }: { config: FormConfig }) {
     return (
       <div className="site-form">
         <p className="site-form-status site-form-status-ok" role="status">
-          {config.successMessage}
+          {config.successMessage?.trim() || "Your message was sent. Someone from the church will be in touch."}
         </p>
       </div>
     );
@@ -161,7 +161,7 @@ export function ContactForm({ config }: { config: FormConfig }) {
         className="site-btn site-btn-solid"
         disabled={status.kind === "sending"}
       >
-        {status.kind === "sending" ? "Sending…" : config.submitLabel}
+        {status.kind === "sending" ? "Sending…" : config.submitLabel?.trim() || "Send message"}
       </button>
 
       {config.consentNote ? (

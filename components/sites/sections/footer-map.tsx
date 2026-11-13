@@ -4,12 +4,14 @@ import {
   buildMapDirectionsUrl,
   buildMapEmbedUrl,
   formatCityLine,
-  formatServiceTime,
+  formatDayAndTime,
 } from "@/lib/sites/format";
 import { cn } from "@/lib/utils";
+import { hasUsableSiteLink } from "@/lib/sites/public-navigation";
 import type { FooterMapContent } from "@/types/site";
 
 import { surfaceClass } from "../primitives";
+import { ResilientImage } from "../resilient-image";
 
 function FooterMap({ content, ctx }: SectionComponentProps<FooterMapContent>) {
   return (
@@ -18,11 +20,11 @@ function FooterMap({ content, ctx }: SectionComponentProps<FooterMapContent>) {
         <div className="site-footer-body">
           <div className="site-footer-brand">
             {content.logo?.src ? (
-              // eslint-disable-next-line @next/next/no-img-element -- church-supplied URL
-              <img
+              <ResilientImage
                 src={content.logo.src}
                 alt=""
                 className="site-footer-logo"
+                fallback="hide"
               />
             ) : null}
             <div>
@@ -49,7 +51,7 @@ function FooterMap({ content, ctx }: SectionComponentProps<FooterMapContent>) {
                   ) : null}
                   {column.links?.length ? (
                     <div className="site-footer-links">
-                      {column.links.map((link) => (
+                      {column.links.filter(hasUsableSiteLink).map((link) => (
                         <a
                           key={link.href + link.label}
                           href={link.href}
@@ -151,7 +153,7 @@ export const footerMapSection = defineSection<FooterMapContent>({
 
     const gatherLines = profile.serviceTimes
       .map((time) => {
-        const clock = formatServiceTime(time.startTime);
+        const clock = formatDayAndTime(time.dayOfWeek, time.startTime);
         return clock ? `${time.label} · ${clock}` : null;
       })
       .filter((line): line is string => Boolean(line));

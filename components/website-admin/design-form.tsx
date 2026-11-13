@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, RotateCcw } from "lucide-react";
+
+import { toast } from "sonner";
 
 import { saveDesign } from "@/app/dashboard/website/actions";
+import { isRecoveryRecord, recoveryHasStrings, websiteRecoveryKey, type WebsiteRecoveryScope } from "@/components/website-admin/draft-recovery";
+import { clearBrandToken } from "@/components/website-admin/field-values";
+import { DraftRecoveryNotice } from "@/components/website-admin/draft-recovery-notice";
 import { SaveStatus } from "@/components/website-admin/save-status";
 import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { normalizeHexColor } from "@/lib/giving/branding";
 import { ColorPickerField } from "@/components/ui/color-picker-field";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
@@ -65,6 +68,7 @@ export type DesignFormProps = {
  */
 export function DesignForm({
   themes,
+  recoveryScope,
   initialThemeKey,
   initialTokens,
   initialCustomCss,
@@ -74,6 +78,7 @@ export function DesignForm({
   isLive,
   onSaved,
 }: DesignFormProps & {
+  recoveryScope: WebsiteRecoveryScope;
   canEdit: boolean;
   isLive: boolean;
   /** Fired after a successful save, so a preview beside it can reload. */
@@ -82,6 +87,7 @@ export function DesignForm({
   const [themeKey, setThemeKey] = useState(initialThemeKey);
   const [tokens, setTokens] = useState<Record<string, string>>(initialTokens);
   const [customCss, setCustomCss] = useState(initialCustomCss);
+  const savedTheme = useRef(initialThemeKey);
 
   // One value for the whole panel, so a colour and a theme change a moment
   // apart collapse into a single write instead of racing each other.
@@ -97,21 +103,40 @@ export function DesignForm({
     [themeKey, tokens, customCss],
   );
 
-  const { status } = useAutosave(
+  const { status, saveNow, recovery, recoveryWarning, restoreRecovered, discardRecovered } = useAutosave(
     design,
     async (value) => {
       const result = await saveDesign(value);
-      if (result.ok) onSaved?.();
+      if (result.ok) {
+        if (savedTheme.current !== value.themeKey) {
+          const previous = savedTheme.current;
+          savedTheme.current = value.themeKey;
+          undoToast(
+            `Your website now uses the ${nameOf(value.themeKey)} look.`,
+            () => setThemeKey(previous),
+            { undoneMessage: `Selected the ${nameOf(previous)} look. Your website updates after it saves.` },
+          );
+        }
+        onSaved?.();
+      }
       return result;
     },
-    { enabled: canEdit },
+    {
+      enabled: canEdit,
+      recoveryKey: canEdit ? websiteRecoveryKey(recoveryScope, "design") : undefined,
+      validateRecovery: isRecoveredDesign,
+    },
   );
 
+  useEffect(() => {
+    if (status.kind === "error") toast.error(`Your website’s look has not saved. ${status.message}`);
+  }, [status]);
+
+  const activeThemeTokens = themes.find(theme => theme.key === themeKey)?.tokens ?? themeDefaults;
   const nameOf = (key: string) => themes.find((t) => t.key === key)?.name ?? "that";
 
   async function chooseTheme(next: string) {
     if (next === themeKey) return;
-    const previous = themeKey;
 
     if (isLive) {
       const ok = await confirmAction({
@@ -124,13 +149,6 @@ export function DesignForm({
     }
 
     setThemeKey(next);
-    undoToast(
-      `Your website now uses the ${nameOf(next)} look.`,
-      () => {
-        setThemeKey(previous);
-      },
-      { undoneMessage: `Back to the ${nameOf(previous)} look.` },
-    );
   }
 
   return (
@@ -142,8 +160,18 @@ export function DesignForm({
             The style and colours of your whole website.
           </p>
         </div>
-        {canEdit ? <SaveStatus status={status} /> : null}
+        {canEdit ? <SaveStatus status={status} onRetry={() => void saveNow()} /> : null}
       </div>
+
+      <DraftRecoveryNotice available={Boolean(recovery)} warning={recoveryWarning} onRestore={() => {
+        const restored = restoreRecovered();
+        if (restored) {
+          setThemeKey(restored.themeKey);
+          setTokens(restored.brandTokens);
+          setCustomCss(restored.customCss);
+        }
+      }} onDiscard={discardRecovered} />
+      <fieldset disabled={Boolean(recovery)} className="flex min-w-0 flex-col gap-6">
 
       <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <h3 className="font-heading text-lg font-bold">Style</h3>
@@ -172,7 +200,7 @@ export function DesignForm({
                   <span className="font-heading text-base font-bold">{theme.name}</span>
                   {selected ? (
                     <span className="inline-flex items-center gap-1 text-sm font-semibold text-accent">
-                      <Check className="size-4" aria-hidden /> In use
+                      <Check className="size-4" aria-hidden /> {savedTheme.current === themeKey ? "In use" : "Selected"}
                     </span>
                   ) : null}
                 </span>
@@ -190,7 +218,7 @@ export function DesignForm({
       <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <h3 className="font-heading text-lg font-bold">Your colours</h3>
         <p className="text-[15px] text-muted-foreground">
-          Choose your own colours, or use the style defaults.
+          Choose a colour, or use the style&apos;s own colour.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -202,22 +230,14 @@ export function DesignForm({
                 value={tokens[token.key] ?? ""}
                 // Unset falls back to the live theme value, so the swatch shows
                 // what the site actually renders rather than an arbitrary black.
-                defaultColor={themeDefaults[token.key] ?? "#000000"}
+                defaultColor={activeThemeTokens[token.key] ?? "#000000"}
                 onChange={(value) =>
                   setTokens((current) => ({ ...current, [token.key]: value }))
                 }
                 disabled={!canEdit}
-              />
-              <ColourValue
-                label={token.label}
-                value={tokens[token.key] ?? ""}
-                defaultColor={themeDefaults[token.key] ?? "#000000"}
-                disabled={!canEdit}
-                onChange={(value) =>
-                  setTokens((current) => ({ ...current, [token.key]: value }))
-                }
               />
               <p className="text-sm text-muted-foreground">{token.help}</p>
+              <Button type="button" variant="ghost" className="self-start" disabled={!canEdit || !tokens[token.key]?.trim()} onClick={() => setTokens(current => clearBrandToken(current, token.key))}><RotateCcw className="size-4" aria-hidden /> Use style&apos;s colour</Button>
             </div>
           ))}
         </div>
@@ -246,6 +266,8 @@ export function DesignForm({
         </section>
       ) : null}
 
+      </fieldset>
+
       {!canEdit ? (
         <p className="text-sm text-muted-foreground">
           Only church admins can change the look.
@@ -255,42 +277,6 @@ export function DesignForm({
   );
 }
 
-function ColourValue({ label, value, defaultColor, disabled, onChange }: {
-  label: string;
-  value: string;
-  defaultColor: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  const [invalid, setInvalid] = useState(false);
-  useEffect(() => { setDraft(value); setInvalid(false); }, [value]);
-
-  function apply() {
-    const next = draft.trim() ? normalizeHexColor(draft) : "";
-    if (next === null) { setInvalid(true); return; }
-    setInvalid(false);
-    onChange(next.toUpperCase());
-  }
-
-  return (
-    <div className="space-y-2">
-      <Input
-        aria-label={`${label} hex value`}
-        aria-invalid={invalid}
-        value={draft}
-        placeholder={defaultColor}
-        disabled={disabled}
-        onChange={(event) => { setDraft(event.target.value); setInvalid(false); }}
-        onBlur={apply}
-        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); apply(); } }}
-      />
-      {invalid ? <p role="alert" className="text-sm text-destructive">Enter a colour such as #2E2B46, or leave it blank for the style default.</p> : null}
-      {value ? (
-        <Button type="button" variant="outline" disabled={disabled} aria-label={`Use style default for ${label.toLowerCase()}`} onClick={() => { setDraft(""); setInvalid(false); onChange(""); }}>
-          Use style default
-        </Button>
-      ) : <p className="text-sm text-muted-foreground">Using style default</p>}
-    </div>
-  );
+function isRecoveredDesign(value: unknown): value is { themeKey: string; brandTokens: Record<string, string>; customCss: string } {
+  return recoveryHasStrings(value, ["themeKey", "customCss"]) && isRecoveryRecord(value.brandTokens) && Object.values(value.brandTokens).every(token => typeof token === "string");
 }

@@ -449,7 +449,7 @@ export async function verifyRecording(
   const playable = verdict.playable && provable;
   const reason = verdict.playable && !provable ? "object_identity_unavailable" : verdict.reason;
 
-  const { data } = await db.rpc("record_recording_rendition", {
+  const { data, error } = await db.rpc("record_recording_rendition", {
     p_recording_id: input.recordingId,
     p_church_id: input.churchId,
     p_playable: playable,
@@ -469,6 +469,13 @@ export async function verifyRecording(
   });
 
   const row = ((data ?? []) as Record<string, unknown>[])[0];
+  if (error || !row?.ok) {
+    console.error("[recordings] verification could not be saved", { recordingId: input.recordingId, code: error?.code });
+    return {
+      ...verdict, playable: false, kind: null, reason: "probe_unavailable",
+      verifiedAt: null, identity, revision: 0,
+    };
+  }
 
   return {
     playable: Boolean(row?.playable) && playable,

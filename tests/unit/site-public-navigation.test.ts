@@ -8,13 +8,17 @@ test("all six church pages stay on the same app-host website, including preview"
   assert.deepEqual(rewriteSiteNavigation(input, { slug: "grace", basePath: "/sites/grace", preview: false }), paths.map(path => ({ href: `/sites/grace${path}?from=nav#details` })));
   assert.deepEqual(rewriteSiteNavigation(input, { slug: "grace", basePath: "/sites/grace", preview: true }), paths.map(path => ({ href: `/sites/grace${path}?from=nav&preview=1#details` })));
   assert.deepEqual(rewriteSiteNavigation([{ href: "/sites/grace/staff?preview=1" }], { slug: "grace", basePath: "/sites/grace", preview: false }), [{ href: "/sites/grace/staff" }]);
+  assert.deepEqual(rewriteSiteNavigation({ href: " /staff?from=menu " }, { slug: "grace", basePath: "/sites/grace", preview: true }), { href: "/sites/grace/staff?from=menu&preview=1" });
 });
 
 test("custom domains use root links and external/giving/contact links retain their destinations", () => {
   assert.equal(churchSiteBasePath("grace", "localhost:3107", []), "/sites/grace");
   assert.equal(churchSiteBasePath("grace", "app.faithform.io", ["app.faithform.io"]), "/sites/grace");
   assert.equal(churchSiteBasePath("grace", "grace-church.org", ["faithform.io"]), "");
-  const untouched = { body: "/give", links: ["https://other.org/staff", "//other.org/visit", "/give/grace", "mailto:office@example.org", "tel:+15025551234", "#form", "/sites/other/staff"].map(href => ({ href })) };
+  assert.equal(churchSiteBasePath("grace", "church.vercel.app", ["faithform-deployment.vercel.app"]), "", "foreign Vercel domains are church domains, not app deployments");
+  assert.equal(churchSiteBasePath("grace", "faithform-deployment.vercel.app", ["faithform-deployment.vercel.app"]), "/sites/grace");
+  assert.equal(churchSiteBasePath("grace", "[::1]:3000", []), "/sites/grace");
+  const untouched = { body: "/give", links: ["https://other.org/staff", "//other.org/visit", "/give/grace", "mailto:office@example.org", "tel:+15025551234", "#form", "/sites/other/staff", "/\\["].map(href => ({ href })) };
   assert.deepEqual(rewriteSiteNavigation(untouched, { slug: "grace", basePath: "/sites/grace", preview: true }), untouched);
   assert.deepEqual(rewriteSiteNavigation({ href: "/sites/grace/visit" }, { slug: "grace", basePath: "", preview: false }), { href: "/visit" });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 
 import {
   highlightWords,
@@ -9,6 +9,7 @@ import {
   splitHeadline,
   type HeadlineParts,
 } from "@/components/website-admin/headline-text";
+import { blankSectionItem, moveSectionListItem } from "@/components/website-admin/field-values";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ function asRecord(value: Value): Bag {
 }
 
 function asArray(value: Value): Bag[] {
-  return Array.isArray(value) ? (value as Bag[]) : [];
+  return Array.isArray(value) ? value.filter((item): item is Bag => Boolean(item && typeof item === "object" && !Array.isArray(item))) : [];
 }
 
 /** Editor-only identities: never add bookkeeping fields to saved site content. */
@@ -72,21 +73,6 @@ export function createListItemRegistry() {
       return copy;
     },
   };
-}
-
-/** A blank item shaped by the list's own field descriptors. */
-function emptyItem(fields: SectionField[]): Bag {
-  const item: Bag = {};
-  for (const field of fields) {
-    if (field.type === "list") item[field.key] = [];
-    else if (field.type === "group") item[field.key] = emptyItem(field.fields);
-    else if (field.type === "toggle") item[field.key] = false;
-    else if (field.type === "image") item[field.key] = { src: null, alt: "" };
-    else if (field.type === "headline") item[field.key] = { lead: "" };
-    else if (field.type === "paragraphs") item[field.key] = [];
-    else item[field.key] = "";
-  }
-  return item;
 }
 
 function FieldShell({
@@ -117,6 +103,7 @@ export function SectionFieldsForm({
   fields,
   value,
   onChange,
+  onRecoverChange,
   idPrefix = "f",
   depth = 0,
   linkTargets = [],
@@ -124,17 +111,20 @@ export function SectionFieldsForm({
   fields: SectionField[];
   value: Bag;
   onChange: (next: Bag) => void;
+  onRecoverChange?: (update: (current: Bag) => Bag) => void;
   idPrefix?: string;
   depth?: number;
   /** Sections a link can jump to; turns "Link" fields into a picker. */
   linkTargets?: LinkTarget[];
 }) {
-  const latest = useRef({ value, onChange });
-  latest.current = { value, onChange };
   const registryRef = useRef<ReturnType<typeof createListItemRegistry> | null>(null);
   if (!registryRef.current) registryRef.current = createListItemRegistry();
   const registry = registryRef.current;
-  const set = (key: string, next: Value) => latest.current.onChange({ ...latest.current.value, [key]: next });
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const set = (key: string, next: Value) => onChangeRef.current({ ...valueRef.current, [key]: next });
 
   return (
     <div className={cn("flex flex-col gap-5", depth > 0 && "gap-4")}>
@@ -273,14 +263,18 @@ export function SectionFieldsForm({
                   // Stored as null rather than "" so the renderer falls back to
                   // the striped placeholder instead of an empty <img>.
                   onChange={(url) => set(field.key, { ...img, src: url || null })}
+                  onRecoverUpload={url => onRecoverChange?.(current => ({ ...current, [field.key]: { ...asRecord(current[field.key]), src: url || null } }))}
                 />
+                <Label htmlFor={`${id}-alt`}>Photo description</Label>
                 <Input
+                  id={`${id}-alt`}
                   placeholder="Describe the image for screen readers"
                   value={asString(img.alt)}
                   onChange={(e) => set(field.key, { ...img, alt: e.target.value })}
                 />
                 {!asString(img.src) ? (
                   <Input
+                    aria-label={`${field.label} placeholder caption`}
                     placeholder="Placeholder caption shown until a photo is added"
                     value={asString(img.placeholder)}
                     onChange={(e) =>
@@ -303,7 +297,7 @@ export function SectionFieldsForm({
                     <div key={i} className="flex gap-2">
                       <Textarea
                         rows={3}
-                        aria-label={`${field.label} ${i + 1}`}
+                        aria-label={`${field.label} paragraph ${i + 1}`}
                         value={paragraph}
                         onChange={(e) => {
                           const next = [...paragraphs];
@@ -348,6 +342,7 @@ export function SectionFieldsForm({
                     fields={field.fields}
                     value={asRecord(current)}
                     onChange={(next) => set(field.key, next)}
+                    onRecoverChange={update => onRecoverChange?.(current => ({ ...current, [field.key]: update(asRecord(current[field.key])) }))}
                     idPrefix={id}
                     depth={depth + 1}
                     linkTargets={linkTargets}
@@ -361,55 +356,77 @@ export function SectionFieldsForm({
             return (
               <FieldShell key={id} label={field.label} help={field.help}>
                 <div className="flex flex-col gap-3">
+                  {items.length === 0 ? <p className="text-sm text-muted-foreground">No items are showing. Add an item, or use Reset to original below to restore the starting list.</p> : null}
                   {items.map((item, i) => {
-                    const itemKey = registry.keyFor(item);
-                    return (
-                    <div
-                      key={itemKey}
+                    const rowKey = registry.keyFor(item);
+                    return <div
+                      key={rowKey}
                       className="rounded-lg border border-border bg-muted/30 p-3"
                     >
-                      <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[15px] font-semibold text-foreground">
                           {(field.titleKey && asString(item[field.titleKey])) ||
                             `${field.label} ${i + 1}`}
                         </span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          aria-label={`Remove ${
-                            (field.titleKey && asString(item[field.titleKey])) ||
-                            `${field.label} ${i + 1}`
-                          }`}
-                          onClick={() =>
-                            set(
-                              field.key,
-                              items.filter((_, index) => index !== i),
-                            )
-                          }
-                        >
-                          <Trash2 className="size-4" aria-hidden /> Remove
-                        </Button>
+                        <div className="flex flex-wrap gap-2">
+                          <Button type="button" variant="ghost" disabled={i === 0} aria-label={`Move ${field.label} item ${i + 1} up`} onClick={() => {
+                            const latest = asArray(valueRef.current[field.key]);
+                            const index = latest.findIndex(entry => registry.keyFor(entry) === rowKey);
+                            if (index >= 0) set(field.key, moveSectionListItem(latest, index, -1));
+                          }}><ArrowUp className="size-4" aria-hidden /> Move up</Button>
+                          <Button type="button" variant="ghost" disabled={i === items.length - 1} aria-label={`Move ${field.label} item ${i + 1} down`} onClick={() => {
+                            const latest = asArray(valueRef.current[field.key]);
+                            const index = latest.findIndex(entry => registry.keyFor(entry) === rowKey);
+                            if (index >= 0) set(field.key, moveSectionListItem(latest, index, 1));
+                          }}><ArrowDown className="size-4" aria-hidden /> Move down</Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            aria-label={`Remove ${
+                              (field.titleKey && asString(item[field.titleKey])) ||
+                              `${field.label} ${i + 1}`
+                            }`}
+                            onClick={() => {
+                              const latest = asArray(valueRef.current[field.key]);
+                              if (latest.some(entry => registry.keyFor(entry) === rowKey)) {
+                                set(field.key, latest.filter(entry => registry.keyFor(entry) !== rowKey));
+                              }
+                            }}
+                          >
+                            <Trash2 className="size-4" aria-hidden /> Remove
+                          </Button>
+                        </div>
                       </div>
                       <SectionFieldsForm
                         fields={field.itemFields}
                         value={item}
                         onChange={(next) => {
-                          const copy = registry.replace(asArray(latest.current.value[field.key]), itemKey, next);
+                          const copy = registry.replace(asArray(valueRef.current[field.key]), rowKey, next);
                           if (copy) set(field.key, copy);
                         }}
-                        idPrefix={`${id}-${itemKey}`}
+                        onRecoverChange={update => onRecoverChange?.(current => {
+                          const copy = [...asArray(current[field.key])];
+                          // A previous editor can finish an upload after this
+                          // list was edited again. Match the original item by
+                          // its non-image fields, never by its old array index.
+                          const identity = recoveryItemIdentity(item, field.itemFields);
+                          const matches = copy.map((candidate, index) => recoveryItemIdentity(candidate, field.itemFields) === identity ? index : -1).filter(index => index >= 0);
+                          if (matches.length !== 1) return current;
+                          copy[matches[0]] = update(copy[matches[0]]);
+                          return { ...current, [field.key]: copy };
+                        })}
+                        idPrefix={`${id}-${i}`}
                         depth={depth + 1}
                         linkTargets={linkTargets}
                       />
-                    </div>
-                    );
+                    </div>;
                   })}
                   <Button
                     type="button"
                     variant="outline"
                     className="self-start"
                     onClick={() =>
-                      set(field.key, [...items, emptyItem(field.itemFields)])
+                      set(field.key, [...asArray(valueRef.current[field.key]), blankSectionItem(field.itemFields)])
                     }
                   >
                     <Plus className="mr-1 size-4" /> {field.addLabel}
@@ -591,4 +608,12 @@ function LinkField({
       </AdvancedSection>
     </div>
   );
+}
+
+function recoveryItemIdentity(item: Bag, fields: SectionField[]): string {
+  return JSON.stringify(fields.filter(field => field.type !== "image").map(field => {
+    if (field.type === "group") return [field.key, recoveryItemIdentity(asRecord(item[field.key]), field.fields)];
+    if (field.type === "list") return [field.key, asArray(item[field.key]).map(child => recoveryItemIdentity(child, field.itemFields))];
+    return [field.key, item[field.key]];
+  }));
 }

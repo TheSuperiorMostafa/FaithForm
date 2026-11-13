@@ -1,6 +1,6 @@
 "use client";
 
-import { cloneElement, useId, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -19,6 +19,7 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
+import { websiteActionRequest } from "./action-request";
 
 import {
   cancelDomainRequest,
@@ -31,7 +32,7 @@ import {
   domainStatusWords,
 } from "@/components/website-admin/website-words";
 import { AdvancedSection } from "@/components/ui/advanced-section";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -178,11 +179,9 @@ function CurrentAddress({
         <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
         <span className="min-w-0 flex-1 truncate text-base font-medium">{label}</span>
         {url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer">
-            <Button variant="ghost">
+          <a href={url} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost" })}>
               Open
               <ExternalLink className="size-4" aria-hidden />
-            </Button>
           </a>
         ) : null}
       </div>
@@ -216,7 +215,7 @@ function DomainCard({
 
   function recheck() {
     startTransition(async () => {
-      const result = await recheckDomainDns(domain.id);
+      const result = await websiteActionRequest(() => recheckDomainDns(domain.id));
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -244,7 +243,7 @@ function DomainCard({
     if (!ok) return;
 
     startRemoving(async () => {
-      const result = await removeDomain(domain.id);
+      const result = await websiteActionRequest(() => removeDomain(domain.id));
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -565,7 +564,7 @@ function RequestForm({
     event.preventDefault();
 
     startTransition(async () => {
-      const result = await submitDomainRequest({
+      const result = await websiteActionRequest(() => submitDomainRequest({
         kind: connecting ? "connect_existing" : "register_new",
         hostname,
         alternateHostnames: connecting
@@ -579,7 +578,7 @@ function RequestForm({
         contactEmail,
         contactPhone,
         notes,
-      });
+      }));
 
       if (!result.ok) {
         toast.error(result.error);
@@ -724,14 +723,12 @@ function Field({
 }: {
   label: string;
   hint?: string;
-  children: React.ReactElement<{ id?: string }>;
+  children: React.ReactNode;
 }) {
-  const generatedId = useId();
-  const controlId = children.props.id ?? generatedId;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={controlId} className="text-[15px] font-semibold">{label}</Label>
-      {cloneElement(children, { id: controlId })}
+      <Label className="text-[15px] font-semibold">{label}</Label>
+      {children}
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
@@ -814,7 +811,7 @@ function RequestCard({
     if (!ok) return;
 
     startTransition(async () => {
-      const result = await cancelDomainRequest(request.id);
+      const result = await websiteActionRequest(() => cancelDomainRequest(request.id));
       if (!result.ok) {
         toast.error(result.error);
         return;

@@ -17,10 +17,23 @@ export function GiveCtaView({ content, ctx }: SectionComponentProps<GiveCtaConte
   const [selected, setSelected] = useState(0);
 
   const amount = selected >= 0 ? content.amounts[selected] : null;
-  const href = amount ? `${content.href}?amount=${amount}` : content.href;
+  // Keep existing fund/campaign parameters and fragments when carrying a
+  // selected amount into the church's giving page.
+  let href = content.href;
+  if (amount) {
+    const hashAt = href.indexOf("#");
+    const hash = hashAt < 0 ? "" : href.slice(hashAt);
+    const destination = hashAt < 0 ? href : href.slice(0, hashAt);
+    const queryAt = destination.indexOf("?");
+    const path = queryAt < 0 ? destination : destination.slice(0, queryAt);
+    const query = new URLSearchParams(queryAt < 0 ? "" : destination.slice(queryAt + 1));
+    query.set("amount", String(amount));
+    href = `${path}?${query}${hash}`;
+  }
+  const submitLabel = content.submitLabel?.trim() || "Give {amount}";
   const label = amount
-    ? content.submitLabel.replace("{amount}", `$${amount}`)
-    : content.submitLabel.replace("{amount}", "").trim();
+    ? submitLabel.replace("{amount}", `$${amount}`)
+    : submitLabel.replace("{amount}", "").trim();
 
   return (
     <SectionShell surface={content.surface} anchor={ctx.anchor}>
@@ -63,7 +76,7 @@ export function GiveCtaView({ content, ctx }: SectionComponentProps<GiveCtaConte
               aria-pressed={selected === -1}
               onClick={() => setSelected(-1)}
             >
-              {content.otherLabel}
+              {content.otherLabel?.trim() || "Other amount"}
             </button>
           </div>
 

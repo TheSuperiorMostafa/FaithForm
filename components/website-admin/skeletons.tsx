@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 /** Mirrors `SitePreview`: toolbar (real labels), 620px frame, caption. */
 export function SitePreviewSkeleton({ sticky = false }: { sticky?: boolean }) {
   return (
-    <div className={cn("flex min-w-0 flex-col gap-3", sticky && "lg:sticky lg:top-4")}>
+    <div className={cn("flex flex-col gap-3", sticky && "lg:sticky lg:top-4")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
           <span className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-background px-4 text-sm font-semibold text-foreground shadow-sm">
@@ -22,7 +22,7 @@ export function SitePreviewSkeleton({ sticky = false }: { sticky?: boolean }) {
             <Smartphone className="size-4" aria-hidden /> Phone
           </span>
         </div>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <span className="inline-flex min-h-11 items-center gap-2 px-6 text-sm font-medium text-muted-foreground">
             <RefreshCw className="size-4" aria-hidden /> Refresh
           </span>
@@ -34,7 +34,7 @@ export function SitePreviewSkeleton({ sticky = false }: { sticky?: boolean }) {
       <div className="relative overflow-hidden rounded-xl border border-border bg-muted/30" style={{ height: 620 }}>
         <Skeleton className="absolute inset-0 rounded-none" />
       </div>
-      <p className="text-sm text-muted-foreground">Your website exactly as a visitor sees it.</p>
+      <p className="text-sm text-muted-foreground">This shows your saved website. Changes appear here after they save.</p>
     </div>
   );
 }

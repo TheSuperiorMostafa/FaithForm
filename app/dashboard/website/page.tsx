@@ -15,7 +15,6 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { getChurchDomains } from "@/lib/sites/domain-queries";
 import { getDomainProvider } from "@/lib/sites/domains";
 import { parseSiteLayoutMode } from "@/lib/sites/layout-mode";
-import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { countNewSubmissions, getWebsiteForChurch } from "@/lib/sites/queries";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
@@ -32,23 +31,23 @@ export default async function WebsiteOverviewPage() {
   if (!auth) redirect("/login");
 
   const site = await getWebsiteForChurch(auth.churchId);
-  if (!site) return <EmptySite />;
+  if (!site || site.sections.length === 0) return <EmptySite />;
 
   const [domains, newMessages] = await Promise.all([
     getChurchDomains(auth.churchId),
     countNewSubmissions(auth.churchId),
   ]);
 
-  const published = isPublicSitePublication(site.page.status, site.settings?.isPublished);
+  const published = site.settings?.isPublished === true && site.page.status === "published";
   const layoutMode = parseSiteLayoutMode(site.settings?.layoutMode);
   const previewUrl = `${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`;
 
   const rootHost = process.env.NEXT_PUBLIC_SITE_ROOT_HOST?.trim().toLowerCase();
   const faithformAddress = rootHost && site.slug ? `${site.slug}.${rootHost}` : null;
-  const connected = domains.find((d) => d.status === "live");
+  const connected = domains.find((d) => d.status === "live" && d.verifiedAt);
   const primary = domains.find((d) => d.isPrimary) ?? domains[0] ?? null;
   const liveHost = connected?.hostname ?? faithformAddress;
-  const liveUrl = liveHost ? `https://${liveHost}` : null;
+  const liveUrl = liveHost ? `https://${liveHost}` : `${getCanonicalSiteUrl()}/sites/${site.slug}`;
 
   const visible = site.sections.filter((s) => s.isVisible).length;
   const automated = getDomainProvider().automated;
@@ -142,7 +141,7 @@ export default async function WebsiteOverviewPage() {
         </ul>
       </section>
 
-      <SitePreview key={layoutMode} previewUrl={previewUrl} />
+      <SitePreview previewUrl={previewUrl} />
     </div>
   );
 }

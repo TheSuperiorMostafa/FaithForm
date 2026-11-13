@@ -25,6 +25,7 @@ import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import { rotateStreamPublishSecret } from "@/lib/stream/relay";
 import { getActiveStreamSession } from "@/lib/stream/sessions";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { recheckFileRecording } from "@/lib/stream/recording-upload-service";
 
 /**
  * Everything a church does to a livestream recording from the dashboard.
@@ -53,6 +54,9 @@ async function requireAdmin(): Promise<
 }
 
 function revalidate(recordingId?: string) {
+  revalidatePath("/dashboard/website/sermons");
+  revalidatePath("/sites/[slug]/[[...path]]", "page");
+  revalidatePath("/live/[slug]/watch/[id]", "page");
   revalidatePath("/dashboard/live-streaming");
   revalidatePath("/dashboard/live-streaming/recordings");
   revalidatePath("/dashboard/live-streaming/upcoming");
@@ -77,6 +81,10 @@ export async function publishRecordingAction(input: {
     }
   }
   // Everyone who follows a church is a member, so "members" is saved as "followers".
+  if (input.website) {
+    const denied = await featureActionError("website");
+    if (denied) return { ok: false, error: denied };
+  }
   const appVisibility: AppVisibility | null =
     input.appVisibility === "members" ? "followers" : input.appVisibility;
 
@@ -254,7 +262,12 @@ export async function retryRecordingAction(recordingId: string): Promise<Recordi
   const row = await deps.repo.getRecording(auth.churchId, recordingId);
   if (!row) return { ok: false, error: "That recording is no longer available." };
   try {
-    await retryRecording(deps, row);
+    if (row.sourceKind === "file") {
+      const result = await recheckFileRecording({ churchId: auth.churchId, recordingId }, createAdminClient());
+      if (!result.ok) return result;
+    } else {
+      await retryRecording(deps, row);
+    }
   } catch (error) {
     return { ok: false, error: toUserError(error, "We couldn't try that recording again.") };
   }

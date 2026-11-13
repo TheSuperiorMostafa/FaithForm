@@ -342,6 +342,7 @@ export type SiteProfileEvent = {
 export type SiteProfile = {
   slug: string;
   name: string;
+  timezone?: string | null;
   tagline: string | null;
   description: string | null;
   missionStatement: string | null;

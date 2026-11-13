@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import { UserFacingError, toUserError } from "@/lib/errors/user-error";
-import { verifyRecording } from "@/lib/media/v1/rendition-check";
+import { finalizeUploadedRecording } from "@/lib/stream/recording-upload-service";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { recordingUploadPath, validateRecordingUpload } from "@/lib/stream/recording-upload";
@@ -48,20 +48,8 @@ export async function finishRecordingUpload(recordingId: string) {
   try {
     const auth = await uploadAuth();
     if (!/^[0-9a-f-]{36}$/i.test(recordingId)) return { ok: false as const, error: "That upload is no longer available." };
-    const admin = createAdminClient();
-    const path = recordingUploadPath(auth.churchId, recordingId);
-    const { data: row, error } = await admin.from("stream_recordings").select("status, total_bytes")
-      .eq("id", recordingId).eq("church_id", auth.churchId).eq("storage_path", path).eq("source_kind", "file").maybeSingle();
-    if (error) throw error;
-    if (!row || !["processing", "ready"].includes(row.status)) return { ok: false as const, error: "That upload is no longer available." };
-    const { data: object, error: objectError } = await admin.storage.from(STREAM_RECORDINGS_BUCKET).info(path);
-    if (objectError || !object || Number(object.size) !== Number(row.total_bytes)) return { ok: false as const, error: "The video hasn't finished uploading. Please try again." };
-    const { error: updateError } = await admin.from("stream_recordings").update({ status: "ready", ready_at: new Date().toISOString(), finalized_by: "legacy" })
-      .eq("id", recordingId).eq("church_id", auth.churchId).eq("storage_path", path).eq("status", "processing");
-    if (updateError) throw updateError;
-    // The canonical probe reads actual bytes and binds publication to the object.
-    // A rejected codec stays visible for review but cannot be published.
-    await verifyRecording({ recordingId, churchId: auth.churchId, storagePath: path }, admin);
+    const result = await finalizeUploadedRecording({ churchId: auth.churchId, recordingId }, createAdminClient());
+    if (!result.ok) return result;
     revalidatePath("/dashboard/live-streaming/recordings");
     return { ok: true as const, recordingId };
   } catch (error) {

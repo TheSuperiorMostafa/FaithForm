@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { websiteActionRequest } from "./action-request";
 
 import { setLayoutMode } from "@/app/dashboard/website/actions";
 import { confirmAction } from "@/components/ui/confirm-dialog";
@@ -52,7 +53,7 @@ export function LayoutModeCard({
     }
 
     startTransition(async () => {
-      const result = await setLayoutMode(next);
+      const result = await websiteActionRequest(() => setLayoutMode(next));
       if (!result.ok) {
         toast.error(result.error);
         return;

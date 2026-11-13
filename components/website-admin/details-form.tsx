@@ -1,7 +1,8 @@
 "use client";
 
-import { cloneElement, useEffect, useId, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
@@ -9,7 +10,10 @@ import {
   type SavedRowIds,
   type SiteDetailsInput,
 } from "@/app/dashboard/website/actions";
+import { recoveryHasStrings, websiteRecoveryKey, type WebsiteRecoveryScope } from "@/components/website-admin/draft-recovery";
+import { DraftRecoveryNotice } from "@/components/website-admin/draft-recovery-notice";
 import { DesignForm, type DesignFormProps } from "@/components/website-admin/design-form";
+import { EditorField as Field } from "@/components/website-admin/editor-field";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { LiveEditsNote } from "@/components/website-admin/live-edits-note";
 import { SaveStatus } from "@/components/website-admin/save-status";
@@ -36,7 +40,7 @@ import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
 type StaffRow = SiteDetailsInput["staff"][number];
 
 function newId() {
-  return crypto.randomUUID();
+  return Math.random().toString(36).slice(2);
 }
 
 /** Where the same church details are also edited, so it reads as one set. */
@@ -44,12 +48,14 @@ const SHARED_NOTE = "Also shown in Settings → Church info.";
 
 export function DetailsForm({
   initial,
+  recoveryScope,
   canEdit,
   previewUrl,
   isLive,
   design,
 }: {
   initial: SiteDetailsInput;
+  recoveryScope: WebsiteRecoveryScope;
   canEdit: boolean;
   previewUrl: string;
   isLive: boolean;
@@ -57,6 +63,11 @@ export function DetailsForm({
   design?: DesignFormProps;
 }) {
   const [form, setForm] = useState<SiteDetailsInput>(initial);
+  const editorMounted = useRef(true);
+  useEffect(() => {
+    editorMounted.current = true;
+    return () => { editorMounted.current = false; };
+  }, []);
   const [savedAt, setSavedAt] = useState(0);
   const router = useRouter();
   const [view, setView] = useState<DetailsView>("details");
@@ -70,7 +81,7 @@ export function DetailsForm({
     value: SiteDetailsInput[K],
   ) => setForm((f) => ({ ...f, [key]: value }));
 
-  const { status } = useAutosave(
+  const { status, saveNow, recovery, recoveryWarning, restoreRecovered, discardRecovered, backupDraft } = useAutosave(
     form,
     async (value) => {
       const result = await saveSiteDetails(value);
@@ -82,8 +93,16 @@ export function DetailsForm({
       }
       return result;
     },
-    { enabled: canEdit },
+    {
+      enabled: canEdit,
+      recoveryKey: canEdit ? websiteRecoveryKey(recoveryScope, "details") : undefined,
+      validateRecovery: isRecoveredDetails,
+    },
   );
+
+  useEffect(() => {
+    if (status.kind === "error") toast.error(`Your church details have not saved. ${status.message}`);
+  }, [status]);
 
   /**
    * Take on the ids the database assigned to rows this form created.
@@ -129,10 +148,10 @@ export function DetailsForm({
       destructive: true,
     });
     if (!ok) return;
-    set(
-      "serviceTimes",
-      times.filter((_, i) => i !== index),
-    );
+    setForm(current => ({
+      ...current,
+      serviceTimes: current.serviceTimes.filter(item => item.clientId !== row.clientId),
+    }));
   }
 
   async function removePerson(index: number) {
@@ -145,14 +164,14 @@ export function DetailsForm({
       destructive: true,
     });
     if (!ok) return;
-    set(
-      "staff",
-      staff.filter((_, i) => i !== index),
-    );
+    setForm(current => ({
+      ...current,
+      staff: current.staff.filter(item => item.clientId !== row.clientId),
+    }));
   }
 
   return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
       <div className="flex min-w-0 flex-col gap-6">
         <LiveEditsNote isLive={isLive} />
 
@@ -177,8 +196,14 @@ export function DetailsForm({
                 and what your phone assistant tells callers.
               </p>
             </div>
-            {canEdit ? <SaveStatus status={status} /> : null}
+            {canEdit ? <SaveStatus status={status} onRetry={() => void saveNow()} /> : null}
           </div>
+
+          <DraftRecoveryNotice available={Boolean(recovery)} warning={recoveryWarning} onRestore={() => {
+            const restored = restoreRecovered();
+            if (restored) setForm(restored);
+          }} onDiscard={discardRecovered} />
+          <fieldset disabled={Boolean(recovery)} className="flex min-w-0 flex-col gap-6">
 
           <Panel title="Your church" description={SHARED_NOTE}>
             <Field label="Church name" required>
@@ -204,6 +229,7 @@ export function DetailsForm({
               value={form.logoUrl}
               disabled={!canEdit}
               onChange={(url) => set("logoUrl", url)}
+              onRecoverUpload={url => { if (!editorMounted.current) backupDraft(current => ({ ...current, logoUrl: url })); }}
             />
             <ImageUploadField
               label="Cover photo"
@@ -214,6 +240,7 @@ export function DetailsForm({
               value={form.coverImageUrl}
               disabled={!canEdit}
               onChange={(url) => set("coverImageUrl", url)}
+              onRecoverUpload={url => { if (!editorMounted.current) backupDraft(current => ({ ...current, coverImageUrl: url })); }}
             />
           </Panel>
 
@@ -278,7 +305,9 @@ export function DetailsForm({
                   // rather than each sizing to its own content.
                   className="grid items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem_auto]"
                 >
+                  <Label htmlFor={`service-${row.clientId}-label`} className="sr-only">Service name</Label>
                   <Input
+                    id={`service-${row.clientId}-label`}
                     placeholder="Sunday Worship"
                     value={row.label}
                     disabled={!canEdit}
@@ -288,7 +317,9 @@ export function DetailsForm({
                       set("serviceTimes", next);
                     }}
                   />
+                  <Label htmlFor={`service-${row.clientId}-day`} className="sr-only">Day for {row.label || `service ${i + 1}`}</Label>
                   <Select
+                    id={`service-${row.clientId}-day`}
                     value={row.dayOfWeek}
                     disabled={!canEdit}
                     onChange={(e) => {
@@ -303,7 +334,9 @@ export function DetailsForm({
                       </option>
                     ))}
                   </Select>
+                  <Label htmlFor={`service-${row.clientId}-time`} className="sr-only">Start time for {row.label || `service ${i + 1}`}</Label>
                   <Input
+                    id={`service-${row.clientId}-time`}
                     type="time"
                     value={row.startTime}
                     disabled={!canEdit}
@@ -364,20 +397,26 @@ export function DetailsForm({
                     className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
                   >
                     <div className="grid gap-3 sm:grid-cols-2">
+                      <Label htmlFor={`staff-${row.clientId}-name`} className="sr-only">Name for team member {i + 1}</Label>
                       <Input
+                        id={`staff-${row.clientId}-name`}
                         placeholder="Full name"
                         value={row.fullName}
                         disabled={!canEdit}
                         onChange={(e) => update({ fullName: e.target.value })}
                       />
+                      <Label htmlFor={`staff-${row.clientId}-role`} className="sr-only">Role for {row.fullName || `team member ${i + 1}`}</Label>
                       <Input
+                        id={`staff-${row.clientId}-role`}
                         placeholder="Role, e.g. Lead Pastor"
                         value={row.title}
                         disabled={!canEdit}
                         onChange={(e) => update({ title: e.target.value })}
                       />
                     </div>
+                    <Label htmlFor={`staff-${row.clientId}-bio`} className="sr-only">Biography for {row.fullName || `team member ${i + 1}`}</Label>
                     <Textarea
+                      id={`staff-${row.clientId}-bio`}
                       rows={2}
                       placeholder="A sentence about them"
                       value={row.bio}
@@ -390,11 +429,17 @@ export function DetailsForm({
                       value={row.photoUrl}
                       disabled={!canEdit}
                       onChange={(url) => update({ photoUrl: url })}
+                      onRecoverUpload={url => {
+                        if (editorMounted.current) return;
+                        backupDraft(current => ({ ...current, staff: current.staff.map(person => person.clientId === row.clientId ? { ...person, photoUrl: url } : person) }));
+                      }}
                     />
                     <div className="flex items-center justify-between gap-4">
-                      <Label className="text-[15px] font-medium">Show on the website</Label>
+                      <Label htmlFor={`staff-${row.clientId}-public`} className="text-[15px] font-medium">Show on the website</Label>
                       <div className="flex items-center gap-2">
                         <Switch
+                          id={`staff-${row.clientId}-public`}
+                          aria-label={`Show ${row.fullName || `team member ${i + 1}`} on the website`}
                           checked={row.isPublic}
                           disabled={!canEdit}
                           onCheckedChange={(checked) => update({ isPublic: checked })}
@@ -435,12 +480,14 @@ export function DetailsForm({
             </Field>
           </Panel>
 
+          </fieldset>
+
           {!canEdit ? (
             <p className="text-sm text-muted-foreground">
               Only church admins can change these.
             </p>
           ) : (
-            <SaveStatus status={status} />
+            <SaveStatus status={status} onRetry={() => void saveNow()} />
           )}
         </div>
 
@@ -448,9 +495,10 @@ export function DetailsForm({
           <div className={view === "look" ? undefined : "hidden"}>
             <DesignForm
               {...design}
+              recoveryScope={recoveryScope}
               canEdit={canEdit}
               isLive={isLive}
-              onSaved={() => setSavedAt(Date.now())}
+              onSaved={() => { setSavedAt(Date.now()); router.refresh(); }}
             />
           </div>
         ) : null}
@@ -487,35 +535,6 @@ function Panel({
     </section>
   );
 }
-
-function Field({
-  label,
-  help,
-  required,
-  children,
-}: {
-  label: string;
-  help?: string;
-  required?: boolean;
-  children: React.ReactElement<{ id?: string }>;
-}) {
-  const generatedId = useId();
-  const controlId = children.props.id ?? generatedId;
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={controlId} className="text-sm font-semibold">
-        {label}
-        {required ? <span className="text-destructive"> *</span> : null}
-      </Label>
-      {/* Help sits below the control, not between label and control. Above it,
-       * a field with help pushes its input down and stops lining up with the
-       * field beside it in the same row. */}
-      {cloneElement(children, { id: controlId })}
-      {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
-    </div>
-  );
-}
-
 type DetailsView = "details" | "look";
 
 /** Details or Look, one at a time, so the look is one tap away instead of a long scroll. */
@@ -523,3 +542,10 @@ const VIEW_OPTIONS: { value: DetailsView; label: string }[] = [
   { value: "details", label: "Details" },
   { value: "look", label: "Look" },
 ];
+
+function isRecoveredDetails(value: unknown): value is SiteDetailsInput {
+  if (!recoveryHasStrings(value, ["name", "denomination", "logoUrl", "coverImageUrl", "address", "city", "state", "zip", "phone", "email", "googleMapsUrl", "missionStatement", "visionStatement"])) return false;
+  if (!Array.isArray(value.serviceTimes) || !Array.isArray(value.staff)) return false;
+  return value.serviceTimes.every(row => recoveryHasStrings(row, ["clientId", "label", "startTime"]) && typeof row.dayOfWeek === "number" && (row.id === undefined || typeof row.id === "string"))
+    && value.staff.every(row => recoveryHasStrings(row, ["clientId", "fullName", "title", "bio", "photoUrl"]) && typeof row.isPublic === "boolean" && (row.id === undefined || typeof row.id === "string"));
+}

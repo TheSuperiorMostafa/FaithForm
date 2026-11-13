@@ -5,15 +5,8 @@ import Cropper, { type Area } from "react-easy-crop";
 import { Maximize2, Minus, Plus, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /**
  * Crop-to-fit before upload.
@@ -57,12 +50,17 @@ export function ImageCropper({
   const [pixels, setPixels] = useState<Area | null>(null);
   const titleId = useId();
   const descriptionId = useId();
+  const [loadError, setLoadError] = useState(false);
 
   // Object URLs leak until revoked, and a church may open the cropper many
   // times while trying photos.
   useEffect(() => {
     const url = URL.createObjectURL(file);
     setSrc(url);
+    setPixels(null);
+    setLoadError(false);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
@@ -77,25 +75,20 @@ export function ImageCropper({
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <DialogContent
-        showClose={false}
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        className="max-w-3xl overflow-hidden"
-      >
-        <DialogHeader className="px-5 py-4">
+      <DialogContent className="max-w-3xl overflow-hidden" aria-labelledby={titleId} aria-describedby={descriptionId}>
+        <DialogHeader className="pr-16">
           <DialogTitle id={titleId}>Position your photo</DialogTitle>
           <DialogDescription id={descriptionId}>
             {aspect.label} — {aspect.hint} Drag to move, and zoom to fill the
             frame. Everything outside it is trimmed off.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="min-h-0 flex-auto overflow-y-auto p-5">
-          <div className="relative h-[min(380px,50dvh)] min-h-[120px] overflow-hidden rounded-xl bg-muted">
+        <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto p-4 sm:p-6">
+          <div className="relative h-[min(380px,45dvh)] min-h-40 shrink-0 overflow-hidden rounded-xl bg-muted">
             {src ? (
               <Cropper
                 image={src}
+                mediaProps={{ onError: () => setLoadError(true) }}
                 crop={crop}
                 zoom={zoom}
                 aspect={aspect.ratio ?? 1}
@@ -111,18 +104,19 @@ export function ImageCropper({
             ) : null}
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          {loadError ? <p role="alert" className="text-sm text-destructive">We couldn&apos;t open that photo. Cancel and try a JPG or PNG image.</p> : null}
+
+          <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
               variant="outline"
-              size="icon"
               aria-label="Zoom out"
               onClick={() => setZoom((z) => Math.max(1, Number((z - 0.2).toFixed(2))))}
             >
-              <Minus className="size-4" />
+              <Minus className="size-4" aria-hidden /> Zoom out
             </Button>
 
-            <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2">
+            <label className="flex min-w-0 flex-1 items-center gap-2">
               <Maximize2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               <span className="sr-only">Zoom</span>
               <input
@@ -139,27 +133,26 @@ export function ImageCropper({
             <Button
               type="button"
               variant="outline"
-              size="icon"
               aria-label="Zoom in"
               onClick={() => setZoom((z) => Math.min(5, Number((z + 0.2).toFixed(2))))}
             >
-              <Plus className="size-4" />
+              <Plus className="size-4" aria-hidden /> Zoom in
             </Button>
 
-            <Button type="button" variant="ghost" size="sm" onClick={reset}>
+            <Button type="button" variant="ghost" onClick={reset}>
               <RotateCcw className="mr-1 size-4" />
               Reset
             </Button>
           </div>
-        </div>
 
-        <DialogFooter className="flex-row justify-end px-5 py-4">
+        </div>
+        <DialogFooter>
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
           <Button
             type="button"
-            disabled={!pixels}
+            disabled={!pixels || loadError}
             onClick={() => pixels && onConfirm(pixels)}
           >
             Use this photo

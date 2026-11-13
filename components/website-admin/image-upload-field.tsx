@@ -1,11 +1,14 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
+import { flushSync } from "react-dom";
 import { ImageUp, Link2, Loader2, Trash2 } from "lucide-react";
 
 import type { Area } from "react-easy-crop";
 
 import { uploadSiteImage, type UploadResult } from "@/app/dashboard/website/actions";
+import { registerWebsiteEditor } from "@/components/website-admin/editor-save-guard";
+import type { SaveResult } from "@/components/website-admin/autosave-queue";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +42,7 @@ export function ImageUploadField({
   label,
   value,
   onChange,
+  onRecoverUpload,
   help,
   disabled,
   className,
@@ -59,6 +63,8 @@ export function ImageUploadField({
   label: string;
   value: string;
   onChange: (url: string) => void;
+  /** Retain an upload after its whole editor leaves; never apply it to a removed item. */
+  onRecoverUpload?: (url: string) => void;
   help?: string;
   disabled?: boolean;
   className?: string;
@@ -68,28 +74,47 @@ export function ImageUploadField({
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const mounted = useRef(true);
+  const guardRef = useRef<ReturnType<typeof createImageUploadGuard> | null>(null);
+  if (!guardRef.current) guardRef.current = createImageUploadGuard();
+  const guard = guardRef.current;
+  useEffect(() => {
+    mounted.current = true;
+    guard.mount();
+    return () => { mounted.current = false; guard.unmount(); };
+  }, [guard]);
   // An upload can finish after the rest of this section has been edited.
   // Use the latest callback so its new URL cannot restore an older form draft.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const guardRef = useRef<ReturnType<typeof createImageUploadGuard> | null>(null);
-  if (!guardRef.current) guardRef.current = createImageUploadGuard();
-  const guard = guardRef.current;
-  useEffect(() => { guard.mount(); return guard.unmount; }, [guard]);
+  const onRecoverUploadRef = useRef(onRecoverUpload);
+  onRecoverUploadRef.current = onRecoverUpload;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUrl, setShowUrl] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [cropping, setCropping] = useState<{ file: File; operation: number } | null>(null);
+  const [cropping, setCropping] = useState<File | null>(null);
   // Shrinking a 12MP photo takes a beat, and it happens before the upload
   // starts, so it needs its own flag to hold the spinner open.
   const [preparing, setPreparing] = useState(false);
 
+  const operation = useRef<{ promise: Promise<SaveResult>; resolve: (result: SaveResult) => void; revision: number } | null>(null);
+  useEffect(() => registerWebsiteEditor({
+    get hasUnsavedChanges() { return operation.current !== null; },
+    flush: () => operation.current?.promise ?? Promise.resolve({ ok: true }),
+  }), []);
+
+  function finish(result: SaveResult) {
+    operation.current?.resolve(result);
+    operation.current = null;
+  }
+
   const preset = getAspect(aspect);
   const busy = pending || preparing;
 
-  function upload(file: File, operation: number, crop?: Area) {
-    if (!guard.isCurrent(operation)) return;
+  function upload(file: File, crop?: Area) {
+    const revision = operation.current?.revision;
+    if (revision === undefined || !guard.isCurrent(revision)) return;
     setError(null);
     const data = new FormData();
     data.set("file", file);
@@ -105,14 +130,22 @@ export function ImageUploadField({
     startTransition(async () => {
       try {
         const result = await uploadAction(data);
-        if (!guard.isCurrent(operation)) return;
+        if (mounted.current && !guard.isCurrent(revision)) return;
         if (!result.ok) {
           setError(result.error);
+          finish(result);
           return;
         }
-        onChangeRef.current(result.url);
-      } catch {
-        if (guard.isCurrent(operation)) setError("We couldn't upload that photo. Try again.");
+        // Commit the URL before resolving the upload guard, so its parent
+        // autosave is queued before a page/full-screen transition can proceed.
+        if (mounted.current) flushSync(() => onChangeRef.current(result.url));
+        else onRecoverUploadRef.current?.(result.url);
+        finish({ ok: true });
+      } catch (cause) {
+        console.error("[website] Photo upload failed:", cause);
+        const message = "We couldn’t upload that photo. Your current photo is kept. Choose the photo again to retry.";
+        setError(message);
+        finish({ ok: false, error: message });
       }
     });
   }
@@ -125,37 +158,48 @@ export function ImageUploadField({
    * would leave those coordinates pointing at an image that no longer exists.
    */
   async function accept(file: File) {
-    const operation = guard.start();
     setError(null);
+    if (disabled || busy || operation.current) return;
+    if (!file.type.startsWith("image/")) {
+      setError("That file isn’t an image. Choose a JPG or PNG photo.");
+      return;
+    }
+    let resolve!: (result: SaveResult) => void;
+    const promise = new Promise<SaveResult>(done => { resolve = done; });
+    const revision = guard.start();
+    operation.current = { promise, resolve, revision };
     setPreparing(true);
 
     let ready: File;
     try {
       ready = await downscaleForUpload(file);
-    } catch {
-      if (guard.isCurrent(operation)) setError("We couldn't prepare that photo. Try another image.");
+    } catch (cause) {
+      console.error("[website] Photo preparation failed:", cause);
+      const message = "We couldn’t prepare that photo. Choose a JPG or PNG image and try again.";
+      setError(message);
+      finish({ ok: false, error: message });
       return;
     } finally {
-      if (guard.isCurrent(operation)) setPreparing(false);
+      setPreparing(false);
     }
-    if (!guard.isCurrent(operation)) return;
 
     // Only a file the browser could not decode, a HEIC outside Safari being
     // the realistic case, arrives here still oversized. Saying so beats
     // letting the request die at the server's body limit, which surfaces as an
     // error nobody wrote.
     if (ready.size > UPLOAD_BUDGET_BYTES) {
-      setError(
-        "That photo is too large to upload. Save it as a JPG and try again.",
-      );
+      const message = "That photo is too large to upload. Save it as a JPG and try again.";
+      setError(message);
+      finish({ ok: false, error: message });
       return;
     }
 
+    if (!mounted.current || !guard.isCurrent(revision)) { finish({ ok: true }); return; }
     if (preset.ratio === null) {
-      upload(ready, operation);
+      upload(ready);
       return;
     }
-    setCropping({ file: ready, operation });
+    setCropping(ready);
   }
 
   function onDrop(event: React.DragEvent) {
@@ -180,7 +224,8 @@ export function ImageUploadField({
         </Label>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          disabled={disabled || busy}
+          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
           onClick={() => setShowUrl((s) => !s)}
         >
           <Link2 className="size-3" aria-hidden />
@@ -216,7 +261,6 @@ export function ImageUploadField({
             <Button
               type="button"
               variant="outline"
-              size="sm"
               disabled={disabled || busy}
               onClick={() => inputRef.current?.click()}
             >
@@ -225,12 +269,11 @@ export function ImageUploadField({
             <Button
               type="button"
               variant="ghost"
-              size="sm"
               disabled={disabled || busy}
               onClick={() => {
                 guard.invalidate();
                 setError(null);
-                onChangeRef.current("");
+                onChange("");
               }}
             >
               <Trash2 className="mr-1 size-4" />
@@ -264,7 +307,7 @@ export function ImageUploadField({
               <p className="text-sm">
                 <button
                   type="button"
-                  className="font-semibold text-accent underline underline-offset-4"
+                  className="inline-flex min-h-11 items-center font-semibold text-accent underline underline-offset-4"
                   disabled={disabled || busy}
                   onClick={() => inputRef.current?.click()}
                 >
@@ -297,32 +340,28 @@ export function ImageUploadField({
 
       {cropping ? (
         <ImageCropper
-          file={cropping.file}
+          file={cropping}
           aspectKey={preset.key}
-          onCancel={() => { guard.invalidate(); setCropping(null); }}
+          onCancel={() => { guard.invalidate(); setCropping(null); finish({ ok: true }); }}
           onConfirm={(crop) => {
-            const { file, operation } = cropping;
+            const file = cropping;
             setCropping(null);
-            upload(file, operation, crop);
+            upload(file, crop);
           }}
         />
       ) : null}
 
       {showUrl ? (
         <Input
+          aria-label={`${label} web address`}
           placeholder="https://…"
           value={value}
-          disabled={disabled}
-          onChange={(e) => {
-            guard.invalidate();
-            setPreparing(false);
-            setCropping(null);
-            onChangeRef.current(e.target.value);
-          }}
+          disabled={disabled || busy}
+          onChange={(e) => { guard.invalidate(); onChange(e.target.value); }}
         />
       ) : null}
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

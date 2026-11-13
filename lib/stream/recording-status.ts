@@ -48,7 +48,7 @@ export function isStillChanging(phase: RecordingPhase): boolean {
 export type RecordingNextAction = { label: string; href: string };
 
 export function recordingNextAction(
-  recording: { id: string; phase: { phase: RecordingPhase } },
+  recording: { id: string; phase: { phase: RecordingPhase }; sourceKind?: string; status?: string },
   isAdmin: boolean,
 ): RecordingNextAction | null {
   const href = recordingHref(recording.id);
@@ -56,7 +56,7 @@ export function recordingNextAction(
     case "recording":
       return { label: "Go to Live", href: GO_LIVE_HREF };
     case "preparing":
-      return null;
+      return recording.sourceKind === "file" && recording.status === "ready" ? { label: "Check video", href } : null;
     case "ready_to_publish":
       return isAdmin
         ? { label: "Review & publish", href }

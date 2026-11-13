@@ -11,6 +11,7 @@ import {
   getStaffPlayback,
   getStaffRecording,
   listThumbnailChoices,
+  getWebsiteSermonsUrl,
 } from "@/lib/stream/recording-publication";
 import { isStillChanging } from "@/lib/stream/recording-status";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
@@ -34,7 +35,7 @@ export default async function RecordingReviewPage({
   const recording = await getStaffRecording(auth.churchId, id);
   if (!recording) notFound();
 
-  const [playback, series, thumbnails, settings, mediaItem, stats, access] = await Promise.all([
+  const [playback, series, thumbnails, settings, mediaItem, stats, access, websiteSermonsUrl] = await Promise.all([
     recording.status === "ready" || recording.status === "processing"
       ? getStaffPlayback(auth.churchId, id)
       : Promise.resolve(null),
@@ -44,6 +45,7 @@ export default async function RecordingReviewPage({
     getMediaItem(auth.churchId, id),
     getMediaStats(auth.churchId, id, recording.sessionId),
     getFeatureAccess(),
+    getWebsiteSermonsUrl(auth.churchId),
   ]);
 
   const stillChanging = isStillChanging(recording.phase.phase);
@@ -60,6 +62,7 @@ export default async function RecordingReviewPage({
         isAdmin={auth.isAdmin}
         appEnabled={Boolean(access?.flags.member_app)}
         timeZone={auth.churchTimezone ?? "America/New_York"}
+        websiteSermonsUrl={websiteSermonsUrl}
         stats={{ live: stats.liveViews, replay: stats.replayViews }}
         artworkSlot={
           auth.isAdmin && mediaItem ? (

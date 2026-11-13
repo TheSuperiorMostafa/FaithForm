@@ -12,6 +12,11 @@ import { SECTION_REGISTRY } from "@/lib/sites/registry";
  * pages, one level larger.
  */
 export function PageRenderer({ page, website }: { page: ResolvedPage; website?: WebsitePageFrame }) {
+  const hasHeroHeading=page.sections.some(section=>{
+    if(section.type!=="hero") return false;
+    const headline=section.content.headline as {lead?:string;accent?:string;trail?:string}|undefined;
+    return [headline?.lead,headline?.accent,headline?.trail].some(value=>typeof value==="string" && value.trim());
+  });
   return (
     // The outer element carries the tokens too, so the letterboxing either side
     // of the 1280px column is the church's own ink rather than whatever the app
@@ -24,6 +29,7 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
       style={page.tokens as React.CSSProperties}
     >
       <div data-site={page.slug}>
+        {!hasHeroHeading && (!website || website.path === "/") ? <h1 className="sr-only">{page.title || website?.churchName}</h1> : null}
         {page.customCss ? (
           // Sanitised in lib/sites/resolve.ts. It can only ever load here, on
           // this church's own pages, which is what walls it off from the rest.

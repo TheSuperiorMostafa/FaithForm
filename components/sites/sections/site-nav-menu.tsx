@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { isCurrentSiteLink } from "@/lib/sites/active-link";
+import { hasUsableSiteLink } from "@/lib/sites/public-navigation";
 import { cn } from "@/lib/utils";
 import type { SiteAction, SiteLink } from "@/types/site";
 
@@ -43,9 +44,11 @@ export function SiteNavMenu({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (links.length === 0 && !cta?.label) return null;
+  const usableLinks=links.filter(hasUsableSiteLink);
+  const usableCta=hasUsableSiteLink(cta)?cta:null;
+  if (usableLinks.length === 0 && !usableCta) return null;
 
-  const ctaVariant = ACTION_CLASS[cta?.variant ?? "solid"] ?? ACTION_CLASS.solid;
+  const ctaVariant = ACTION_CLASS[usableCta?.variant ?? "solid"] ?? ACTION_CLASS.solid;
 
   return (
     <div className="site-nav-menu">
@@ -96,7 +99,7 @@ export function SiteNavMenu({
             className="site-nav-drawer"
             aria-label="Site menu"
           >
-            {links.map((link) => (
+            {usableLinks.map((link) => (
               <a
                 key={link.href + link.label}
                 href={link.href}
@@ -107,14 +110,14 @@ export function SiteNavMenu({
                 {link.label}
               </a>
             ))}
-            {cta?.label ? (
+            {usableCta?.label ? (
               <a
-                href={cta.href || "#"}
-                aria-current={isCurrentSiteLink(cta.href, websitePath, websiteBasePath) ? "page" : undefined}
+                href={usableCta.href || "#"}
+                aria-current={isCurrentSiteLink(usableCta.href, websitePath, websiteBasePath) ? "page" : undefined}
                 className={cn("site-btn", ctaVariant, "site-nav-drawer-cta")}
                 onClick={() => setOpen(false)}
               >
-                {cta.label}
+                {usableCta.label}
               </a>
             ) : null}
           </nav>

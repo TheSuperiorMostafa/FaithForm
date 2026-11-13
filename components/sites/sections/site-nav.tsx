@@ -4,27 +4,31 @@ import { cn } from "@/lib/utils";
 import type { NavContent } from "@/types/site";
 
 import { isCurrentSiteLink } from "@/lib/sites/active-link";
+import { hasUsableSiteLink } from "@/lib/sites/public-navigation";
 import { SiteNavMenu } from "./site-nav-menu";
+import { ResilientImage } from "../resilient-image";
 
 function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref?: string; websitePath?: string; websiteBasePath?: string }>) {
+  const links=content.links.filter(hasUsableSiteLink);
+  const cta=hasUsableSiteLink(content.cta)?content.cta:null;
   // Website mode uses path links (`/about`); the masthead should take visitors
   // home rather than to a hash on the current page.
-  const usesPages = content.links.some((link) => link.href.startsWith("/"));
+  const usesPages = links.some((link) => link.href.startsWith("/"));
   const brandHref = content.homeHref ?? (usesPages ? "/" : `#${ctx.anchor}`);
 
   const current = (href: string) => isCurrentSiteLink(href, content.websitePath, content.websiteBasePath) ? "page" as const : undefined;
-  const ctaVariant = { solid: "site-btn-solid", outline: "site-btn-outline", quiet: "site-btn-quiet" }[content.cta?.variant ?? "solid"];
+  const ctaVariant = { solid: "site-btn-solid", outline: "site-btn-outline", quiet: "site-btn-quiet" }[cta?.variant ?? "solid"];
 
   return (
     <nav id={ctx.anchor} className={cn("site-nav", !content.sticky && "site-nav-static")}>
       <div className="site-nav-inner">
-        <a href={brandHref} className="site-nav-brand" aria-current={current(brandHref)}>
+        <a href={brandHref} className="site-nav-brand" aria-label={content.title?.trim() || content.logo?.alt?.trim() || "Home"} aria-current={current(brandHref)}>
           {content.logo?.src ? (
-            // eslint-disable-next-line @next/next/no-img-element -- church-supplied URL
-            <img
+            <ResilientImage
               src={content.logo.src}
               alt={content.logo.alt}
               className="site-nav-logo"
+              fallback="hide"
             />
           ) : null}
           <div>
@@ -36,24 +40,24 @@ function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref
         </a>
 
         <div className="site-nav-links">
-          {content.links.map((link) => (
+          {links.map((link) => (
             <a key={link.href + link.label} href={link.href} className="site-link" aria-current={current(link.href)}>
               {link.label}
             </a>
           ))}
-          {content.cta?.label ? (
+          {cta?.label ? (
             <a
-              href={content.cta.href || "#"}
+              href={cta.href || "#"}
               className={cn("site-btn", ctaVariant)}
-              aria-current={current(content.cta.href)}
-              {...(/^https?:\/\//i.test(content.cta.href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              aria-current={current(cta.href)}
+              {...(/^https?:\/\//i.test(cta.href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
             >
-              {content.cta.label}
+              {cta.label}
             </a>
           ) : null}
         </div>
 
-        <SiteNavMenu links={content.links} cta={content.cta} websitePath={content.websitePath} websiteBasePath={content.websiteBasePath} />
+        <SiteNavMenu links={links} cta={cta} websitePath={content.websitePath} websiteBasePath={content.websiteBasePath} />
       </div>
     </nav>
   );

@@ -10,7 +10,8 @@ function settings(brandTokens: Record<string, string>): SiteSettingsRow {
 
 test("each default website theme keeps its original palette", () => {
   for (const theme of Object.values(CODE_SITE_THEMES)) {
-    assert.deepEqual(resolveTokens(theme, settings({}), null), theme.tokens);
+    const tokens=resolveTokens(theme, settings({}), null);
+    for(const [key,value] of Object.entries(theme.tokens)) assert.equal(tokens[key],value);
   }
 });
 
@@ -43,5 +44,5 @@ test("explicit shade overrides keep their precedence over derived brand colors",
 test("rejected brand tokens cannot influence dependent footer shades", () => {
   const theme = CODE_SITE_THEMES.grace;
   const tokens = resolveTokens(theme, settings({ "--site-ink": "red; background: url(evil)", "--site-canvas": "<style>" }), null);
-  assert.deepEqual(tokens, theme.tokens);
+  assert.deepEqual(tokens, resolveTokens(theme,settings({}),null));
 });

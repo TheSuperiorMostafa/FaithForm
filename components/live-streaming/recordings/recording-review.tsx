@@ -63,6 +63,7 @@ type Props = {
   timeZone: string;
   stats: { live: number; replay: number } | null;
   artworkSlot?: React.ReactNode;
+  websiteSermonsUrl?: string | null;
 };
 
 const NEW_SERIES = "__new__";
@@ -97,6 +98,7 @@ export function RecordingReview({
   timeZone,
   stats,
   artworkSlot,
+  websiteSermonsUrl,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -206,6 +208,12 @@ export function RecordingReview({
         );
         return;
       }
+      if (toWebsite && !recording.website.published && !(await confirmAction({
+        title: "Publish this recording on your website?",
+        description: "Visitors will be able to watch this video. This also shows your existing Sermons section, including its saved content. If your website is live, its Sermons page will be published. Other draft pages and an offline website stay as they are.",
+        confirmLabel: "Publish recording and show Sermons",
+        cancelLabel: "Go back",
+      }))) return;
       if (!(await saveDetails())) return;
       const result = await publishRecordingAction({
         recordingId: recording.id,
@@ -365,12 +373,12 @@ export function RecordingReview({
             )}
             {recording.phase.detail}
           </p>
-          {phase === "needs_attention" ? (
+          {phase === "needs_attention" || recording.sourceKind === "file" && recording.status === "ready" && !recording.canPublish ? (
             <div className="flex shrink-0 flex-wrap gap-2">
-              {isAdmin && recording.segmentCount > 0 ? (
+              {isAdmin && (recording.segmentCount > 0 || recording.sourceKind === "file" && recording.status === "ready") ? (
                 <Button onClick={retry} disabled={pending} className="gap-2">
                   <RefreshCw className="size-4" aria-hidden />
-                  Try again
+                  {recording.sourceKind === "file" ? "Recheck video" : "Try again"}
                 </Button>
               ) : null}
               <Link href="/dashboard/support" className={buttonVariants({ variant: "outline" })}>
@@ -576,8 +584,8 @@ export function RecordingReview({
                   recording.website.published
                     ? "It's on your website. To take it down, use Unpublish below."
                     : appEnabled
-                      ? "Anyone can watch it on your church's watch page, without the app."
-                      : "Anyone can watch it on your church's watch page."
+                      ? "Adds it to your website's Sermons section and public watch page, without the app."
+                      : "Adds it to your website's Sermons section and public watch page."
                 }
               />
               {appEnabled ? (
@@ -671,6 +679,9 @@ export function RecordingReview({
                         View on your website <ExternalLink className="size-4" aria-hidden />
                       </a>
                     ) : null}
+                    {recording.website.published && websiteSermonsUrl ? <a href={websiteSermonsUrl} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
+                      View Sermons page <ExternalLink className="size-4" aria-hidden />
+                    </a> : null}
                     <Button variant="outline" onClick={() => void unpublish()} disabled={pending} className="gap-2">
                       <Undo2 className="size-4" aria-hidden />
                       Unpublish

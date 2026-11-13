@@ -25,7 +25,8 @@ test("a stale page after a deploy asks for a reload instead of retrying", () => 
   );
   const failure = describeSaveFailure(error, true);
   assert.equal(failure.retry, false);
-  assert.match(failure.message, /Reload the page/);
+  assert.match(failure.message, /Copy any wording/);
+  assert.match(failure.message, /reload/i);
 });
 
 test("a redirect means the sign-in is gone", () => {
@@ -38,5 +39,7 @@ test("a redirect means the sign-in is gone", () => {
 });
 
 test("giving up tells them what to do next", () => {
-  assert.match(GIVE_UP_MESSAGE, /Reload the page/);
+  assert.match(GIVE_UP_MESSAGE, /Keep this page open/);
+  assert.match(GIVE_UP_MESSAGE, /Try saving again/);
+  assert.doesNotMatch(GIVE_UP_MESSAGE, /Reload/i);
 });

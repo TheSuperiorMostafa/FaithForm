@@ -1,4 +1,5 @@
 import { defineSection } from "@/lib/sites/contract";
+import { formatLongDate } from "@/lib/sites/format";
 import type { SermonFeedContent } from "@/types/site";
 
 import { SermonFeedView } from "./sermon-feed-view";
@@ -41,6 +42,6 @@ export const sermonFeedSection = defineSection<SermonFeedContent>({
     surface: "ink",
     align: "split",
   },
-  derive: (profile) => (profile.media.length > 0 ? { items: profile.media } : {}),
+  derive: (profile) => (profile.media.length > 0 ? { items: profile.media.map(item=>({...item,date:formatLongDate(item.date,profile.timezone)})) } : {}),
   Component: SermonFeedView,
 });

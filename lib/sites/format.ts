@@ -7,7 +7,7 @@ export function formatServiceTime(value: string | null | undefined): string | nu
   const [rawHour, rawMinute] = value.split(":");
   const hour = Number(rawHour);
   const minute = Number(rawMinute);
-  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
 
   const suffix = hour >= 12 ? "PM" : "AM";
   const displayHour = hour % 12 === 0 ? 12 : hour % 12;
@@ -35,21 +35,25 @@ export function formatDayAndTime(
  * `new Date()` treats it as UTC and can render the previous day in western
  * timezones, so it is split by hand instead.
  */
-export function formatLongDate(value: string | null | undefined): string | null {
+export function formatLongDate(value: string | null | undefined, timezone?: string | null): string | null {
   if (!value) return null;
 
   const bare = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   const date = bare
-    ? new Date(Number(bare[1]), Number(bare[2]) - 1, Number(bare[3]))
+    ? new Date(Date.UTC(Number(bare[1]), Number(bare[2]) - 1, Number(bare[3])))
     : new Date(value);
 
   if (Number.isNaN(date.getTime())) return null;
+  if (bare && (date.getUTCFullYear()!==Number(bare[1]) || date.getUTCMonth()!==Number(bare[2])-1 || date.getUTCDate()!==Number(bare[3]))) return null;
 
-  return date.toLocaleDateString("en-US", {
+  const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
     year: "numeric",
-  });
+    ...(bare ? {timeZone:"UTC"} : timezone ? {timeZone:timezone} : {}),
+  };
+  try { return date.toLocaleDateString("en-US", options); }
+  catch { return date.toLocaleDateString("en-US", {...options,timeZone:"UTC"}); }
 }
 
 /** Joins the parts of a postal address that are actually present. */

@@ -19,7 +19,8 @@ async function withDatabase(failedTable: string | null, run: () => Promise<void>
       site_settings: { theme_key: "grace", brand_tokens: {}, custom_css: null, is_published: false,
         site_themes: { key: "grace", name: "Grace", tokens: {}, section_defaults: {} } },
       site_pages: { id: "home", path: "/", status: "draft", site_sections: [] },
-      site_overrides: [], church_service_times: [], church_staff: [], announcements: [], site_media: [],
+      site_overrides: [], site_sections: [], church_service_times: [], church_staff: [], announcements: [], site_media: [], web_recordings: [],
+      site_themes: { key: "grace", name: "Grace", tokens: {}, section_defaults: {} },
     };
     assert.ok(table && table in rows, `unexpected table ${table}`);
     return Response.json(rows[table!]);

@@ -54,6 +54,22 @@ function draw(bitmap: ImageBitmap, edge: number): HTMLCanvasElement | null {
   return canvas;
 }
 
+function keepTransparency(canvas: HTMLCanvasElement, type: string): boolean {
+  if (type === "image/png") return true;
+  if (type === "image/jpeg" || type === "image/jpg") return false;
+  try {
+    const context = canvas.getContext("2d");
+    if (!context) return true;
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let i = 3; i < pixels.length; i += 4) if (pixels[i] < 255) return true;
+    return false;
+  } catch {
+    // When a browser refuses pixel reads, retaining alpha is safer than
+    // silently replacing a church's transparent logo with a black square.
+    return true;
+  }
+}
+
 /**
  * Returns a file small enough to upload, or the original when it already is.
  *
@@ -81,15 +97,17 @@ export async function downscaleForUpload(file: File): Promise<File> {
     const oversized = Math.max(bitmap.width, bitmap.height) > MAX_EDGE;
     if (!oversized && fits(file)) return file;
 
-    // Transparency has to survive, so a PNG stays a PNG. Photographs are
-    // rarely PNG, and the ones that are shrink enough on dimensions alone.
-    const keepPng = file.type === "image/png";
+    const firstCanvas = draw(bitmap, MAX_EDGE);
+    if (!firstCanvas) return file;
+    // Alpha is a property of pixels, not a filename: WebP and AVIF can carry
+    // transparent logos too. Opaque phone photos still use efficient JPEG.
+    const keepPng = keepTransparency(firstCanvas, file.type);
     const type = keepPng ? "image/png" : "image/jpeg";
     const name = file.name.replace(/\.[^.]+$/, "") + (keepPng ? ".png" : ".jpg");
     const qualities = keepPng ? [1] : QUALITY_STEPS;
 
     for (const edge of [MAX_EDGE, 2400, 1800]) {
-      const canvas = draw(bitmap, edge);
+      const canvas = edge === MAX_EDGE ? firstCanvas : draw(bitmap, edge);
       if (!canvas) return file;
 
       for (const quality of qualities) {

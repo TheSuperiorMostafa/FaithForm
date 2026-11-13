@@ -8,7 +8,6 @@
  *
  * Ratios come from the rendered layout at the 1280px column width:
  *   banner   .site-hero-media   1280 x 220
- *   background Light's hero    16:9 source, cropped to fill on narrow screens
  *   feature  .site-figure       the split-grid photo column
  *   portrait .site-staff-photo  staff card, near-square
  *   video    .site-sermon-stage featured sermon player
@@ -41,10 +40,10 @@ export const IMAGE_ASPECTS: Record<ImageAspectKey, ImageAspect> = {
   },
   background: {
     key: "background",
-    label: "Background photo",
+    label: "Welcome photo",
     ratio: 16 / 9,
     output: { width: 1600, height: 900 },
-    hint: "Fills the area behind your welcome text. Phone screens show a narrower part of the photo.",
+    hint: "A wide photo behind your welcome. Smaller screens show the center of the photo.",
   },
   feature: {
     key: "feature",

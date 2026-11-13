@@ -1,6 +1,6 @@
 import { defineSection } from "@/lib/sites/contract";
 import type { SectionComponentProps } from "@/lib/sites/contract";
-import { formatCityLine, formatServiceTime } from "@/lib/sites/format";
+import { formatCityLine, formatDayAndTime } from "@/lib/sites/format";
 import { cn } from "@/lib/utils";
 import type { ServiceTimesCell, ServiceTimesContent } from "@/types/site";
 
@@ -48,7 +48,7 @@ export const serviceTimesSection = defineSection<ServiceTimesContent>({
       type: "list",
       addLabel: "Add cell",
       titleKey: "label",
-      help: "Left empty, this shows the service times and address from Website → Look & Details. Adding your own here stops that.",
+      help: "Starts with the service times and address in Look & Details. Removing every cell hides these entries. Reset to original restores the shared details.",
       itemFields: [
         { key: "label", label: "Label", type: "text" },
         { key: "value", label: "Time", type: "text" },
@@ -64,7 +64,7 @@ export const serviceTimesSection = defineSection<ServiceTimesContent>({
     const items: ServiceTimesCell[] = profile.serviceTimes
       .map((time) => ({
         label: time.label,
-        value: formatServiceTime(time.startTime),
+        value: formatDayAndTime(time.dayOfWeek, time.startTime),
       }))
       .filter((cell) => Boolean(cell.value));
 

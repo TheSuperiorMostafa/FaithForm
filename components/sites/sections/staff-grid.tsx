@@ -47,7 +47,7 @@ export const staffGridSection = defineSection<StaffGridContent>({
       type: "list",
       addLabel: "Add person",
       titleKey: "name",
-      help: "Left empty, this shows the people in Website → Look & Details. Edit them there and they update everywhere.",
+      help: "Starts with the public team in Look & Details. Removing everyone hides these entries. Reset to original restores the shared team.",
       itemFields: [
         { key: "name", label: "Name", type: "text" },
         { key: "role", label: "Role", type: "text" },

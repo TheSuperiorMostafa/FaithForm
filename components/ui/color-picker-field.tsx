@@ -2,6 +2,7 @@
 
 import { Label } from "@/components/ui/label";
 import { normalizeHexColor } from "@/lib/giving/branding";
+import { readableColorText } from "@/lib/branding/color-contrast";
 import { cn } from "@/lib/utils";
 
 type ColorPickerFieldProps = {
@@ -23,7 +24,7 @@ export function ColorPickerField({
   onChange,
   className,
 }: ColorPickerFieldProps) {
-  const resolved = normalizeHexColor(value) ?? defaultColor;
+  const resolved = normalizeHexColor(value) ?? normalizeHexColor(defaultColor) ?? "#FFFFFF";
 
   return (
     <div className={cn("space-y-2", className)}>
@@ -39,10 +40,10 @@ export function ColorPickerField({
           aria-label={`${label} picker`}
         />
         <div
-          className="flex h-11 min-w-0 flex-1 items-center rounded-[10px] border border-border px-3 text-sm font-medium text-white shadow-sm"
+          className="flex min-h-11 min-w-0 flex-1 items-center rounded-[10px] border border-border px-3 py-2 text-sm font-medium shadow-sm"
           style={{
             backgroundColor: resolved,
-            textShadow: "0 1px 2px rgba(0,0,0,0.35)",
+            color: readableColorText(resolved),
           }}
         >
           {label}

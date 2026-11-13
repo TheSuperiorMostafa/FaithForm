@@ -60,7 +60,7 @@ export const eventsListSection = defineSection<EventsListContent>({
       type: "list",
       addLabel: "Add event",
       titleKey: "title",
-      help: "Starts with your upcoming approved announcements. Removing all events shows the empty message. Reset this section to original to follow your announcements again.",
+      help: "Starts with upcoming announcements published for everyone. Removing every event hides these entries. Reset to original restores the public events.",
       itemFields: [
         { key: "title", label: "Title", type: "text" },
         { key: "date", label: "Date", type: "text" },
@@ -84,7 +84,7 @@ export const eventsListSection = defineSection<EventsListContent>({
     return {
       items: profile.events.map((event) => ({
         title: event.title,
-        date: formatLongDate(event.date),
+        date: formatLongDate(event.date, profile.timezone),
         location: event.location,
         note: event.note,
       })),

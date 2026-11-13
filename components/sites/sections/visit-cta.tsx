@@ -15,14 +15,15 @@ import { ContactForm } from "./contact-form";
  */
 function VisitCta({ content, ctx }: SectionComponentProps<VisitCtaContent>) {
   const formAnchor = `${ctx.anchor}-form`;
+  const hasPanel = content.facts.length > 0 || content.form.enabled;
 
-  const action = content.action
+  const action = content.action && (hasPanel || content.action.href && content.action.href !== `#${formAnchor}`)
     ? { ...content.action, href: content.action.href || `#${formAnchor}` }
     : null;
 
   return (
     <SectionShell surface={content.surface} anchor={ctx.anchor}>
-      <div className="site-split">
+      <div className="site-split" style={!hasPanel ? { "--site-split": "1fr" } as React.CSSProperties : undefined}>
         <div>
           <Eyebrow>{content.eyebrow}</Eyebrow>
           <Headline headline={content.headline} className="site-display-lg" />
@@ -30,7 +31,7 @@ function VisitCta({ content, ctx }: SectionComponentProps<VisitCtaContent>) {
           <Action action={action} className="site-btn-solid" />
         </div>
 
-        <div className="site-panel" id={formAnchor}>
+        {hasPanel ? <div className="site-panel" id={formAnchor}>
           {content.facts.length > 0 ? (
             <>
               <div className="site-panel-title">{content.panelHeading}</div>
@@ -49,7 +50,7 @@ function VisitCta({ content, ctx }: SectionComponentProps<VisitCtaContent>) {
           ) : null}
 
           {content.form.enabled ? <ContactForm config={content.form} /> : null}
-        </div>
+        </div> : null}
       </div>
     </SectionShell>
   );
@@ -62,15 +63,6 @@ export const visitCtaSection = defineSection<VisitCtaContent>({
     { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "body", label: "Intro paragraph", type: "textarea" },
-    {
-      key: "action",
-      label: "Visit button",
-      type: "group",
-      fields: [
-        { key: "label", label: "Button label", type: "text", help: "Leave blank to hide this button." },
-        { key: "href", label: "Link", type: "url", help: "Leave blank to scroll to your visit form." },
-      ],
-    },
     { key: "panelHeading", label: "Panel heading", type: "text" },
     {
       key: "facts",
@@ -88,7 +80,7 @@ export const visitCtaSection = defineSection<VisitCtaContent>({
       key: "form",
       label: "Contact form",
       type: "group",
-      help: "Messages arrive in Website → Inbox and are emailed to your church.",
+      help: "Messages arrive in Website → Inbox. Your church can also receive email notices.",
       fields: [
         { key: "enabled", label: "Show the form", type: "toggle" },
         { key: "heading", label: "Form heading", type: "text" },

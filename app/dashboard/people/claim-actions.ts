@@ -113,9 +113,9 @@ export async function approvePeopleClaim(input: {
     await approveClaim({
       churchId,
       staffUserId: userId,
-      claimId: input.claimId,
-      memberId: input.memberId,
-      note: input.note,
+      claimId: input?.claimId,
+      memberId: input?.memberId,
+      note: input?.note,
     });
     revalidatePeople();
     return { ok: true, data: null };

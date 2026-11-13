@@ -4,8 +4,10 @@ import { useState } from "react";
 
 import type { SectionComponentProps } from "@/lib/sites/contract";
 import type { SermonFeedContent } from "@/types/site";
+import { formatLongDate } from "@/lib/sites/format";
 
 import { Media, SectionHead, SectionShell } from "../primitives";
+import { ResilientImage } from "../resilient-image";
 
 /**
  * View only. The master definition lives in the sibling server module, because
@@ -42,8 +44,7 @@ export function SermonFeedView({ content, ctx }: SectionComponentProps<SermonFee
         <div>
           <div className="site-sermon-stage site-ph" data-ph="sermon still">
             {featured.thumbnail?.src ? (
-              // eslint-disable-next-line @next/next/no-img-element -- church-supplied URL
-              <img
+              <ResilientImage
                 src={featured.thumbnail.src}
                 alt=""
                 className="site-media"
@@ -71,7 +72,7 @@ export function SermonFeedView({ content, ctx }: SectionComponentProps<SermonFee
               <span className="site-sermon-dot" />
             ) : null}
             {featured.date ? (
-              <span className="site-sermon-date">{featured.date}</span>
+              <span className="site-sermon-date">{formatLongDate(featured.date) ?? featured.date}</span>
             ) : null}
           </div>
           <h3 className="site-sermon-title">{featured.title}</h3>
@@ -103,7 +104,7 @@ export function SermonFeedView({ content, ctx }: SectionComponentProps<SermonFee
                   {item.title}
                 </span>
                 <span className="site-sermon-row-meta" style={{ display: "block" }}>
-                  {[item.speaker, item.date].filter(Boolean).join(" · ")}
+                  {[item.speaker, formatLongDate(item.date) ?? item.date].filter(Boolean).join(" · ")}
                 </span>
               </span>
             </button>

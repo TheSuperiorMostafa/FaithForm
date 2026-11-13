@@ -117,9 +117,9 @@ export async function normalizeSiteImage(
       });
     }
 
-    // PNG only survives as PNG when it might carry transparency; everything
-    // else becomes JPEG, which is far smaller for photographs.
-    if (metadata.format === "png" && metadata.hasAlpha) {
+    // Transparent WebP/AVIF logos need the same treatment as PNG logos.
+    // JPEG would replace their transparent background with an opaque block.
+    if (metadata.hasAlpha) {
       return {
         buffer: await pipeline.png({ compressionLevel: 9 }).toBuffer(),
         contentType: "image/png",

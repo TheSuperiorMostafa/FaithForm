@@ -15,9 +15,7 @@
 }
 
 [data-theme="wood"] .site-nav {
-  background: linear-gradient(176deg,
-    color-mix(in srgb, var(--site-ink) 80%, #000),
-    color-mix(in srgb, var(--site-ink) 50%, #000));
+  background: linear-gradient(176deg, var(--site-ink), var(--site-ink-strong));
   border-bottom-color: color-mix(in srgb, var(--site-accent) 35%, transparent);
   color: #f6e7c4;
 }
@@ -37,15 +35,15 @@
 }
 
 [data-theme="wood"] .site-hero {
+  /* This decorative walnut background stays dark even with a light brand ink. */
+  --site-fg: #fff;
+  --site-fg-soft: #f8ecd2;
+  --site-eyebrow: #e9cf92;
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(50% 48% at 50% 2%, color-mix(in srgb, var(--site-accent) 38%, transparent), transparent 72%),
-    linear-gradient(176deg,
-      color-mix(in srgb, var(--site-ink) 50%, var(--site-accent)) 0%,
-      color-mix(in srgb, var(--site-ink) 85%, var(--site-accent)) 34%,
-      var(--site-ink) 66%,
-      color-mix(in srgb, var(--site-ink) 50%, #000) 100%);
+    radial-gradient(50% 48% at 50% 2%, rgba(255, 222, 166, 0.38), transparent 72%),
+    linear-gradient(176deg, #7a5028 0%, #54341a 34%, #331e0e 66%, #170d06 100%);
 }
 
 [data-theme="wood"] .site-hero-body {
@@ -54,8 +52,9 @@
 }
 
 [data-theme="wood"] .site-hero-media {
-  height: auto;
-  margin: 0;
+  /* A photo selected in the editor must remain visible in every format. */
+  height: 220px;
+  margin: 32px 0 0;
   overflow: hidden;
 }
 
@@ -107,6 +106,10 @@
   font-weight: 600;
 }
 
+[data-theme="wood"] .site-accent-text {
+  color: var(--site-eyebrow);
+}
+
 [data-theme="wood"] .site-btn {
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -120,12 +123,6 @@
 }
 
 [data-theme="wood"] .site-card {
-  /* These cards use a light canvas even inside a dark section. */
-  --site-fg: var(--site-ink);
-  --site-fg-soft: var(--site-body);
-  --site-fg-faint: var(--site-muted);
-  --site-eyebrow: var(--site-gold);
-  color: var(--site-ink);
   border-top: 3px solid var(--site-accent);
   border-left: 0;
   border-right: 0;
@@ -140,17 +137,19 @@
 
 [data-theme="wood"] .site-strip {
   margin-top: 26px;
+  background: linear-gradient(176deg, rgba(12, 7, 3, 0.82), rgba(12, 7, 3, 0.94));
   border-top-color: color-mix(in srgb, var(--site-accent) 32%, transparent);
+  color: #f8ecd2;
 }
 
 [data-theme="wood"] .site-strip-label,
 [data-theme="wood"] .site-strip-value,
 [data-theme="wood"] .site-strip-lines {
-  color: var(--site-fg);
+  color: rgba(248, 236, 210, 0.82);
 }
 
 [data-theme="wood"] .site-strip-label {
-  color: var(--site-eyebrow);
+  color: #e9cf92;
 }
 
 [data-theme="wood"] .site-section {
@@ -158,8 +157,7 @@
   padding-bottom: 104px;
 }
 
-[data-theme="wood"] .site-surface-canvas,
-[data-theme="wood"] .site-surface-surface {
+[data-theme="wood"] .site-surface-canvas {
   background: var(--site-canvas);
 }
 
@@ -203,6 +201,13 @@
 
 [data-theme="wood"] .site-card,
 [data-theme="wood"] .site-staff-card {
+  --site-on-surface: var(--site-on-canvas);
+  --site-on-surface-body: var(--site-on-canvas-body);
+  --site-on-surface-muted: var(--site-on-canvas-muted);
+  --site-on-surface-accent: var(--site-on-canvas-accent);
+  --site-fg: var(--site-on-canvas, var(--site-ink));
+  --site-fg-soft: var(--site-on-canvas-body, var(--site-body));
+  --site-fg-faint: var(--site-on-canvas-muted, var(--site-muted));
   background: var(--site-canvas);
 }
 
@@ -218,15 +223,12 @@
 }
 
 [data-theme="wood"] .site-badge {
-  width: fit-content;
-  min-width: 30px;
-  height: auto;
-  min-height: 30px;
+  width: 30px;
+  height: 2px;
   border-radius: 0;
-  border-bottom: 2px solid var(--site-accent);
-  background: transparent;
-  color: var(--site-eyebrow);
-  font-size: 16px;
+  background: var(--site-accent);
+  color: transparent;
+  font-size: 0;
 }
 
 [data-theme="wood"] .site-staff-card {
@@ -240,6 +242,10 @@
 }
 
 [data-theme="wood"] .site-panel {
+  --site-on-surface: var(--site-on-canvas);
+  --site-on-surface-body: var(--site-on-canvas-body);
+  --site-on-surface-muted: var(--site-on-canvas-muted);
+  --site-on-surface-accent: var(--site-on-canvas-accent);
   background: var(--site-canvas);
   box-shadow: none;
 }
@@ -260,11 +266,14 @@
 
 [data-theme="wood"] .site-input,
 [data-theme="wood"] .site-textarea {
+  color: var(--site-on-canvas, var(--site-ink));
   border-radius: 0;
   background: var(--site-canvas);
 }
 
 [data-theme="wood"] .site-map-card {
+  --site-on-surface: var(--site-on-canvas);
+  --site-on-surface-muted: var(--site-on-canvas-muted);
   background: var(--site-canvas);
   box-shadow: none;
 }
@@ -288,9 +297,7 @@
 
 [data-theme="wood"] .site-surface-ink,
 [data-theme="wood"] .site-surface-ink-strong {
-  background-image: linear-gradient(176deg,
-    color-mix(in srgb, var(--site-ink) 80%, #000),
-    color-mix(in srgb, var(--site-ink) 50%, #000));
+  background-image: linear-gradient(176deg, var(--site-ink), var(--site-ink-strong));
 }
 
 [data-theme="wood"] .site-strip {

@@ -577,12 +577,19 @@ export async function approveClaim(input: {
   memberId: string;
   note?: string;
 }): Promise<void> {
-  const parsed = claimResolutionSchema.safeParse({
-    claimId: input.claimId,
-    memberId: input.memberId,
-    note: input.note,
-  });
-  if (!parsed.success || !parsed.data.memberId) {
+  const parsed = claimResolutionSchema.safeParse(input);
+  if (!parsed.success) {
+    const field = parsed.error.issues[0]?.path[0];
+    const message = field === "claimId"
+      ? "That confirmation request could not be read. Refresh People and try again."
+      : field === "memberId"
+        ? "That person could not be read. Refresh People, then choose them again."
+        : field === "note"
+          ? "Check the note. Use 500 characters or fewer."
+          : "That confirmation could not be read. Refresh People and try again.";
+    throw new VisitorError("invalid_input", message);
+  }
+  if (!parsed.data.memberId) {
     throw new VisitorError("invalid_input", "Choose the person to link.");
   }
 
@@ -590,34 +597,48 @@ export async function approveClaim(input: {
 
   // Exact church predicate on both sides: a claim id from another tenant
   // matches nothing.
-  const { data: claim } = await admin
+  const { data: claim, error: claimError } = await admin
     .from("visitor_people_claims")
-    .select("id, account_id, church_id, status")
+    .select("id, account_id, church_id, status, resolved_member_id")
     .eq("id", parsed.data.claimId)
     .eq("church_id", input.churchId)
     .maybeSingle();
 
+  if (claimError) throw new VisitorError("unavailable", "We couldn't check this request. Your selection is kept. Try again.");
   if (!claim) throw new VisitorError("claim_not_found", "Request not found.");
-  if (!["pending", "disputed"].includes(claim.status as string)) {
+  const completingPreviousAttempt = claim.status === "approved" && claim.resolved_member_id === parsed.data.memberId;
+  if (!["pending", "disputed"].includes(claim.status as string) && !completingPreviousAttempt) {
     throw new VisitorError("conflict", "That request was already resolved.");
   }
 
-  const { data: member } = await admin
+  const [{ data: account, error: accountError }, { data: relationship, error: relationshipError }] = await Promise.all([
+    admin.from("visitor_accounts").select("id, status").eq("id", claim.account_id).maybeSingle(),
+    admin.from("visitor_church_relationships").select("state").eq("account_id", claim.account_id).eq("church_id", input.churchId).maybeSingle(),
+  ]);
+  if (accountError || relationshipError) throw new VisitorError("unavailable", "We couldn't check this app account. Try again.");
+  if (!account || account.status !== "active") throw new VisitorError("account_inactive", "This app account is not active.");
+  if (relationship?.state === "blocked") throw new VisitorError("blocked", "This account is blocked by your church.");
+  if (relationship?.state === "left") throw new VisitorError("invalid_transition", "This person has left your church in the app. Ask them to join again before linking them.");
+
+  const { data: member, error: memberError } = await admin
     .from("members")
     .select("id")
     .eq("id", parsed.data.memberId)
     .eq("church_id", input.churchId)
     .maybeSingle();
 
+  if (memberError) throw new VisitorError("unavailable", "We couldn't check this person. Your selection is kept. Try again.");
   if (!member) throw new VisitorError("invalid_input", "That person is not in this church.");
 
-  const { data: taken } = await admin
+  const { data: taken, error: takenError } = await admin
     .from("visitor_people_links")
     .select("id, account_id")
+    .eq("church_id", input.churchId)
     .eq("member_id", parsed.data.memberId)
     .eq("is_active", true)
     .maybeSingle();
 
+  if (takenError) throw new VisitorError("unavailable", "We couldn't check the existing connection. Try again.");
   if (taken && taken.account_id !== claim.account_id) {
     throw new VisitorError(
       "member_already_claimed",
@@ -625,54 +646,81 @@ export async function approveClaim(input: {
     );
   }
 
-  const now = new Date().toISOString();
-
-  const { data: link, error: linkError } = await admin
-    .from("visitor_people_links")
-    .insert({
-      account_id: claim.account_id as string,
-      church_id: input.churchId,
-      member_id: parsed.data.memberId,
-      claim_id: claim.id as string,
-      is_active: true,
-      linked_at: now,
-      linked_by: input.staffUserId,
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (linkError || !link) {
-    throw new VisitorError(
-      "member_already_claimed",
-      "That person already has an active link.",
-    );
+  if (completingPreviousAttempt && !taken) {
+    throw new VisitorError("conflict", "That connection is no longer active. Refresh People to open a new confirmation.");
   }
 
-  await admin
-    .from("visitor_people_claims")
-    .update({
-      status: "approved",
-      resolved_member_id: parsed.data.memberId,
-      resolved_by: input.staffUserId,
-      resolved_at: now,
-      resolution_note: parsed.data.note ?? null,
-      updated_at: now,
-    })
-    .eq("id", claim.id as string);
+  const now = new Date().toISOString();
 
-  await admin.from("visitor_people_link_events").insert({
-    church_id: input.churchId,
-    account_id: claim.account_id as string,
-    claim_id: claim.id as string,
-    link_id: link.id as string,
-    member_id: parsed.data.memberId,
-    action: "claim_approved",
-    from_status: claim.status as string,
-    to_status: "approved",
-    actor_type: "staff",
-    actor_user_id: input.staffUserId,
-    note: parsed.data.note ?? null,
-  });
+  // If a previous request created the link but its response/status write failed,
+  // reuse that exact verified connection rather than failing a duplicate insert.
+  let link = taken;
+  if (!link) {
+    const { data, error } = await admin
+      .from("visitor_people_links")
+      .insert({
+        account_id: claim.account_id as string,
+        church_id: input.churchId,
+        member_id: parsed.data.memberId,
+        claim_id: claim.id as string,
+        is_active: true,
+        linked_at: now,
+        linked_by: input.staffUserId,
+      })
+      .select("id, account_id")
+      .maybeSingle();
+    if (error || !data) {
+      throw new VisitorError(
+        error?.code === "23505" ? "member_already_claimed" : "unavailable",
+        error?.code === "23505"
+          ? "The connection changed while you were deciding. Refresh People to check it."
+          : "We couldn't create the connection. Your selection is kept. Try again.",
+      );
+    }
+    link = data;
+  }
+
+  if (!completingPreviousAttempt) {
+    const { data: resolved, error: resolutionError } = await admin
+      .from("visitor_people_claims")
+      .update({
+        status: "approved",
+        resolved_member_id: parsed.data.memberId,
+        resolved_by: input.staffUserId,
+        resolved_at: now,
+        resolution_note: parsed.data.note ?? null,
+        updated_at: now,
+      })
+      .eq("id", claim.id as string)
+      .eq("church_id", input.churchId)
+      .in("status", ["pending", "disputed"])
+      .select("id")
+      .maybeSingle();
+    if (resolutionError || !resolved) {
+      throw new VisitorError("unavailable", "The connection was saved, but we couldn't finish this confirmation. Try again to finish it.");
+    }
+  }
+
+  const { data: audit, error: auditReadError } = await admin.from("visitor_people_link_events")
+    .select("id").eq("church_id", input.churchId).eq("claim_id", claim.id).eq("action", "claim_approved").limit(1).maybeSingle();
+  if (auditReadError) throw new VisitorError("unavailable", "We couldn't finish recording this confirmation. Try again.");
+  if (!audit) {
+    const { error: auditError } = await admin.from("visitor_people_link_events").insert({
+      church_id: input.churchId,
+      account_id: claim.account_id as string,
+      claim_id: claim.id as string,
+      link_id: link.id as string,
+      member_id: parsed.data.memberId,
+      action: "claim_approved",
+      from_status: claim.status as string,
+      to_status: "approved",
+      actor_type: "staff",
+      actor_user_id: input.staffUserId,
+      note: parsed.data.note ?? null,
+    });
+
+    if (auditError) throw new VisitorError("unavailable", "The connection is saved, but we couldn't finish recording it. Try again to finish it.");
+  }
 
   await bumpAuthorizationVersion(claim.account_id as string, admin);
 }

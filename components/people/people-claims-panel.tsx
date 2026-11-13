@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import {
@@ -99,6 +100,8 @@ export function PeopleClaimsPanel({
 
 function ClaimRow({ claim }: { claim: StaffClaimRow }) {
   const [pending, startTransition] = useTransition();
+  const submitting = useRef(false);
+  const router = useRouter();
   const [selected, setSelected] = useState<string | null>(null);
   const [addingNew, setAddingNew] = useState(false);
   const [firstName, setFirstName] = useState(claim.claimedFirstName ?? "");
@@ -111,21 +114,36 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
     ? [chosen.firstName, chosen.lastName].filter(Boolean).join(" ")
     : "";
 
+  useEffect(() => {
+    if (selected && (!chosen || chosen.alreadyLinked)) setSelected(null);
+  }, [selected, chosen]);
+
+  function perform(work: () => Promise<void>, failureMessage: string) {
+    if (submitting.current) return;
+    submitting.current = true;
+    startTransition(async () => {
+      try { await work(); }
+      catch { toast.error(failureMessage); }
+      finally { submitting.current = false; }
+    });
+  }
+
   const link = () => {
-    if (!selected) {
+    if (!selected || !chosen || chosen.alreadyLinked) {
       toast.error("Choose which person this is first.");
       return;
     }
-    startTransition(async () => {
+    perform(async () => {
       const result = await approvePeopleClaim({ claimId: claim.id, memberId: selected });
       if (result.ok) {
         toast.success(
           chosenName ? `${name} is now linked to ${chosenName}.` : `${name} is now linked.`,
         );
+        router.refresh();
       } else {
         toast.error(result.message);
       }
-    });
+    }, "We couldn't confirm the link. Your selection is kept. Try again.");
   };
 
   const addNew = () => {
@@ -133,7 +151,7 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
       toast.error("Enter at least a first name.");
       return;
     }
-    startTransition(async () => {
+    perform(async () => {
       const result = await addPeopleClaimAsNewPerson({
         claimId: claim.id,
         firstName,
@@ -141,21 +159,23 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
       });
       if (result.ok) {
         toast.success(`${[firstName.trim(), lastName.trim()].filter(Boolean).join(" ")} added to People.`);
+        router.refresh();
       } else {
         toast.error(result.message);
       }
-    });
+    }, "We couldn't confirm whether they were added. Refresh People to check before adding them again.");
   };
 
   const decline = (dispute: boolean) => {
-    startTransition(async () => {
+    perform(async () => {
       const result = await rejectPeopleClaim({ claimId: claim.id, dispute });
       if (result.ok) {
         toast.success(dispute ? `${name} flagged for review.` : `${name}'s request declined.`);
+        router.refresh();
       } else {
         toast.error(result.message);
       }
-    });
+    }, "We couldn't confirm that decision. Your choices are kept. Try again.");
   };
 
   return (
@@ -201,6 +221,7 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
               <input
                 type="radio"
                 name={`claim-${claim.id}`}
+                value={candidate.memberId}
                 className="size-5 accent-current"
                 disabled={candidate.alreadyLinked}
                 checked={selected === candidate.memberId}
@@ -267,11 +288,12 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
       ) : (
         <div className="flex flex-wrap gap-2">
           {claim.candidates.length > 0 ? (
-            <Button disabled={pending || !selected} onClick={link}>
+            <Button type="button" disabled={pending || !chosen || chosen.alreadyLinked} onClick={link}>
               {chosenName ? `Yes, this is ${chosenName}` : "Choose a person above"}
             </Button>
           ) : null}
           <Button
+            type="button"
             variant={claim.candidates.length > 0 ? "outline" : "default"}
             disabled={pending}
             onClick={() => setAddingNew(true)}
@@ -282,11 +304,11 @@ function ClaimRow({ claim }: { claim: StaffClaimRow }) {
               the only question is which person they are. */}
           {claim.source !== "join" ? (
             <>
-              <Button variant="ghost" disabled={pending} onClick={() => decline(false)}>
+              <Button type="button" variant="ghost" disabled={pending} onClick={() => decline(false)}>
                 Decline
               </Button>
               {claim.status !== "disputed" && (
-                <Button variant="ghost" disabled={pending} onClick={() => decline(true)}>
+                <Button type="button" variant="ghost" disabled={pending} onClick={() => decline(true)}>
                   Flag for review
                 </Button>
               )}

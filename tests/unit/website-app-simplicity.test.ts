@@ -152,7 +152,7 @@ test("taking the site offline, resetting a section and switching theme are guard
   const sections = read("components/website-admin/section-list.tsx");
   assert.match(sections, /confirmAction\(/);
   assert.match(sections, /undoToast\(/);
-  assert.match(sections, /aria-label=.*Move.*up/); // W1 compact layout uses aria-label with template literal
+  assert.match(sections, /Move up/);
   assert.doesNotMatch(sections, /size-6|text-\[10px\]/);
 
   const design = read("components/website-admin/design-form.tsx");

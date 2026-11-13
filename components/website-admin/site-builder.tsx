@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Globe, Sparkles } from "lucide-react";
@@ -32,20 +32,30 @@ export function SiteBuilder({
   const [themeKey, setThemeKey] = useState(themes[0]?.key ?? "grace");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+  const building = useRef(false);
 
   function build() {
+    if (building.current || !canBuild) return;
+    building.current = true;
     startTransition(async () => {
-      const result = await createWebsite(themeKey);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+      try {
+        const result = await createWebsite(themeKey);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success(
+          result.aiCopyUsed
+            ? "Your website is built. Review the draft, then publish when you're happy."
+            : "Your website is built with starter text — AI copy wasn't available, so edit the wording in Pages.",
+        );
+        router.refresh();
+      } catch (cause) {
+        console.error("[website] Creation request failed:", cause);
+        toast.error("We couldn’t finish building your website. Refresh this page to check whether the draft was created, then try again.");
+      } finally {
+        building.current = false;
       }
-      toast.success(
-        result.aiCopyUsed
-          ? "Your website is built. Review the draft, then publish when you're happy."
-          : "Your website is built with starter text — AI copy wasn't available, so edit the wording in Pages.",
-      );
-      router.refresh();
     });
   }
 
@@ -127,10 +137,10 @@ export function SiteBuilder({
         </ul>
 
         <Link
-          href="/dashboard/support"
+          href="/dashboard/settings?tab=church"
           className="mt-4 inline-block text-sm font-semibold text-accent underline underline-offset-4"
         >
-          Missing something? Ask support to fill it in
+          Fill in missing church details
         </Link>
       </section>
 

@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
+import { hasUsableSiteLink } from "@/lib/sites/public-navigation";
+import { ResilientImage } from "./resilient-image";
 import type {
   SiteAction,
   SiteAlign,
@@ -73,6 +75,7 @@ export function Headline({
   className?: string;
   as?: "h1" | "h2" | "h3";
 }) {
+  if (![headline.lead,headline.accent,headline.trail].some(part=>typeof part === "string" && part.trim())) return null;
   return (
     <Tag className={cn("site-display", className)}>
       {headline.lead}
@@ -126,10 +129,7 @@ export function Media({
 
   return (
     <div className={cn(className, wrapperClassName)}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- src is an
-          arbitrary church-supplied URL, so next/image remote patterns cannot
-          enumerate it ahead of time. */}
-      <img
+      <ResilientImage
         src={image.src}
         alt={image.alt}
         className="site-media"
@@ -154,7 +154,7 @@ export function Action({
   action: SiteAction | null | undefined;
   className?: string;
 }) {
-  if (!action?.label) return null;
+  if (!hasUsableSiteLink(action)) return null;
 
   const variant = ACTION_CLASS[action.variant ?? "solid"] ?? ACTION_CLASS.solid;
   const external = /^https?:\/\//i.test(action.href);
@@ -171,7 +171,7 @@ export function Action({
 }
 
 export function QuietLink({ link }: { link: SiteLink | null | undefined }) {
-  if (!link?.label) return null;
+  if (!hasUsableSiteLink(link)) return null;
   return (
     <a href={link.href || "#"} className="site-btn site-btn-quiet">
       {link.label}

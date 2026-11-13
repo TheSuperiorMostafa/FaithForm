@@ -171,9 +171,12 @@ export const claimRequestSchema = z.object({
   onBehalfOfMemberId: z.string().uuid().optional(),
 });
 
+// These identifiers come from PostgreSQL uuid columns. Legacy/imported UUIDs
+// need not carry RFC version/variant bits; Zod 4's .uuid() rejects those valid
+// persisted IDs. Keep canonical hex/hyphen validation without inventing a new ID.
 export const claimResolutionSchema = z.object({
-  claimId: z.string().uuid(),
-  memberId: z.string().uuid().optional(),
+  claimId: z.guid(),
+  memberId: z.guid().optional(),
   note: z.string().trim().max(500).optional(),
 });
 
