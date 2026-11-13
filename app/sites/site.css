@@ -761,6 +761,35 @@
   padding: 20px 22px 24px;
 }
 
+.site-staff-card--text-only {
+  align-self: start;
+}
+
+.site-staff-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.site-staff-identity > div {
+  min-width: 0;
+}
+
+.site-staff-initials {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--site-on-surface, var(--site-ink)) 8%, var(--site-surface));
+  color: var(--site-on-surface, var(--site-ink));
+  font-family: var(--site-font-display);
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .site-staff-name {
   font-family: var(--site-font-display);
   font-size: 20px;
@@ -796,6 +825,11 @@
   padding: 34px 36px;
   box-shadow: 0 26px 60px -28px color-mix(in srgb, var(--site-ink) 55%, transparent);
   color: var(--site-on-surface, var(--site-ink));
+}
+
+/* A short welcome must not be vertically centred against a tall contact form. */
+.site-split.site-visit-layout {
+  align-items: start;
 }
 
 .site-panel-ink {
@@ -1769,3 +1803,31 @@
 .site-input, .site-textarea, .site-map-card, .site-map-card .site-btn-quiet { color: var(--site-on-surface, var(--site-ink)); }
 .site-panel-label, .site-footer-sub, .site-footer-col-head { color: var(--site-eyebrow); }
 [data-layout="landing"][data-theme="light"] .site-nav-sub { color: #fff; }
+
+/* Keep Grace's display treatment readable without letting the welcome push
+ * its photo and service times far down the page. Saved copy/tokens stay intact. */
+[data-theme="grace"] .site-hero-body {
+  padding-block: clamp(32px, 4vw, 56px) 32px;
+}
+
+[data-theme="grace"] .site-hero .site-display-xl {
+  font-size: clamp(40px, 7vw, min(var(--site-display-xl), 96px));
+  line-height: 1.04;
+  max-inline-size: 20ch;
+  text-wrap: balance;
+}
+
+[data-theme="grace"] .site-hero-center .site-display-xl {
+  margin-inline: auto;
+}
+
+[data-theme="grace"] .site-hero-foot {
+  justify-content: flex-start;
+  gap: 24px;
+  margin-top: 24px;
+}
+
+[data-theme="grace"] .site-hero-center .site-hero-foot {
+  justify-content: center;
+  align-items: center;
+}

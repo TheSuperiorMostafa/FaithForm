@@ -198,11 +198,17 @@ export function SectionHead({
   headingClassName?: string;
 }) {
   const aside = note ? <p className="site-head-note">{note}</p> : <QuietLink link={link} />;
+  // Generated and older saved sections sometimes repeat the same heading in
+  // both fields. Present it once without changing either saved value.
+  const headingText = [headline.lead, headline.accent, headline.trail]
+    .filter(Boolean).join(" ").trim().replace(/\s+/g, " ").toLowerCase();
+  const visibleEyebrow = eyebrow?.trim().replace(/\s+/g, " ").toLowerCase() === headingText
+    ? null : eyebrow;
 
   if (align === "center") {
     return (
       <div className="site-head site-head-center">
-        <Eyebrow>{eyebrow}</Eyebrow>
+        <Eyebrow>{visibleEyebrow}</Eyebrow>
         <Headline headline={headline} className={headingClassName} />
         {aside}
       </div>
@@ -212,7 +218,7 @@ export function SectionHead({
   return (
     <div className="site-head site-head-split">
       <div>
-        <Eyebrow>{eyebrow}</Eyebrow>
+        <Eyebrow>{visibleEyebrow}</Eyebrow>
         <Headline headline={headline} className={headingClassName} />
       </div>
       {aside}

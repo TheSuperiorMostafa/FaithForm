@@ -64,6 +64,14 @@ export function websitePageDefForPath(path: string): WebsitePageDef | null {
   return DEF_BY_PATH.get(normalizeSitePath(path)) ?? null;
 }
 
+/** Saved menus can use the older Services address for the Programs page.
+ * Resolve that destination without renaming the page or rewriting church copy. */
+export function canonicalWebsiteNavigationPath(path: string): string | null {
+  const normalized = normalizeSitePath(path);
+  const canonical = normalized === "/services" ? "/programs" : normalized;
+  return canonical === "/" || DEF_BY_PATH.has(canonical) ? canonical : null;
+}
+
 /** Turn App Router catch-all segments into a site_pages.path value. */
 export function normalizeSitePath(segments: string[] | string | undefined | null): string {
   if (segments == null) return "/";
@@ -244,7 +252,8 @@ export function normalizeLandingHrefs(value: unknown, slug: string): unknown {
         const prefix = `/sites/${encodeURIComponent(slug)}`;
         const localPath = url.pathname.startsWith(`${prefix}/`)
           ? url.pathname.slice(prefix.length) : url.pathname;
-        const def = websitePageDefForPath(localPath);
+        const canonicalPath = canonicalWebsiteNavigationPath(localPath);
+        const def = canonicalPath ? websitePageDefForPath(canonicalPath) : null;
         if (def) return [key, `${url.search}${url.hash || `#${def.hash}`}`];
       }
     }

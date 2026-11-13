@@ -1,4 +1,4 @@
-import { WEBSITE_PAGE_DEFS, websitePageDefForPath } from "@/lib/sites/layout-mode";
+import { canonicalWebsiteNavigationPath, WEBSITE_PAGE_DEFS, websitePageDefForPath } from "@/lib/sites/layout-mode";
 
 export type SiteNavigationPage = { path: string; status: string; visibleTypes: string[] };
 
@@ -31,12 +31,16 @@ export function filterUnavailableSiteLinks(value: unknown, options: {
   ]);
   function available(href: string): boolean {
     href = href.trim();
-    if (href.startsWith("#")) return !anchors || !knownAnchors.has(href.slice(1)) || anchors.has(href.slice(1));
+    if (href.startsWith("#") || href.startsWith("?")) {
+      const anchor = new URL(href, "https://navigation.invalid").hash.slice(1);
+      return !anchors || !knownAnchors.has(anchor) || anchors.has(anchor);
+    }
     if (!paths || !href.startsWith("/") || href.startsWith("//") || href.includes("\\")) return true;
     const url = new URL(href, "https://navigation.invalid");
     const prefix = `/sites/${encodeURIComponent(options.slug)}`;
     const path = url.pathname === prefix ? "/" : url.pathname.startsWith(`${prefix}/`) ? url.pathname.slice(prefix.length) : url.pathname;
-    return path !== "/" && !websitePageDefForPath(path) || paths.has(path.replace(/\/+$/, "") || "/");
+    const canonicalPath = canonicalWebsiteNavigationPath(path);
+    return canonicalPath === null || paths.has(canonicalPath);
   }
   function visit(entry: unknown, root = false): unknown {
     if (Array.isArray(entry)) return entry.map(item => visit(item)).filter(item => item !== null);
@@ -65,12 +69,21 @@ export function rewriteSiteNavigation(value: unknown, options: { slug: string; b
   if (Array.isArray(value)) return value.map(entry => rewriteSiteNavigation(entry, options));
   if (!value || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+    // Landing links with their own query replace the current query, unlike a
+    // plain #anchor. Keep authorized draft navigation in preview after that move.
+    if (key === "href" && typeof entry === "string" && entry.trim().startsWith("?")) {
+      const url = new URL(entry.trim(), "https://navigation.invalid");
+      if (options.preview) url.searchParams.set("preview", "1");
+      else url.searchParams.delete("preview");
+      return [key, `${url.search}${url.hash}`];
+    }
     if (key === "href" && typeof entry === "string" && entry.trim().startsWith("/") && !entry.trim().startsWith("//") && !entry.includes("\\")) {
       const url = new URL(entry.trim(), "https://navigation.invalid");
       const prefix = `/sites/${encodeURIComponent(options.slug)}`;
       const localPath = url.pathname === prefix ? "/" : url.pathname.startsWith(`${prefix}/`) ? url.pathname.slice(prefix.length) : url.pathname;
-      if (localPath === "/" || websitePageDefForPath(localPath)) {
-        url.pathname = `${options.basePath}${localPath === "/" ? "" : localPath}` || "/";
+      const canonicalPath = canonicalWebsiteNavigationPath(localPath);
+      if (canonicalPath !== null) {
+        url.pathname = `${options.basePath}${canonicalPath === "/" ? "" : canonicalPath}` || "/";
         if (options.preview) url.searchParams.set("preview", "1");
         else url.searchParams.delete("preview");
         return [key, `${url.pathname}${url.search}${url.hash}`];

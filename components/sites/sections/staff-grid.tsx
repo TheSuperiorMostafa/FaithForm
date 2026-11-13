@@ -4,6 +4,12 @@ import type { StaffGridContent } from "@/types/site";
 
 import { Media, SectionHead, SectionShell, gridStyle } from "../primitives";
 
+function staffInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = parts.length > 1 ? [parts[0], parts[parts.length - 1]] : parts;
+  return initials.map((part) => Array.from(part)[0]).join("").toUpperCase();
+}
+
 function StaffGrid({ content, ctx }: SectionComponentProps<StaffGridContent>) {
   if (content.members.length === 0) return null;
 
@@ -19,16 +25,25 @@ function StaffGrid({ content, ctx }: SectionComponentProps<StaffGridContent>) {
         className="site-grid"
         style={gridStyle(content.columns, content.members.length)}
       >
-        {content.members.map((member, index) => (
-          <article key={`${member.name}-${index}`} className="site-staff-card">
-            <Media image={member.photo} className="site-staff-photo" />
-            <div className="site-staff-text">
-              <h3 className="site-staff-name">{member.name}</h3>
-              {member.role ? <div className="site-staff-role">{member.role}</div> : null}
-              {member.bio ? <p className="site-staff-bio">{member.bio}</p> : null}
-            </div>
-          </article>
-        ))}
+        {content.members.map((member, index) => {
+          const hasPhoto = Boolean(member.photo?.src?.trim());
+          const initials = hasPhoto ? "" : staffInitials(member.name);
+          return (
+            <article key={`${member.name}-${index}`} className={`site-staff-card${hasPhoto ? "" : " site-staff-card--text-only"}`}>
+              {hasPhoto ? <Media image={member.photo} className="site-staff-photo" /> : null}
+              <div className="site-staff-text">
+                <div className="site-staff-identity">
+                  {initials ? <span className="site-staff-initials" aria-hidden="true">{initials}</span> : null}
+                  <div>
+                    <h3 className="site-staff-name">{member.name}</h3>
+                    {member.role ? <div className="site-staff-role">{member.role}</div> : null}
+                  </div>
+                </div>
+                {member.bio ? <p className="site-staff-bio">{member.bio}</p> : null}
+              </div>
+            </article>
+          );
+        })}
       </div>
     </SectionShell>
   );

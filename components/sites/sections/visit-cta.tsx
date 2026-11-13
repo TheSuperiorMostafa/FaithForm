@@ -23,7 +23,7 @@ function VisitCta({ content, ctx }: SectionComponentProps<VisitCtaContent>) {
 
   return (
     <SectionShell surface={content.surface} anchor={ctx.anchor}>
-      <div className="site-split" style={!hasPanel ? { "--site-split": "1fr" } as React.CSSProperties : undefined}>
+      <div className="site-split site-visit-layout" style={!hasPanel ? { "--site-split": "1fr" } as React.CSSProperties : undefined}>
         <div>
           <Eyebrow>{content.eyebrow}</Eyebrow>
           <Headline headline={content.headline} className="site-display-lg" />

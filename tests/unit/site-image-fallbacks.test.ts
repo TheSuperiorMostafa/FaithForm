@@ -36,8 +36,14 @@ for (const theme of Object.values(CODE_SITE_THEMES)) {
           page, ...(mode === "website" ? { website: { path, churchName: DEV_PREVIEW_PROFILE.name, coverImageUrl: null } } : {}),
         }));
         assert.match(html, new RegExp(`data-theme="${theme.key}"`));
-        const frame = path === "/about" ? "site-figure" : path === "/staff" ? "site-staff-photo" : path === "/sermons" ? "site-sermon-thumb" : "site-hero-media";
-        assert.match(html, new RegExp(`<div class="site-ph ${frame}" aria-hidden="true"></div>`), `${mode}${path} keeps the designed decorative photo geometry`);
+        if (path === "/staff") {
+          assert.match(html, /class="site-staff-card site-staff-card--text-only"/, "staff without photos keep their identity instead of a large empty portrait");
+          assert.match(html, /class="site-staff-initials" aria-hidden="true"/);
+          assert.doesNotMatch(html, /class="site-ph site-staff-photo"/);
+        } else {
+          const frame = path === "/about" ? "site-figure" : path === "/sermons" ? "site-sermon-thumb" : "site-hero-media";
+          assert.match(html, new RegExp(`<div class="site-ph ${frame}" aria-hidden="true"></div>`), `${mode}${path} keeps the designed decorative photo geometry`);
+        }
         assert.doesNotMatch(html, /a photo of your|data-ph="(?:portrait|thumb|sermon still)"/, `${mode}${path} must not display instructions or prototype captions`);
         if (mode === "landing" || path === "/sermons") {
           assert.match(html, /<div class="site-sermon-stage site-ph"><span class="site-play" aria-hidden="true"><\/span><\/div>/, "a missing still keeps the stage and decorative play mark");
