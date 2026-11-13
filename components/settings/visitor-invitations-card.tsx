@@ -61,14 +61,17 @@ export function VisitorInvitationsCard({
   isAdmin: boolean;
   invitations: InvitationSummary[];
 }) {
-  const [pending, startTransition] = useTransition();
+  const [creating, startCreate] = useTransition();
+  const [withdrawing, startWithdraw] = useTransition();
+  const pending = creating || withdrawing;
   const [label, setLabel] = useState("");
   const [expiresInDays, setExpiresInDays] = useState(14);
   const [maxUses, setMaxUses] = useState(1);
   const [issuedUrl, setIssuedUrl] = useState<string | null>(null);
+  const [issuedInvitationId, setIssuedInvitationId] = useState<string | null>(null);
 
   const create = () => {
-    startTransition(async () => {
+    startCreate(async () => {
       const result = await createVisitorInvitation({
         purpose: "join",
         invitedLabel: label.trim() || undefined,
@@ -77,6 +80,7 @@ export function VisitorInvitationsCard({
       });
       if (result.ok) {
         setIssuedUrl(result.data.url);
+        setIssuedInvitationId(result.data.id);
         setLabel("");
         toast.success("Invitation created.");
       } else {
@@ -96,10 +100,15 @@ export function VisitorInvitationsCard({
   };
 
   const withdraw = (invitationId: string) => {
-    startTransition(async () => {
+    startWithdraw(async () => {
       const result = await withdrawVisitorInvitation(invitationId);
-      if (result.ok) toast.success("Invitation withdrawn.");
-      else toast.error(result.message);
+      if (result.ok) {
+        if (invitationId === issuedInvitationId) {
+          setIssuedUrl(null);
+          setIssuedInvitationId(null);
+        }
+        toast.success("Invitation withdrawn.");
+      } else toast.error(result.message);
     });
   };
 
@@ -162,7 +171,7 @@ export function VisitorInvitationsCard({
             </div>
 
             <Button onClick={create} disabled={pending} className="self-start">
-              {pending ? "Creating…" : "Create invitation link"}
+              {creating ? "Creating…" : "Create invitation link"}
             </Button>
 
             {issuedUrl && (
@@ -209,7 +218,9 @@ export function VisitorInvitationsCard({
                     </span>
                     <span className="text-xs text-muted-foreground">
                       Used {invitation.usedCount} of {invitation.maxUses} ·{" "}
-                      {status === "expired" || status === "withdrawn"
+                      {status === "withdrawn" && invitation.revokedAt
+                        ? `Withdrawn ${formatDate(invitation.revokedAt)}`
+                        : status === "expired"
                         ? `Expired ${formatDate(invitation.expiresAt)}`
                         : `Expires ${formatDate(invitation.expiresAt)}`}
                     </span>
@@ -232,7 +243,7 @@ export function VisitorInvitationsCard({
                         disabled={pending}
                         onClick={() => withdraw(invitation.id)}
                       >
-                        Withdraw
+                        {withdrawing ? "Withdrawing…" : "Withdraw"}
                       </Button>
                     )}
                   </div>
