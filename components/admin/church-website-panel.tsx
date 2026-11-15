@@ -21,6 +21,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import type {
   DomainRequestStatus,
   SiteDomainDetail,
@@ -120,7 +121,7 @@ function DomainsCard({
           <CardTitle>Domains</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
             {automated
-              ? "Hostnames are registered with the hosting provider automatically. A domain goes live once the provider confirms it is serving."
+              ? "Addresses are registered automatically, then checked for ownership, website settings, and a secure connection to the correct church."
               : "Automatic hosting setup is not connected. Addresses are saved and checked safely; finish the Vercel integration from Domains to automate new connections."}
           </p>
         </div>
@@ -132,8 +133,8 @@ function DomainsCard({
       <CardContent className="flex flex-col gap-4">
         {domains.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No domain attached. This church is reachable on its FaithForm
-            subdomain only.
+            No custom address is connected. The church can review its website
+            from the Website dashboard before publishing.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
@@ -150,7 +151,7 @@ function DomainsCard({
                         href={`https://${domain.hostname}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 font-mono text-sm hover:underline"
+                        className="inline-flex min-h-11 min-w-0 items-center gap-1 break-all font-mono text-sm hover:underline"
                       >
                         {domain.hostname}
                         <ExternalLink className="size-3" aria-hidden />
@@ -167,7 +168,7 @@ function DomainsCard({
                         size="default"
                         disabled={pending}
                         onClick={() =>
-                          run(() => recheckDomain(domain.id), "Re-checked.")
+                          run(() => recheckDomain(domain.id), "Connection check scheduled.")
                         }
                       >
                         <RefreshCw className="size-3.5" aria-hidden />
@@ -211,32 +212,30 @@ function DomainsCard({
                         variant="ghost"
                         size="default"
                         disabled={pending}
-                        onClick={() => {
-                          if (
-                            !window.confirm(
-                              `Detach ${domain.hostname}? The site stops answering on it immediately.`,
-                            )
-                          ) {
-                            return;
-                          }
+                        onClick={async () => {
+                          if (!(await confirmAction({
+                            title: "Remove this web address?",
+                            description: <span tabIndex={0} className="block max-h-[calc(100dvh-18rem)] overflow-y-auto rounded-sm break-words focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Visitors will stop reaching this church website through this address. A main address also removes its managed www redirect.</span>,
+                            confirmLabel: "Remove web address",
+                            destructive: true,
+                          }))) return;
                           run(
                             () => removeChurchDomain(domain.id),
-                            `${domain.hostname} detached.`,
+                            "Address removal scheduled.",
                           );
                         }}
                       >
                         <Trash2 className="size-3.5" aria-hidden />
+                        Remove
                       </Button>
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground">
-                    {domain.dnsDetail ?? "Not checked yet."}
-                    {domain.dnsCheckedAt
-                      ? ` · Checked ${formatDateTime(domain.dnsCheckedAt)}`
-                      : ""}
-                    {` · via ${domain.provider}`}
-                  </p>
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium text-foreground">{domain.setup?.title ?? "Connection check pending"}</p>
+                    <p>{domain.setup?.description ?? "Schedule a check to see this address's current progress."}</p>
+                    {domain.setup?.checkedAt ? <p className="mt-1">Last checked {formatDateTime(domain.setup.checkedAt)}</p> : null}
+                  </div>
                 </li>
               );
             })}

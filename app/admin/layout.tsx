@@ -2,6 +2,7 @@ import { AdminMobileNav } from "@/components/admin/admin-mobile-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { Toaster } from "sonner";
+import { ConfirmHost } from "@/components/ui/confirm-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ export default async function AdminLayout({
         </main>
       </div>
       <Toaster richColors position="top-center" />
+      <ConfirmHost />
     </div>
   );
 }

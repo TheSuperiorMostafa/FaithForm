@@ -292,13 +292,9 @@ function DomainCard({
         toast.error(result.error);
         return;
       }
-      if (result.status === "live") toast.success(`${domain.hostname} is connected.`);
-      else if (result.dnsOk) toast.success(`The settings for ${domain.hostname} are correct.`);
-      else
-        toast.message(`${domain.hostname} isn't connected yet`, {
-          description:
-            "Your domain company hasn't passed the change on yet. Give it a few more minutes, then check again.",
-        });
+      toast.message("Connection check scheduled", {
+        description: "Your progress will update here. You can leave this page while the check finishes.",
+      });
       router.refresh();
     });
   }

@@ -260,20 +260,13 @@ export async function cancelDomainRequest(
 // RE-CHECK DNS
 // ---------------------------------------------------------------------------
 
-/** Records propagate in minutes, not seconds; this stops a button-mash loop. */
-const RECHECK_COOLDOWN_MS = 15_000;
-
 export type DnsRecheckResult =
   | { ok: true; dnsOk: boolean; detail: string; status: DomainStatus }
   | { ok: false; error: string };
 
 /**
- * Re-runs the DNS check for one of this church's domains and, when automation
- * is configured, asks the platform whether it is serving yet.
- *
- * Deliberately never sets `live` off DNS alone. Correct DNS means the church
- * finished their half; a green check before the hostname actually answers would
- * send them to a URL that errors.
+ * Schedules the scoped family check. The database enforces cooldown and
+ * provider delays; only the background worker can activate verified routing.
  */
 export async function recheckDomainDns(
   domainId: string,
@@ -285,18 +278,6 @@ export async function recheckDomainDns(
   const domain = domains.find((d) => d.id === domainId);
 
   if (!domain) return fail("We couldn't find that domain on your account.");
-
-  if (
-    domain.dnsCheckedAt &&
-    Date.now() - new Date(domain.dnsCheckedAt).getTime() < RECHECK_COOLDOWN_MS
-  ) {
-    return {
-      ok: true,
-      dnsOk: domain.status === "dns_ok" || domain.status === "live",
-      detail: domain.dnsDetail ?? "Just checked — give it a moment.",
-      status: domain.status,
-    };
-  }
 
   if (!(await requestDomainCheck(auth.churchId, domainId))) {
     return fail("We couldn't schedule the connection check. Please try again.");
