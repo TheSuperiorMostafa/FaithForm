@@ -3,13 +3,15 @@ import test, { type TestContext } from "node:test";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { NextRequest } from "next/server";
+import type { ReactElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { canPreviewDraftSite, isPublicSitePublication } from "../../lib/sites/preview-access";
 import { CODE_SITE_THEMES } from "../../lib/sites/themes";
 
 const churchId = "d1d65673-2d45-4825-9e6e-c2d85d4583fd";
 type Viewer = { churchId: string; isAdmin: boolean; featurePermissions: string[] };
-type Fixture = { viewer: Viewer | null; allowed: string[]; enabled: boolean; published: boolean; homeStatus: string; aboutStatus: string; authReads: number };
-const state: Fixture = { viewer: null, allowed: [], enabled: true, published: true, homeStatus: "published", aboutStatus: "draft", authReads: 0 };
+type Fixture = { viewer: Viewer | null; allowed: string[]; enabled: boolean; published: boolean; homeStatus: string; aboutStatus: string; authReads: number; host: string; navigation: boolean };
+const state: Fixture = { viewer: null, allowed: [], enabled: true, published: true, homeStatus: "published", aboutStatus: "draft", authReads: 0, host: "app.faithform.test", navigation: false };
 Object.assign(globalThis, { __websitePreviewAccessTest: state });
 
 test("anonymous publication requires both page and settings to be published", () => {
@@ -28,7 +30,7 @@ test("draft website previews require a viewer from the same church with website 
 });
 
 type Props = { params: Promise<{ slug: string; path?: string[] }>; searchParams: Promise<{ preview?: string }> };
-type Rendered = { props: { page: { sections: { type: string; content: Record<string, unknown> }[] } } };
+type Rendered = { props: { page: { sections: { type: string; content: Record<string, unknown> }[] }; website?: { basePath: string } } };
 type Routes = {
   dynamic: string;
   default: (props: Props) => Promise<Rendered>;
@@ -51,7 +53,7 @@ function routes() {
       const built = await build({ entryPoints: [entry], bundle: true, write: false, platform: "node", format: "cjs", packages: "external", target: "node20", jsx: "automatic", tsconfig: fileURLToPath(new URL("../../tsconfig.json", import.meta.url)), plugins: [{ name: "website-preview-providers", setup(builder: PluginBuild) {
         builder.onResolve({ filter: /^(?:@\/lib\/(?:auth\/church|features\/access)|next\/headers)$/ }, args => args.importer === entry ? { path: args.path, namespace: "preview-test" } : undefined);
         builder.onLoad({ filter: /.*/, namespace: "preview-test" }, args => ({ loader: "js", resolveDir: fileURLToPath(new URL("../../", import.meta.url)), contents: args.path === "next/headers"
-          ? 'export async function headers(){return new Headers({host:"app.faithform.test"})}'
+          ? 'export async function headers(){return new Headers({host:globalThis.__websitePreviewAccessTest.host})}'
           : args.path.endsWith("auth/church")
             ? 'export async function getChurchAuth(){globalThis.__websitePreviewAccessTest.authReads++;return globalThis.__websitePreviewAccessTest.viewer}'
             : `export {canAccessFeature} from ${JSON.stringify(featurePath)}; export async function getFeatureAccess(){return {allowed:globalThis.__websitePreviewAccessTest.allowed}}; export async function isChurchFeatureEnabled(){return globalThis.__websitePreviewAccessTest.enabled}; export async function isChurchFeatureEmailEnabled(){return false}` }));
@@ -67,6 +69,7 @@ function routes() {
 
 function configure(t: TestContext) {
   state.viewer = null; state.allowed = []; state.enabled = true; state.published = true; state.homeStatus = "published"; state.aboutStatus = "draft"; state.authReads = 0;
+  state.host = "app.faithform.test"; state.navigation = false;
   for (const [key, value] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: "https://preview-access.example.test", SUPABASE_SECRET_KEY: "safe-test-key", NEXT_PUBLIC_SITE_URL: "https://app.faithform.test" })) {
     const previous = process.env[key]; process.env[key] = value;
     t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
@@ -86,7 +89,10 @@ function configure(t: TestContext) {
       }
       case "site_sections": return Response.json(url.searchParams.get("page_id") === "eq.about"
         ? [{ id: "about-body", type: "about_text", is_visible: true, sort_order: 0, props: { headline: { lead: "Related draft content" }, body: ["Confidential related draft"] } }]
-        : [{ id: "hero", type: "hero", is_visible: true, sort_order: 0, props: { headline: { lead: "Home content" } } }]);
+        : [
+          ...(state.navigation ? [{ id: "nav", type: "site_nav", is_visible: true, sort_order: 0, props: { title: "Grace Community Church", links: [{ label: "Home", href: "/" }, { label: "About", href: "/about" }], cta: { label: "Our story", href: "/about" } } }] : []),
+          { id: "hero", type: "hero", is_visible: true, sort_order: 1, props: { headline: { lead: "Home content" } } },
+        ]);
       case "site_themes": return Response.json({ key: "grace", name: "Grace", tokens: CODE_SITE_THEMES.grace.tokens, section_defaults: CODE_SITE_THEMES.grace.sectionDefaults });
       case "consume_api_rate_limit": return Response.json([{ allowed: true, retry_after_seconds: 0 }]);
       case "site_contact_submissions":
@@ -110,6 +116,43 @@ test("actual public page and metadata allow anonymous published content without 
   assert.equal(result.props.page.sections.some(section => section.type === "about_text"), false);
   assert.equal(state.authReads, 0);
   assert.equal((await page.generateMetadata(props())).title, "Private home title");
+});
+
+test("church navigation uses root paths even when Vercel selects its domain as the production URL", async t => {
+  configure(t);
+  const previousProductionHost = process.env.VERCEL_PROJECT_PRODUCTION_URL;
+  process.env.VERCEL_PROJECT_PRODUCTION_URL = "lgcnaz-navigation.example";
+  t.after(() => { if (previousProductionHost === undefined) delete process.env.VERCEL_PROJECT_PRODUCTION_URL; else process.env.VERCEL_PROJECT_PRODUCTION_URL = previousProductionHost; });
+  state.host = "lgcnaz-navigation.example"; state.navigation = true; state.aboutStatus = "published";
+  const { page } = await routes();
+  for (const path of [undefined, ["about"]]) {
+    const result = await page.default({ params: Promise.resolve({ slug: "grace", path }), searchParams: Promise.resolve({}) });
+    const nav = result.props.page.sections.find(section => section.type === "site_nav")!;
+    assert.equal(result.props.website?.basePath, "");
+    assert.equal(nav.content.homeHref, "/");
+    assert.deepEqual(nav.content.links, [{ label: "Home", href: "/" }, { label: "About", href: "/about" }]);
+    const html = renderToStaticMarkup(result as unknown as ReactElement);
+    assert.match(html, /<a href="\/" class="site-nav-brand"/);
+    assert.match(html, /href="\/about"/);
+    assert.doesNotMatch(html, /href="\/sites\/grace/);
+  }
+});
+
+test("authorized application previews retain the church prefix and preview query in every navigation link", async t => {
+  configure(t);
+  state.navigation = true; state.published = false; state.homeStatus = "draft";
+  state.viewer = { churchId, isAdmin: true, featurePermissions: ["website"] }; state.allowed = ["website"];
+  const { page } = await routes();
+  for (const path of [undefined, ["about"]]) {
+    const result = await page.default({ params: Promise.resolve({ slug: "grace", path }), searchParams: Promise.resolve({ preview: "1" }) });
+    const nav = result.props.page.sections.find(section => section.type === "site_nav")!;
+    assert.equal(result.props.website?.basePath, "/sites/grace");
+    assert.equal(nav.content.homeHref, "/sites/grace?preview=1");
+    assert.deepEqual(nav.content.links, [{ label: "Home", href: "/sites/grace?preview=1" }, { label: "About", href: "/sites/grace/about?preview=1" }]);
+    const html = renderToStaticMarkup(result as unknown as ReactElement);
+    assert.match(html, /<a href="\/sites\/grace\?preview=1" class="site-nav-brand"/);
+    assert.match(html, /href="\/sites\/grace\/about\?preview=1"/);
+  }
 });
 
 test("anonymous preview queries never reveal public-site related drafts or private metadata", async t => {

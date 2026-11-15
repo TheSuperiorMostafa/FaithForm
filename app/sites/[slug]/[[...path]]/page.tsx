@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { getChurchAuth } from "@/lib/auth/church";
 import { canAccessFeature, getFeatureAccess } from "@/lib/features/access";
-import { getCanonicalSiteUrl } from "@/lib/site-url";
-import { availableWebsitePaths, canViewChurchSitePage, churchSiteBasePath, filterUnavailableSiteLinks, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
+import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
+import { availableWebsitePaths, canViewChurchSitePage, filterUnavailableSiteLinks, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
+import { isPlatformSiteHost } from "@/lib/sites/tenant";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
@@ -183,13 +184,8 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
   }
 
   const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? new URL(getCanonicalSiteUrl()).host;
-  const basePath = churchSiteBasePath(slug, host, [
-    new URL(getCanonicalSiteUrl()).hostname,
-    "faithform.io", "www.faithform.io",
-    process.env.NEXT_PUBLIC_SITE_ROOT_HOST ?? "",
-    process.env.VERCEL_URL ?? "", process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "",
-  ]);
+  const host = requestHeaders.get("host") ?? new URL(DEFAULT_PRODUCTION_SITE_URL).host;
+  const basePath = isPlatformSiteHost(host) ? `/sites/${encodeURIComponent(slug)}` : "";
   const availablePaths = loaded.layoutMode === "website"
     ? availableWebsitePaths(await getSiteNavigationPages(bundle.churchId), isPreview)
     : undefined;
