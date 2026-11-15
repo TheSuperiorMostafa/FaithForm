@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getCanonicalSiteUrl } from "@/lib/site-url";
+import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
 
 /**
  * Tenant resolution: incoming hostname -> which church's site to render.
@@ -56,10 +56,12 @@ export function siteHostname(host: string): string {
 
 /** The app's own hostnames, which must keep serving the dashboard. */
 function platformHosts(): string[] {
-  const hosts: string[] = [new URL(getCanonicalSiteUrl()).hostname.toLowerCase()];
+  const hosts: string[] = [new URL(DEFAULT_PRODUCTION_SITE_URL).hostname.toLowerCase()];
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-  if (siteUrl) {
+  // Vercel may select a newly attached church domain as the production URL.
+  // Only explicit application configuration may make a custom host an app host.
+  for (const siteUrl of [process.env.NEXT_PUBLIC_SITE_URL, process.env.SITE_URL, process.env.INVITE_SITE_URL]) {
+    if (!siteUrl?.trim()) continue;
     try {
       hosts.push(new URL(siteUrl).hostname.toLowerCase());
     } catch {
@@ -75,10 +77,10 @@ function platformHosts(): string[] {
   const rootHost = siteHostname(process.env.NEXT_PUBLIC_SITE_ROOT_HOST ?? "");
   if (rootHost) hosts.push(rootHost, `www.${rootHost}`);
 
-  const vercelUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL?.toLowerCase();
-  if (vercelUrl) hosts.push(vercelUrl.split(":")[0]);
-  const deploymentUrl = process.env.VERCEL_URL?.toLowerCase();
-  if (deploymentUrl) hosts.push(deploymentUrl.split(":")[0]);
+  for (const raw of [process.env.VERCEL_PROJECT_PRODUCTION_URL, process.env.VERCEL_URL]) {
+    const host = siteHostname(raw ?? "");
+    if (host.endsWith(".vercel.app")) hosts.push(host);
+  }
 
   return hosts;
 }
