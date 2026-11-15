@@ -173,7 +173,7 @@ test("domain changes are confirmed and never show raw errors", () => {
   const workspace = read("components/website-admin/domain-workspace.tsx");
   assert.match(workspace, /confirmLabel: "Cancel request"/);
   assert.match(workspace, /confirmLabel: "Remove web address"/);
-  assert.match(workspace, /Email these steps to the person who manages our domain/);
+  assert.match(workspace, /Email instructions to our IT person/);
   assert.match(workspace, /Let FaithForm do it for me/);
   assert.match(workspace, /Technical details/);
 
@@ -183,7 +183,8 @@ test("domain changes are confirmed and never show raw errors", () => {
   // The removal is scoped to the caller's church and admin-only, like the rest.
   const remove = actions.slice(actions.indexOf("export async function removeDomain"));
   assert.match(remove, /guardAdmin\(\)/);
-  assert.match(remove, /\.eq\("church_id", auth\.churchId\)/);
+  assert.match(remove, /disconnectDomain\(auth\.churchId, domainId\)/);
+  assert.match(read("lib/sites/domain-onboarding.ts"), /rpc\("request_site_domain_disconnect", \{ p_church_id: churchId, p_domain_id: domainId \}\)/);
 });
 
 test("the section editor speaks plainly", () => {

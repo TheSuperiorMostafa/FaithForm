@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { cloneElement, useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -29,6 +29,7 @@ import {
 } from "@/app/dashboard/website/domain-actions";
 import {
   domainInstructionsMailto,
+  domainInstructionsText,
   domainStatusWords,
 } from "@/components/website-admin/website-words";
 import { AdvancedSection } from "@/components/ui/advanced-section";
@@ -62,7 +63,18 @@ import { cn } from "@/lib/utils";
  * or let FaithForm do it.
  */
 
-type DomainWithRecords = SiteDomainDetail & { records: DnsRecord[] };
+export type DomainSetup = {
+  phase: "connecting" | "ownership" | "dns" | "https" | "ready" | "attention";
+  title: string;
+  description: string;
+  checkedAt: string | null;
+  nextCheckAt: string | null;
+  records: DnsRecord[];
+  verification: DnsRecord[];
+  retryable: boolean;
+};
+
+type DomainWithRecords = SiteDomainDetail & { records: DnsRecord[]; setup?: DomainSetup; redirectTo?: string | null };
 
 type Props = {
   domains: DomainWithRecords[];
@@ -74,13 +86,22 @@ type Props = {
   churchName: string | null;
   defaults: { contactName: string | null; contactEmail: string | null };
   automated: boolean;
+  publicUrl?: string | null;
+  isPublished?: boolean;
 };
 
 export function DomainWorkspace(props: Props) {
   const { domains, openRequest, canEdit } = props;
+  const canonicalDomains = domains.filter((domain) => !domain.redirectTo || !domains.some((target) => target.hostname === domain.redirectTo));
+  const connections = canonicalDomains;
   const [choice, setChoice] = useState<"connect" | "register" | null>(null);
 
-  const live = domains.find((d) => d.status === "live");
+  const live = canonicalDomains.find((domain) => domain.isPrimary && domain.status === "live")
+    ?? canonicalDomains.find((domain) => domain.status === "live");
+  const familyReady = connections.some((domain) => domain.setup ? domain.setup.phase === "ready" : domain.status === "live");
+  const waiting = domains.some((domain) => domain.setup ? domain.setup.phase !== "ready" : domain.status !== "live");
+  useDomainRefresh(waiting);
+  const isPublished = props.isPublished === true;
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -94,24 +115,30 @@ export function DomainWorkspace(props: Props) {
         </Link>
         <SectionHeader
           title="Your web address"
-          description="Where people find your website. Your free FaithForm address always works; you can also use your own."
+          description="Connect your church’s address, check it, then publish when you’re ready."
         />
       </div>
+
+      <SetupProgress hasAddress={domains.length > 0} connected={familyReady} published={isPublished} />
 
       <CurrentAddress
         live={live ?? null}
         faithformAddress={props.faithformAddress}
         previewUrl={props.previewUrl}
+        publicUrl={props.publicUrl ?? null}
+        isPublished={isPublished}
       />
 
-      {domains.map((domain) => (
+      {connections.map((domain) => (
         <DomainCard
           key={domain.id}
           domain={domain}
           canEdit={canEdit}
           automated={props.automated}
           churchName={props.churchName}
-          hasFaithformAddress={Boolean(props.faithformAddress)}
+          hasFaithformAddress={Boolean(props.publicUrl && !props.publicUrl.startsWith(`https://${domain.hostname}`))}
+          isPublished={isPublished}
+          aliases={domains.filter((alias) => alias.redirectTo === domain.hostname).map((alias) => alias.hostname)}
         />
       ))}
 
@@ -142,49 +169,85 @@ export function DomainWorkspace(props: Props) {
 // CURRENT ADDRESS
 // ---------------------------------------------------------------------------
 
-function CurrentAddress({
-  live,
-  faithformAddress,
-  previewUrl,
-}: {
+/** Refreshes saved progress without changing a church’s settings on page load. */
+function useDomainRefresh(waiting: boolean) {
+  const router = useRouter();
+  const [refreshing, startRefresh] = useTransition();
+  const refreshingRef = useRef(refreshing);
+  refreshingRef.current = refreshing;
+
+  useEffect(() => {
+    if (!waiting) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || refreshingRef.current) return;
+      refreshingRef.current = true;
+      startRefresh(() => router.refresh());
+    };
+    const timer = window.setInterval(refresh, 30_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [router, waiting]);
+}
+
+function SetupProgress({ hasAddress, connected, published }: { hasAddress: boolean; connected: boolean; published: boolean }) {
+  const steps = [
+    { label: "Choose an address", complete: hasAddress, current: !hasAddress },
+    { label: "Connect your address", complete: connected, current: hasAddress && !connected },
+    { label: "Publish your website", complete: published, current: connected && !published },
+  ];
+  return (
+    <ol aria-label="Website setup" className="grid gap-3 sm:grid-cols-3">
+      {steps.map((step, index) => (
+        <li key={step.label} aria-current={step.current ? "step" : undefined} className={cn("flex items-center gap-3 rounded-2xl border p-4", step.current ? "border-accent bg-accent/5" : "border-border bg-card")}>
+          <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold", step.complete ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200" : "bg-muted text-foreground")}>
+            {step.complete ? <Check className="size-4" aria-hidden /> : index + 1}
+          </span>
+          <span className="text-sm font-semibold">{step.label}<span className="sr-only">{step.complete ? ": complete" : step.current ? ": current step" : ": upcoming"}</span></span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function CurrentAddress({ live, faithformAddress, previewUrl, publicUrl, isPublished }: {
   live: SiteDomainDetail | null;
   faithformAddress: string | null;
   previewUrl: string | null;
+  publicUrl: string | null;
+  isPublished: boolean;
 }) {
-  const url = live
-    ? `https://${live.hostname}`
-    : faithformAddress
-      ? `https://${faithformAddress}`
-      : previewUrl;
-
-  const label = live?.hostname ?? faithformAddress ?? "Preview link";
-
+  const liveUrl = isPublished ? (publicUrl ?? (live ? `https://${live.hostname}` : null)) : null;
+  const label = live?.hostname ?? faithformAddress ?? (liveUrl ? liveUrl.replace(/^https?:\/\//, "").replace(/\/$/, "") : "Your website preview");
   return (
     <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <h3 className="font-heading text-lg font-bold">Address that works today</h3>
-          <p className="mt-0.5 text-[15px] text-muted-foreground">
-            {live
-              ? "This is the address visitors see."
-              : faithformAddress
-                ? "This address works now, with no setup. Connect your own below if you'd like to replace it."
-                : "Your site is reachable at the preview link while you set an address up."}
+          <h3 className="font-heading text-lg font-bold">Your website address</h3>
+          <p className="mt-1 text-[15px] text-muted-foreground">
+            {liveUrl
+              ? "Your website is published. Visitors can open it at this address."
+              : live
+                ? "Your address is connected. Review your draft, then publish it from Overview."
+                : "You can review your saved website while your address is being connected."}
           </p>
         </div>
-        {live ? <StatusBadge tone="done">Connected</StatusBadge> : null}
+        <StatusBadge tone={liveUrl ? "done" : "neutral"}>{liveUrl ? "Published" : "Not published"}</StatusBadge>
       </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-2">
-        <Globe className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-        <span className="min-w-0 flex-1 truncate text-base font-medium">{label}</span>
-        {url ? (
-          <a href={url} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost" })}>
-              Open
-              <ExternalLink className="size-4" aria-hidden />
-          </a>
-        ) : null}
+      <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="flex w-full min-w-0 items-start gap-3 sm:min-w-56 sm:flex-1">
+          <Globe className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+          <span className="min-w-0 flex-1 break-words text-base font-medium">{label}</span>
+        </div>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+          {liveUrl ? <a href={liveUrl} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "outline" }), "w-full sm:w-auto")}><ExternalLink className="size-4" aria-hidden />Visit website</a> : null}
+          {previewUrl ? <a href={previewUrl} target="_blank" rel="noopener noreferrer" className={cn(buttonVariants({ variant: "ghost" }), "w-full sm:w-auto")}><ExternalLink className="size-4" aria-hidden />Review preview</a> : null}
+        </div>
       </div>
+      {!isPublished && live ? <Link href="/dashboard/website" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}><ArrowRight className="size-4" aria-hidden />Review and publish</Link> : null}
+      {!isPublished ? <p className="mt-3 text-sm text-muted-foreground">Preview links are for your signed-in team. Connecting an address does not publish your website.</p> : null}
     </section>
   );
 }
@@ -199,19 +262,28 @@ function DomainCard({
   automated,
   churchName,
   hasFaithformAddress,
+  isPublished,
+  aliases,
 }: {
   domain: DomainWithRecords;
   canEdit: boolean;
   automated: boolean;
   churchName: string | null;
   hasFaithformAddress: boolean;
+  isPublished: boolean;
+  aliases: string[];
 }) {
   const [pending, startTransition] = useTransition();
   const [removing, startRemoving] = useTransition();
   const [route, setRoute] = useState<"self" | null>(null);
   const router = useRouter();
   const status = domainStatusWords(domain.status, automated);
-  const needsSetup = domain.status === "pending_dns" || domain.status === "failed";
+  const setup = domain.setup;
+  const phase = setup?.phase ?? (domain.status === "live" ? "ready" : domain.status === "dns_ok" ? "https" : domain.status === "failed" ? "attention" : "dns");
+  const needsSetup = phase === "ownership" || phase === "dns" || phase === "attention";
+  const records = [...(setup?.verification ?? []), ...(setup?.records ?? domain.records)];
+  const statusTitle = setup?.title ?? status.label;
+  const statusDescription = setup?.description ?? status.detail;
 
   function recheck() {
     startTransition(async () => {
@@ -233,10 +305,12 @@ function DomainCard({
 
   async function remove() {
     const ok = await confirmAction({
-      title: `Remove ${domain.hostname}?`,
-      description: hasFaithformAddress
-        ? `Visitors who type ${domain.hostname} will no longer reach your website. Your free FaithForm address keeps working, and you can connect ${domain.hostname} again later.`
-        : `Visitors who type ${domain.hostname} will no longer reach your website. You can connect it again later.`,
+      title: "Remove this web address?",
+      description: <span tabIndex={0} className="block max-h-[calc(100dvh-18rem)] overflow-y-auto rounded-sm break-words [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {hasFaithformAddress
+          ? `Visitors who type ${domain.hostname} will no longer reach your website. Your published website stays available at its FaithForm address, and you can connect ${domain.hostname} again later.`
+          : `Visitors who type ${domain.hostname} will no longer reach your website. You can connect it again later.`}
+      </span>,
       confirmLabel: "Remove web address",
       destructive: true,
     });
@@ -255,32 +329,44 @@ function DomainCard({
 
   const mailto = domainInstructionsMailto({
     hostname: domain.hostname,
-    records: domain.records,
+    records,
     churchName,
+    automatic: automated,
   });
+  const instructions = domainInstructionsText({ hostname: domain.hostname, records, churchName, automatic: automated });
 
   return (
     <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="font-heading text-lg font-bold">{domain.hostname}</h3>
+            <h3 className="break-words font-heading text-lg font-bold [overflow-wrap:anywhere]">{domain.hostname}</h3>
             {domain.isPrimary ? (
               <span className="text-sm font-medium text-muted-foreground">Main address</span>
             ) : null}
           </div>
-          <p className="mt-0.5 text-[15px] text-muted-foreground">{status.detail}</p>
+          <p className="mt-1 text-[15px] text-muted-foreground">{statusDescription}</p>
+          {aliases.length > 0 ? <p className="mt-2 break-words text-sm text-muted-foreground">{phase === "ready" ? "Also connects" : "Includes"} {aliases.join(", ")}{phase === "ready" ? " and sends visitors to this address." : ". Both versions are checked before setup is complete."}</p> : null}
         </div>
-        <StatusBadge tone={status.tone as StatusTone}>{status.label}</StatusBadge>
+        <StatusBadge className="max-w-full whitespace-normal" tone={phase === "ready" ? "done" : phase === "attention" || phase === "ownership" ? "attention" : "working"}>{statusTitle}</StatusBadge>
       </div>
+
+      {phase === "ready" ? (
+        <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[15px] text-emerald-900 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100">{isPublished ? "This address is connected to your published website." : "Your address is ready. Review your saved website before publishing."}</p>
+      ) : (
+        <div className="mt-4 rounded-xl border border-border bg-muted/30 px-4 py-3 text-[15px]">
+          <p className="font-semibold">{needsSetup ? "Next step: update your website settings" : "FaithForm is finishing the connection"}</p>
+          <p className="mt-1 text-muted-foreground">{needsSetup ? "Use the connection settings below, or hand the instructions to the person who looks after your address." : automated ? "We’ll keep checking in the background. You can leave this page and come back." : "Your request is saved. The FaithForm team needs to finish the connection."}</p>
+        </div>
+      )}
 
       {needsSetup ? (
         <div className="mt-5 flex flex-col gap-4">
-          <h4 className="text-base font-semibold">How would you like to finish?</h4>
+          <h4 className="text-base font-semibold">Choose who will update the settings</h4>
           <div className="grid gap-3 md:grid-cols-3">
             <RouteCard
               icon={Wrench}
-              title="I'll do it myself"
+              title="Show connection settings"
               body="Step-by-step, with the settings to copy."
               selected={route === "self"}
               onClick={() => setRoute(route === "self" ? null : "self")}
@@ -293,7 +379,7 @@ function DomainCard({
                 <Mail className="size-5" strokeWidth={1.75} aria-hidden />
               </span>
               <span className="text-base font-semibold">
-                Email these steps to the person who manages our domain
+                Email instructions to our IT person
               </span>
               <span className="text-sm text-muted-foreground">
                 Opens your email with the instructions filled in.
@@ -308,45 +394,43 @@ function DomainCard({
               </span>
               <span className="text-base font-semibold">Let FaithForm do it for me</span>
               <span className="text-sm text-muted-foreground">
-                We already have your request. Contact us and we&apos;ll walk through it with you.
+                Ask our team to help finish this connection.
               </span>
             </Link>
           </div>
 
           {route === "self" ? (
             <ol className="flex list-decimal flex-col gap-2 rounded-xl border border-border bg-muted/30 py-4 pl-10 pr-4 text-[15px]">
-              <li>Sign in wherever you bought {domain.hostname} (for example GoDaddy or Namecheap).</li>
+              <li>Sign in to the company that manages the settings for {domain.hostname}. This may be different from the company where you bought it.</li>
               <li>Open the settings called &ldquo;DNS&rdquo; or &ldquo;Manage DNS&rdquo;.</li>
               <li>Add the settings shown under Technical details below. Copy each value exactly.</li>
               <li>Leave any email settings alone. These only affect the website.</li>
-              <li>Come back here and choose &ldquo;Check again&rdquo;.</li>
+              <li>{automated ? "FaithForm checks the connection automatically. You can leave this page while it finishes." : "After saving the settings, choose Check again so the FaithForm team can finish."}</li>
             </ol>
           ) : null}
         </div>
       ) : null}
 
+      {needsSetup ? <div className="mt-4"><CopyButton value={instructions} label="Copy instructions for our IT person" /></div> : null}
+
       <div className="mt-5 flex flex-wrap items-center gap-3">
-        {canEdit && domain.status !== "live" ? (
-          <Button variant="outline" onClick={recheck} disabled={pending}>
+        {canEdit && phase !== "ready" ? (
+          <Button variant="outline" onClick={recheck} disabled={pending || removing}>
             {pending ? (
-              <Loader2 className="size-4 animate-spin" aria-hidden />
+              <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
             ) : (
               <RefreshCw className="size-4" aria-hidden />
             )}
             Check again
           </Button>
         ) : null}
-        {domain.dnsCheckedAt && domain.status !== "live" ? (
-          <span className="text-sm text-muted-foreground">
-            We check on our own too. Last checked {relativeTime(domain.dnsCheckedAt)}.
-          </span>
-        ) : null}
+        {(setup?.checkedAt ?? domain.dnsCheckedAt) ? <p className="text-sm text-muted-foreground">Last checked {relativeTime((setup?.checkedAt ?? domain.dnsCheckedAt)!)}.{phase !== "ready" && setup?.nextCheckAt && automated ? " Another check is scheduled." : ""}</p> : null}
         {canEdit ? (
           <Button
             variant="ghost"
-            className="ml-auto text-destructive hover:text-destructive"
+            className="ml-auto h-auto min-h-11 max-w-full whitespace-normal text-left text-destructive hover:text-destructive"
             onClick={remove}
-            disabled={removing}
+            disabled={removing || pending}
           >
             {removing ? (
               <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -358,42 +442,41 @@ function DomainCard({
         ) : null}
       </div>
 
-      {domain.status !== "live" ? (
+      {phase !== "ready" ? (
         <AdvancedSection
           title="Technical details"
-          description="The exact settings your domain company needs."
+          description="Exact connection settings to copy or give to your IT person."
+          forceOpen={route === "self"}
           className="mt-5"
         >
           <ul className="flex flex-col gap-3">
-            {domain.records.map((record) => (
+            {records.map((record) => (
               <li
-                key={`${record.type}-${record.name}`}
+                key={`${record.type}-${record.name}-${record.value}`}
                 className="flex flex-col gap-2 rounded-xl border border-border bg-background p-4"
               >
                 <p className="text-[15px] text-muted-foreground">{record.note}</p>
-                <dl className="grid gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)]">
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[6rem_minmax(8rem,1fr)_minmax(0,2fr)]">
                   <RecordValue label="Type" value={record.type} />
-                  <RecordValue label="Name / Host" value={record.name} />
-                  <RecordValue label="Value / Points to" value={record.value} copy />
+                  <RecordValue label="Name / Host" value={record.name} copy />
+                  <RecordValue label="Value / Points to" value={record.value} copy className="sm:col-span-2 lg:col-span-1" />
                 </dl>
               </li>
             ))}
           </ul>
-          {domain.dnsDetail ? (
-            <p className="text-sm text-muted-foreground">Last check: {domain.dnsDetail}</p>
-          ) : null}
+          <p className="text-sm text-muted-foreground">Update only the website records shown here. Keep email, verification, and other existing records in place. If you are unsure, send these instructions to your IT person.</p>
         </AdvancedSection>
       ) : null}
     </section>
   );
 }
 
-function RecordValue({ label, value, copy }: { label: string; value: string; copy?: boolean }) {
+function RecordValue({ label, value, copy, className }: { label: string; value: string; copy?: boolean; className?: string }) {
   return (
-    <div className="min-w-0">
+    <div className={cn("min-w-0", className)}>
       <dt className="text-sm font-semibold text-muted-foreground">{label}</dt>
-      <dd className="mt-1 flex min-w-0 items-center gap-2">
-        <span className="break-all font-mono text-base">{value}</span>
+      <dd className="mt-1 flex min-w-0 flex-col items-start gap-2">
+        <span className="w-full break-all font-mono text-base">{value}</span>
         {copy ? <CopyButton value={value} /> : null}
       </dd>
     </div>
@@ -432,14 +515,14 @@ function RouteCard({
   );
 }
 
-function CopyButton({ value }: { value: string }) {
+function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   return (
     <Button
       variant="outline"
-      size="sm"
-      aria-label={`Copy ${value}`}
+      className="h-auto min-h-11 max-w-full whitespace-normal text-left"
+      aria-label={label === "Copy" ? `Copy ${value}` : label}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(value);
@@ -455,7 +538,7 @@ function CopyButton({ value }: { value: string }) {
       ) : (
         <Copy className="size-4" aria-hidden />
       )}
-      {copied ? "Copied" : "Copy"}
+      {copied ? "Copied" : label}
     </Button>
   );
 }
@@ -477,8 +560,7 @@ function Chooser({
         {hasDomain ? "Add another address" : "Use your own address"}
       </h3>
       <p className="mt-0.5 text-[15px] text-muted-foreground">
-        An address like gracechurch.org is easy to remember and looks right on a
-        bulletin. Pick whichever suits you. Both end in the same place.
+        Connect an address you own, or ask FaithForm for help choosing a new one.
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -492,7 +574,7 @@ function Chooser({
         <ChoiceCard
           icon={Sparkles}
           title="Let FaithForm do it for me"
-          body="Tell us the name you'd like. We'll check it's free, register it, and set it all up with you."
+          body="Ask us to check availability and help you register and connect an address."
           cta="Ask FaithForm"
           onClick={() => onChoose("register")}
         />
@@ -588,7 +670,7 @@ function RequestForm({
       toast.success(
         result.kind === "connect_existing"
           ? `${result.hostname} added. The steps to finish are below.`
-          : "Request sent. We'll be in touch within one business day.",
+          : "Your address request is saved. You can follow its progress here.",
       );
       onCancel();
       router.refresh();
@@ -607,7 +689,7 @@ function RequestForm({
         <p className="mt-0.5 text-[15px] text-muted-foreground">
           {connecting
             ? "We'll add it straight away and show you the steps to finish at your domain company."
-            : "Give us a name or two you'd like. We'll check what's free, register it, and walk the setup through with you."}
+            : "Tell us which names you like. Our team will check availability and arrange the next steps with you."}
         </p>
       </div>
 
@@ -629,6 +711,7 @@ function RequestForm({
         />
       </Field>
 
+      <AdvancedSection title="Setup contact and notes" description="Optional: name your IT person, domain company, or anything our team should know.">
       {connecting ? (
         <Field
           label="Where did you buy it?"
@@ -655,7 +738,7 @@ function RequestForm({
       )}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Who should we talk to?">
+        <Field label="Person handling this address" hint="Your office contact or IT person.">
           <Input
             value={contactName}
             onChange={(e) => setContactName(e.target.value)}
@@ -692,13 +775,14 @@ function RequestForm({
           }
         />
       </Field>
+      </AdvancedSection>
 
       {connecting ? (
         <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
           <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
           <span>
-            If you use email on this address, it keeps working. The settings we
-            ask for only affect the website.
+            Update only the website settings we provide. Keep existing email
+            and verification records in place, or ask your IT person to help.
           </span>
         </p>
       ) : null}
@@ -725,10 +809,11 @@ function Field({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-[15px] font-semibold">{label}</Label>
-      {children}
+      <Label htmlFor={id} className="text-[15px] font-semibold">{label}</Label>
+      {cloneElement(children as React.ReactElement<{ id?: string }>, { id })}
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
@@ -750,7 +835,7 @@ const REQUEST_STATUS: Record<
   submitted: {
     label: "Received",
     tone: "working",
-    body: "We have your request and will pick it up within one business day.",
+    body: "Your request is saved for the FaithForm team. Updates will appear here.",
   },
   in_review: {
     label: "Looking into it",
@@ -801,9 +886,9 @@ function RequestCard({
   async function cancel() {
     const ok = await confirmAction({
       title: "Cancel this request?",
-      description: `FaithForm will stop working on ${
-        request.hostname ?? "your web address"
-      }. Any address already connected stays connected, and you can send a new request later.`,
+      description: <span tabIndex={0} className="block max-h-[calc(100dvh-18rem)] overflow-y-auto rounded-sm break-words [overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {`FaithForm will stop working on ${request.hostname ?? "your web address"}. Any address already connected stays connected, and you can send a new request later.`}
+      </span>,
       confirmLabel: "Cancel request",
       cancelLabel: "Keep request",
       destructive: true,

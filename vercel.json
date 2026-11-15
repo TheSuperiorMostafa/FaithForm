@@ -56,6 +56,9 @@
     },
     "app/api/webhooks/operations/monitor/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/sites/domains/reconcile/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -118,6 +121,10 @@
     {
       "path": "/api/webhooks/operations/monitor",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/sites/domains/reconcile",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

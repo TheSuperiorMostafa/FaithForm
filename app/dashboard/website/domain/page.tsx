@@ -32,9 +32,11 @@ export default async function WebsiteDomainPage() {
 
   const { data: church } = await createAdminClient()
     .from("churches")
-    .select("slug, name, email")
+    .select("slug, name, email, site_settings(is_published)")
     .eq("id", auth.churchId)
     .maybeSingle();
+
+  if (!church) throw new Error("Church website settings unavailable");
 
   const [domains, openRequest, history] = await Promise.all([
     getChurchDomains(auth.churchId),
@@ -42,22 +44,27 @@ export default async function WebsiteDomainPage() {
     getChurchDomainRequests(auth.churchId),
   ]);
 
-  const rootHost = process.env.NEXT_PUBLIC_SITE_ROOT_HOST?.trim().toLowerCase();
+  // Public path addresses need no wildcard DNS or certificate setup.
   const slug = (church?.slug as string | null) ?? null;
 
   // Every church has this the moment their site publishes — no DNS, no wait.
-  const faithformAddress =
-    rootHost && slug ? `${slug}.${rootHost}` : null;
+  const faithformAddress = null;
+  const siteSettings = church?.site_settings as unknown as { is_published?: boolean } | null;
+  const isPublished = siteSettings?.is_published === true;
+  const live = domains.find(domain => domain.status === "live" && !domain.redirectTo);
+  const publicUrl = slug ? live ? `https://${live.hostname}` : `${getCanonicalSiteUrl()}/sites/${slug}` : null;
 
   return (
     <DomainWorkspace
       domains={domains.map((domain) => ({
         ...domain,
-        records: dnsRecordsFor(domain.hostname),
+        records: domain.setup?.records.length ? domain.setup.records : dnsRecordsFor(domain.hostname),
       }))}
       openRequest={openRequest}
       history={history.filter((r) => r.id !== openRequest?.id)}
       faithformAddress={faithformAddress}
+      publicUrl={publicUrl}
+      isPublished={isPublished}
       previewUrl={slug ? `${getCanonicalSiteUrl()}/sites/${slug}?preview=1` : null}
       canEdit={auth.isAdmin}
       churchName={(church?.name as string | null) ?? null}

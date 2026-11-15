@@ -121,7 +121,7 @@ function DomainsCard({
           <p className="mt-1 text-sm text-muted-foreground">
             {automated
               ? "Hostnames are registered with the hosting provider automatically. A domain goes live once the provider confirms it is serving."
-              : "Automation is off (no VERCEL_API_TOKEN). Add the hostname to the Vercel project by hand, then mark it live here."}
+              : "Automatic hosting setup is not connected. Addresses are saved and checked safely; finish the Vercel integration from Domains to automate new connections."}
           </p>
         </div>
         <Badge variant={automated ? "success" : "warning"}>
@@ -164,7 +164,7 @@ function DomainsCard({
                     <div className="flex flex-wrap gap-1">
                       <Button
                         variant="ghost"
-                        size="xs"
+                        size="default"
                         disabled={pending}
                         onClick={() =>
                           run(() => recheckDomain(domain.id), "Re-checked.")
@@ -177,23 +177,23 @@ function DomainsCard({
                       {domain.status !== "live" ? (
                         <Button
                           variant="outline"
-                          size="xs"
+                          size="default"
                           disabled={pending}
                           onClick={() =>
                             run(
                               () => markDomainLive(domain.id),
-                              `${domain.hostname} is live.`,
+                              `Connection check scheduled for ${domain.hostname}.`,
                             )
                           }
                         >
-                          Mark live
+                          Verify connection
                         </Button>
                       ) : null}
 
                       {!domain.isPrimary ? (
                         <Button
                           variant="ghost"
-                          size="xs"
+                          size="default"
                           disabled={pending}
                           onClick={() =>
                             run(
@@ -209,7 +209,7 @@ function DomainsCard({
 
                       <Button
                         variant="ghost"
-                        size="xs"
+                        size="default"
                         disabled={pending}
                         onClick={() => {
                           if (

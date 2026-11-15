@@ -2,11 +2,11 @@ import { DomainRequestsTable } from "@/components/admin/domain-requests-table";
 import { PageHeader } from "@/components/admin/page-header";
 import { Badge } from "@/components/ui/badge";
 import {
-  listAllDomains,
+  listDomainConnections,
   listDomainRequests,
   type DomainRequestFilter,
 } from "@/lib/sites/domain-queries";
-import { getDomainProvider } from "@/lib/sites/domains";
+import { getDomainProvider, getDomainProviderReadiness } from "@/lib/sites/domains";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,11 +44,14 @@ export default async function AdminDomainsPage({
     typeof query.filter === "string" ? query.filter : undefined,
   );
 
-  const [requests, domains] = await Promise.all([
+  const domainCursor = typeof query.domainCursor === "string" ? query.domainCursor : undefined;
+  const [requests, connectionPage] = await Promise.all([
     listDomainRequests(filter),
-    listAllDomains(),
+    listDomainConnections(domainCursor),
   ]);
 
+  const domains = connectionPage.domains;
+  const readiness = getDomainProviderReadiness();
   const automated = getDomainProvider().automated;
   const needsAttention = domains.filter((d) => d.status === "dns_ok").length;
 
@@ -64,13 +67,15 @@ export default async function AdminDomainsPage({
         }
       />
 
+      {!readiness.configured ? <div className="rounded-2xl border border-amber-300 bg-amber-50 p-5 text-sm text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100"><h2 className="font-semibold">Finish automatic hosting setup</h2><p className="mt-2">New addresses are saved and checked in the background. Automatic Vercel registration needs these server environment settings: {readiness.missing.join(", ")}. Add a dedicated Vercel access token with access to this project, then redeploy. Never paste tokens into church settings.</p></div> : null}
+
       {needsAttention > 0 ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
           <strong>{needsAttention}</strong>{" "}
           {needsAttention === 1 ? "domain has" : "domains have"} correct DNS and
           {automated
             ? " are waiting on the provider to finish."
-            : " are waiting on us — add the hostname to the Vercel project, then mark it live."}
+            : " are waiting on hosting setup. Open the church connection to review the next step."}
         </div>
       ) : null}
 
@@ -78,6 +83,8 @@ export default async function AdminDomainsPage({
         requests={requests}
         domains={domains}
         filter={filter}
+        nextDomainsCursor={connectionPage.nextCursor}
+        currentDomainsCursor={domainCursor}
       />
     </div>
   );

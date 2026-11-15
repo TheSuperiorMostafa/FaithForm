@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink } from "lucide-react";
+import { ArrowRight, ExternalLink } from "lucide-react";
 
 import { formatDateTime } from "@/components/admin/format";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type {
   AdminDomainRequest,
@@ -15,18 +16,7 @@ import type {
 } from "@/lib/sites/domain-queries";
 import { cn } from "@/lib/utils";
 
-/**
- * The platform-wide view of both tables.
- *
- * Triage happens on the church's own page — a request is only actionable next
- * to that church's domains and profile, so every row here is a link there
- * rather than a second place to edit the same fields.
- */
-
-const REQUEST_BADGES: Record<
-  DomainRequestStatus,
-  { label: string; variant: "success" | "info" | "warning" | "muted" | "destructive" }
-> = {
+const REQUEST_BADGES: Record<DomainRequestStatus, { label: string; variant: "success" | "info" | "warning" | "muted" | "destructive" }> = {
   submitted: { label: "New", variant: "warning" },
   in_review: { label: "In review", variant: "info" },
   awaiting_church: { label: "Awaiting church", variant: "warning" },
@@ -36,14 +26,11 @@ const REQUEST_BADGES: Record<
   cancelled: { label: "Cancelled", variant: "muted" },
 };
 
-const DOMAIN_BADGES: Record<
-  DomainStatus,
-  { label: string; variant: "success" | "info" | "warning" | "destructive" }
-> = {
-  live: { label: "Live", variant: "success" },
-  dns_ok: { label: "DNS OK", variant: "info" },
-  pending_dns: { label: "Awaiting DNS", variant: "warning" },
-  failed: { label: "Failed", variant: "destructive" },
+const DOMAIN_BADGES: Record<DomainStatus, { label: string; variant: "success" | "info" | "warning" | "destructive" }> = {
+  live: { label: "Connected", variant: "success" },
+  dns_ok: { label: "Finishing connection", variant: "info" },
+  pending_dns: { label: "Waiting for settings", variant: "warning" },
+  failed: { label: "Needs attention", variant: "destructive" },
 };
 
 const FILTER_TABS: { value: DomainRequestFilter; label: string }[] = [
@@ -55,175 +42,90 @@ const FILTER_TABS: { value: DomainRequestFilter; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
-export function DomainRequestsTable({
-  requests,
-  domains,
-  filter,
-}: {
-  requests: AdminDomainRequest[];
-  domains: AdminSiteDomain[];
-  filter: DomainRequestFilter;
-}) {
-  return (
-    <div className="flex flex-col gap-4">
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-col gap-3">
-          <CardTitle>Requests</CardTitle>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTER_TABS.map((tab) => (
-              <Link
-                key={tab.value}
-                href={`/admin/domains?filter=${tab.value}`}
-                className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                  filter === tab.value
-                    ? "border-transparent bg-accent text-accent-foreground"
-                    : "border-border text-muted-foreground hover:border-accent hover:text-foreground",
-                )}
-              >
-                {tab.label}
-              </Link>
-            ))}
-          </div>
-        </CardHeader>
+type QueueDomain = AdminSiteDomain & { setup?: {
+  phase: "connecting" | "ownership" | "dns" | "https" | "ready" | "attention";
+  title: string;
+  description: string;
+  checkedAt: string | null;
+  nextCheckAt: string | null;
+} };
 
-        <CardContent className="p-0">
-          {requests.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">
-              Nothing here.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold">Church</th>
-                    <th className="px-3 py-3 font-semibold">Asking for</th>
-                    <th className="px-3 py-3 font-semibold">Domain</th>
-                    <th className="px-3 py-3 font-semibold">Contact</th>
-                    <th className="px-3 py-3 font-semibold">Requested</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((request) => (
-                    <tr
-                      key={request.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30"
-                    >
-                      <td className="px-6 py-3">
-                        <Link
-                          href={`/admin/churches/${request.churchId}?tab=website`}
-                          className="font-semibold hover:underline"
-                        >
-                          {request.churchName}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        {request.kind === "register_new"
-                          ? "A new domain"
-                          : "Connect their own"}
-                      </td>
-                      <td className="px-3 py-3 font-mono text-xs">
-                        {request.hostname ?? "—"}
-                        {request.alternateHostnames.length > 0 ? (
-                          <span className="block text-muted-foreground">
-                            +{request.alternateHostnames.length} alt
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">
-                        {request.contactEmail ?? request.contactName ?? "—"}
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
-                        {formatDateTime(request.createdAt)}
-                      </td>
-                      <td className="px-6 py-3">
-                        <Badge variant={REQUEST_BADGES[request.status].variant}>
-                          {REQUEST_BADGES[request.status].label}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+function nextAction(domain: QueueDomain) {
+  if (domain.setup) {
+    switch (domain.setup.phase) {
+      case "ownership": return "Ask the church or its IT person to add the ownership record.";
+      case "connecting": return "Hosting setup is queued. Check the saved connection progress.";
+      case "dns": return "The church or its IT person needs to update the website settings.";
+      case "https": return "Wait for the secure connection check to finish.";
+      case "attention": return "Review the connection details and retry the failed step.";
+      case "ready": return "Connection complete. Publication is managed separately.";
+    }
+  }
+  switch (domain.status) {
+    case "live": return "Connection complete. Publication is managed separately.";
+    case "dns_ok": return "Finish the hosting connection and verify the church website.";
+    case "failed": return "Review the last check and retry the connection.";
+    default: return "The church or its IT person needs to update the website settings.";
+  }
+}
+
+/** One work queue; changes are made from the church’s setup panel. */
+export function DomainRequestsTable({ requests, domains, filter, nextDomainsCursor, currentDomainsCursor }: {
+  requests: AdminDomainRequest[];
+  domains: QueueDomain[];
+  filter: DomainRequestFilter;
+  nextDomainsCursor?: string | null;
+  currentDomainsCursor?: string | null;
+}) {
+  const summaries = [
+    { label: "Connected addresses", count: domains.filter(domain => domain.status === "live").length },
+    { label: "Waiting for church", count: domains.filter(domain => domain.setup ? ["ownership", "dns"].includes(domain.setup.phase) : domain.status === "pending_dns").length },
+    { label: "Finishing connection", count: domains.filter(domain => domain.setup ? ["connecting", "https"].includes(domain.setup.phase) : domain.status === "dns_ok").length },
+    { label: "Needs attention", count: domains.filter(domain => domain.setup?.phase === "attention" || domain.status === "failed").length },
+  ];
+  return (
+    <div className="flex w-full flex-col gap-6">
+      <div><p className="mb-3 text-sm text-muted-foreground">Connection counts for this page</p><dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {summaries.map(summary => <div key={summary.label} className="rounded-2xl border border-border bg-card p-5"><dt className="text-sm text-muted-foreground">{summary.label}</dt><dd className="mt-2 text-3xl font-bold tabular-nums">{summary.count}</dd></div>)}
+      </dl></div>
+      <Card>
+        <CardHeader className="gap-3">
+          <CardTitle>Requests</CardTitle>
+          <nav aria-label="Filter domain requests" className="flex flex-wrap gap-2">
+            {FILTER_TABS.map(tab => <Link key={tab.value} href={`/admin/domains?filter=${tab.value}`} aria-current={filter === tab.value ? "page" : undefined} className={cn("inline-flex min-h-11 items-center rounded-full border px-4 py-2 text-sm font-semibold transition-colors", filter === tab.value ? "border-transparent bg-accent text-accent-foreground" : "border-border text-muted-foreground hover:border-accent hover:text-foreground")}>{tab.label}</Link>)}
+          </nav>
+        </CardHeader>
+        <CardContent>
+          {requests.length === 0 ? <p className="text-sm text-muted-foreground">No requests match this view.</p> : <ul className="divide-y divide-border rounded-xl border border-border">
+            {requests.map(request => <li key={request.id} className="flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0"><Link href={`/admin/churches/${request.churchId}?tab=website`} className="inline-flex min-h-11 items-center break-words font-semibold hover:underline">{request.churchName}</Link><p className="break-words text-sm text-muted-foreground">{request.kind === "register_new" ? "Needs a new address" : "Connecting an existing address"} · {request.hostname ?? "Address not selected"}</p></div>
+                <Badge variant={REQUEST_BADGES[request.status].variant}>{REQUEST_BADGES[request.status].label}</Badge>
+              </div>
+              <dl className="grid gap-3 text-sm sm:grid-cols-3">
+                <div><dt className="font-semibold text-muted-foreground">Contact</dt><dd className="mt-1 break-words">{request.contactName ?? "Not provided"}{request.contactEmail ? <span className="block">{request.contactEmail}</span> : null}</dd></div>
+                <div><dt className="font-semibold text-muted-foreground">Requested</dt><dd className="mt-1">{formatDateTime(request.createdAt)}</dd></div>
+                <div><dt className="font-semibold text-muted-foreground">Next step</dt><dd className="mt-1">{request.status === "awaiting_church" ? "Follow up with the church using the saved contact." : request.status === "completed" ? "Review the connected address." : ["cancelled", "declined"].includes(request.status) ? "No further work scheduled." : "Review the request and its connection progress."}</dd></div>
+              </dl>
+              <Link href={`/admin/churches/${request.churchId}?tab=website`} className={cn(buttonVariants({ variant: "outline" }), "w-fit")}><ArrowRight className="size-4" aria-hidden />Open church setup</Link>
+            </li>)}
+          </ul>}
         </CardContent>
       </Card>
-
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>Connected domains</CardTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Every hostname the tenant router will answer for.
-          </p>
-        </CardHeader>
-        <CardContent className="p-0">
-          {domains.length === 0 ? (
-            <p className="px-6 pb-6 text-sm text-muted-foreground">
-              No custom domains yet.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[680px] text-sm">
-                <thead className="border-b border-border bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-6 py-3 font-semibold">Hostname</th>
-                    <th className="px-3 py-3 font-semibold">Church</th>
-                    <th className="px-3 py-3 font-semibold">Last DNS check</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {domains.map((domain) => (
-                    <tr
-                      key={domain.id}
-                      className="border-b border-border last:border-0 hover:bg-muted/30"
-                    >
-                      <td className="px-6 py-3">
-                        <a
-                          href={`https://${domain.hostname}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 font-mono text-xs hover:underline"
-                        >
-                          {domain.hostname}
-                          <ExternalLink className="size-3" aria-hidden />
-                        </a>
-                        {domain.isPrimary ? (
-                          <Badge variant="muted" className="ml-2">
-                            Primary
-                          </Badge>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-3">
-                        <Link
-                          href={`/admin/churches/${domain.churchId}?tab=website`}
-                          className="hover:underline"
-                        >
-                          {domain.churchName}
-                        </Link>
-                      </td>
-                      <td className="px-3 py-3 text-xs text-muted-foreground">
-                        {domain.dnsDetail ?? "Not checked"}
-                        {domain.dnsCheckedAt ? (
-                          <span className="block">
-                            {formatDateTime(domain.dnsCheckedAt)}
-                          </span>
-                        ) : null}
-                      </td>
-                      <td className="px-6 py-3">
-                        <Badge variant={DOMAIN_BADGES[domain.status].variant}>
-                          {DOMAIN_BADGES[domain.status].label}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      <Card>
+        <CardHeader><CardTitle>Website connections</CardTitle><p className="text-sm text-muted-foreground">Connection progress and the next action for every church address. A connected address does not publish a draft website.</p></CardHeader>
+        <CardContent>
+          {domains.length === 0 ? <p className="text-sm text-muted-foreground">No church addresses have been added yet.</p> : <ul className="divide-y divide-border rounded-xl border border-border">
+            {[...domains].sort((a, b) => Number(a.status === "live") - Number(b.status === "live")).map(domain => <li key={domain.id} className="flex flex-col gap-4 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="break-words font-semibold">{domain.hostname}{domain.isPrimary ? <span className="ml-2 text-sm font-normal text-muted-foreground">Main address</span> : null}</p><p className="mt-1 break-words text-sm text-muted-foreground">{domain.churchName}</p></div><Badge variant={domain.setup?.phase === "attention" ? "destructive" : DOMAIN_BADGES[domain.status].variant}>{domain.setup?.title ?? DOMAIN_BADGES[domain.status].label}</Badge></div>
+              <p className="text-sm">{nextAction(domain)}</p>
+              <div className="flex flex-wrap items-center justify-between gap-3"><div className="text-sm text-muted-foreground"><p>{domain.setup?.checkedAt ?? domain.dnsCheckedAt ? `Last checked ${formatDateTime((domain.setup?.checkedAt ?? domain.dnsCheckedAt)!)}` : "Waiting for the first connection check"}</p>{domain.setup?.nextCheckAt && domain.setup.phase !== "ready" ? <p className="mt-1">Next check {formatDateTime(domain.setup.nextCheckAt)}</p> : null}</div><div className="flex flex-wrap gap-2">{domain.status === "live" ? <a href={`https://${domain.hostname}`} target="_blank" rel="noopener noreferrer" className={buttonVariants({ variant: "ghost" })}><ExternalLink className="size-4" aria-hidden />Open address</a> : null}<Link href={`/admin/churches/${domain.churchId}?tab=website`} className={buttonVariants({ variant: "outline" })}><ArrowRight className="size-4" aria-hidden />Open setup</Link></div></div>
+            </li>)}
+          </ul>}
+          {nextDomainsCursor || currentDomainsCursor ? <nav aria-label="Connection pages" className="mt-5 flex flex-wrap justify-between gap-3">
+            {currentDomainsCursor ? <Link href={`/admin/domains?filter=${encodeURIComponent(filter)}`} className={buttonVariants({ variant: "outline" })}><ArrowRight className="size-4 rotate-180" aria-hidden />Newest connections</Link> : <span />}
+            {nextDomainsCursor ? <Link href={`/admin/domains?filter=${encodeURIComponent(filter)}&domainCursor=${encodeURIComponent(nextDomainsCursor)}`} className={buttonVariants({ variant: "outline" })}>Older connections<ArrowRight className="size-4" aria-hidden /></Link> : null}
+          </nav> : null}
         </CardContent>
       </Card>
     </div>

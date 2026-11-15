@@ -22,7 +22,7 @@ export function domainStatusWords(
       return {
         label: "Connected",
         tone: "done",
-        detail: "Visitors can reach your website at this address.",
+        detail: "Your address is connected. Website publication is managed from Overview.",
       };
     case "dns_ok":
       return {
@@ -30,14 +30,14 @@ export function domainStatusWords(
         tone: "working",
         detail: automated
           ? "Your settings are correct. We're finishing the last step, which usually takes a few minutes."
-          : "Your settings are correct and your part is done. We'll switch it on and email you when it's live.",
+          : "Your settings are correct. The FaithForm team needs to finish the connection. You can follow progress here.",
       };
     case "failed":
       return {
         label: "Needs attention",
         tone: "attention",
         detail:
-          "This address stopped pointing to your website. Check the settings at your domain company, then check again.",
+          "We couldn’t confirm this connection. Check the website settings at your domain company, or ask your IT person to help.",
       };
     case "pending_dns":
     default:
@@ -45,7 +45,7 @@ export function domainStatusWords(
         label: "Waiting for your domain company",
         tone: "working",
         detail:
-          "Add the settings below at the company where you bought this address. It usually takes a few minutes, sometimes an hour.",
+          "Add the settings below at the company where you bought this address. Changes can take time to reach everyone.",
       };
   }
 }
@@ -55,17 +55,19 @@ export function domainInstructionsText({
   hostname,
   records,
   churchName,
+  automatic = false,
 }: {
   hostname: string;
   records: DnsRecord[];
   churchName?: string | null;
+  automatic?: boolean;
 }): string {
   const lines = [
     "Hello,",
     "",
     `${churchName?.trim() || "Our church"} is moving our website to FaithForm, and we'd like it to appear at ${hostname}.`,
     "",
-    `Could you please sign in wherever ${hostname} is registered, open its DNS settings, and add ${records.length === 1 ? "this record" : "these records"}:`,
+    `Could you please sign in to the service that manages DNS for ${hostname}, open its website records, and add ${records.length === 1 ? "this record" : "these records"}:`,
     "",
     ...records.flatMap((record, index) => [
       `${index + 1}. Type: ${record.type}`,
@@ -74,9 +76,11 @@ export function domainInstructionsText({
       `   (${record.note})`,
       "",
     ]),
-    "Please leave any email (MX) records exactly as they are. These records only affect the website.",
+    "Update only the website records listed above. Keep existing email (MX), email verification (TXT), and other service records in place. If a website record conflicts, replace that website record rather than adding a conflicting second value.",
     "",
-    "Once they're saved, FaithForm checks automatically. It usually takes a few minutes, sometimes up to an hour.",
+    automatic
+      ? "After saving, FaithForm checks in the background. Domain changes can take time to reach everyone. Our team can follow progress in Website → Your web address."
+      : "After saving, our team will choose Check again in Website → Your web address so FaithForm can finish the connection.",
     "",
     "Thank you!",
   ];
@@ -88,6 +92,7 @@ export function domainInstructionsMailto(input: {
   hostname: string;
   records: DnsRecord[];
   churchName?: string | null;
+  automatic?: boolean;
 }): string {
   const subject = `Please connect ${input.hostname} to our new church website`;
   return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(

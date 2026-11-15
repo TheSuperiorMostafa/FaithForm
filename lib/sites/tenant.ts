@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
+import { domainProbeProof, validDomainProbe } from "@/lib/sites/domain-probe-token";
 
 /**
  * Tenant resolution: incoming hostname -> which church's site to render.
@@ -150,8 +151,8 @@ function writeCache(host: string, slug: string | null): void {
  * client, because middleware runs on the edge runtime and this keeps the
  * dependency to a single fetch.
  */
-async function lookupCustomDomain(host: string): Promise<string | null> {
-  const cached = readCache(host);
+async function lookupCustomDomain(host: string, probe = false): Promise<string | null> {
+  const cached = probe ? null : readCache(host);
   if (cached) return cached.slug;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -164,8 +165,10 @@ async function lookupCustomDomain(host: string): Promise<string | null> {
     const endpoint = new URL("/rest/v1/site_domains", url);
     endpoint.searchParams.set("select", "churches(slug)");
     endpoint.searchParams.set("hostname", `eq.${host}`);
-    endpoint.searchParams.set("status", "eq.live");
-    endpoint.searchParams.set("verified_at", "not.is.null");
+    if (!probe) {
+      endpoint.searchParams.set("status", "eq.live");
+      endpoint.searchParams.set("verified_at", "not.is.null");
+    }
     endpoint.searchParams.set("limit", "1");
 
     const response = await fetch(endpoint, {
@@ -175,14 +178,14 @@ async function lookupCustomDomain(host: string): Promise<string | null> {
     });
 
     if (!response.ok) {
-      writeCache(host, null);
+      if (!probe) writeCache(host, null);
       return null;
     }
 
     const rows = (await response.json()) as { churches?: { slug?: string } }[];
     const slug = rows?.[0]?.churches?.slug ?? null;
 
-    writeCache(host, slug);
+    if (!probe) writeCache(host, slug);
     return slug;
   } catch (error) {
     console.error("[sites] domain lookup failed:", error);
@@ -220,7 +223,9 @@ export async function rewriteChurchSite(
   if (isPlatformSiteHost(host)) return null;
   if (isReservedPath(pathname)) return null;
 
-  const slug = await churchSlugForHost(host);
+  const probeToken = request.headers.get("x-faithform-domain-probe");
+  const probe = await validDomainProbe(host, probeToken);
+  const slug = probe ? await lookupCustomDomain(host, true) : await churchSlugForHost(host);
   // A foreign hostname must never fall through to the app or serve another
   // church through /sites/<slug>. A removed/pending domain fails closed too.
   if (!slug || pathname === "/sites" || pathname.startsWith("/sites/")) {
@@ -229,5 +234,11 @@ export async function rewriteChurchSite(
 
   const url = request.nextUrl.clone();
   url.pathname = `/sites/${slug}${pathname === "/" ? "" : pathname}`;
-  return NextResponse.rewrite(url);
+  const response = NextResponse.rewrite(url);
+  if (probe && probeToken) {
+    const proof = await domainProbeProof(host, slug, probeToken);
+    if (proof) response.headers.set("x-faithform-domain-proof", proof);
+    response.headers.set("Cache-Control", "no-store");
+  }
+  return response;
 }

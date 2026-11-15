@@ -7,13 +7,8 @@ import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import {
   OPEN_REQUEST_STATUSES,
   type DomainRequestStatus,
-  type DomainStatus,
 } from "@/lib/sites/domain-queries";
-import {
-  checkDns,
-  getDomainProvider,
-  normalizeHostname,
-} from "@/lib/sites/domains";
+import { disconnectDomain, requestDomainCheck, reserveDomainSetup } from "@/lib/sites/domain-onboarding";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -123,86 +118,9 @@ export async function addChurchDomain(input: {
 }): Promise<AdminDomainResult> {
   await requireSuperAdmin();
 
-  const normalized = normalizeHostname(input.hostname);
-  if (!normalized.ok) return fail(normalized.error);
-
-  const hostname = normalized.hostname;
-  const supabase = createAdminClient();
-
-  const { data: existing } = await supabase
-    .from("site_domains")
-    .select("id, church_id")
-    .eq("hostname", hostname)
-    .maybeSingle();
-
-  if (existing && existing.church_id !== input.churchId) {
-    return fail(`${hostname} is already attached to another church.`);
-  }
-
-  const provider = getDomainProvider();
-  const registered = await provider.register(hostname);
-  if (!registered.ok) return fail(registered.error);
-
-  const dns = await checkDns(hostname);
-  const status: DomainStatus = registered.serving
-    ? "live"
-    : dns.ok
-      ? "dns_ok"
-      : "pending_dns";
-
-  const now = new Date().toISOString();
-
-  if (existing) {
-    const { error } = await supabase
-      .from("site_domains")
-      .update({
-        status,
-        dns_checked_at: now,
-        dns_detail: dns.detail,
-        provider: provider.name,
-        provider_domain_id: registered.providerDomainId,
-        verified_at: status === "live" ? now : null,
-      })
-      .eq("id", existing.id);
-
-    if (error) return fail(error.message);
-  } else {
-    const { count } = await supabase
-      .from("site_domains")
-      .select("id", { count: "exact", head: true })
-      .eq("church_id", input.churchId);
-
-    const { error } = await supabase.from("site_domains").insert({
-      church_id: input.churchId,
-      hostname,
-      is_primary: (count ?? 0) === 0,
-      status,
-      verified_at: status === "live" ? now : null,
-      dns_checked_at: now,
-      dns_detail: dns.detail,
-      provider: provider.name,
-      provider_domain_id: registered.providerDomainId,
-    });
-
-    if (error) return fail(error.message);
-  }
-
-  if (input.makePrimary) {
-    const { data: row } = await supabase
-      .from("site_domains")
-      .select("id")
-      .eq("hostname", hostname)
-      .maybeSingle();
-
-    if (row) await promotePrimary(row.id as string, input.churchId);
-  }
-
-  await logAdminAction({
-    churchId: input.churchId,
-    taskName: `Domain attached: ${hostname}`,
-    triggerSource: "Control center",
-  });
-
+  const saved = await reserveDomainSetup({ churchId: input.churchId, hostname: input.hostname, userId: null });
+  if (!saved.ok) return fail(saved.error);
+  // A replacement address never takes over from a working primary while it is pending.
   refresh(input.churchId);
   return { ok: true };
 }
@@ -216,24 +134,8 @@ async function promotePrimary(
   domainId: string,
   churchId: string,
 ): Promise<string | null> {
-  const supabase = createAdminClient();
-
-  const { error: clearError } = await supabase
-    .from("site_domains")
-    .update({ is_primary: false })
-    .eq("church_id", churchId)
-    .eq("is_primary", true)
-    .neq("id", domainId);
-
-  if (clearError) return clearError.message;
-
-  const { error } = await supabase
-    .from("site_domains")
-    .update({ is_primary: true })
-    .eq("id", domainId)
-    .eq("church_id", churchId);
-
-  return error?.message ?? null;
+  const { data, error } = await createAdminClient().rpc("set_primary_site_domain", { p_church_id: churchId, p_domain_id: domainId });
+  return error || data !== true ? "Only a connected main address can become the primary website address." : null;
 }
 
 export async function setPrimaryDomain(
@@ -280,104 +182,20 @@ export async function markDomainLive(
 
   if (!domain) return fail("Domain not found.");
 
-  const hostname = domain.hostname as string;
-  const provider = getDomainProvider();
-
-  if (provider.automated) {
-    const status = await provider.status(hostname);
-    if (!status.ok) return fail(status.error);
-    if (!status.serving) {
-      return fail(
-        `${hostname} isn't serving yet — the platform still reports it as misconfigured.`,
-      );
-    }
+  if (!(await requestDomainCheck(domain.church_id as string, domainId))) {
+    return fail("We couldn't schedule that connection check.");
   }
-
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from("site_domains")
-    .update({ status: "live", verified_at: now })
-    .eq("id", domainId);
-
-  if (error) return fail(error.message);
-
-  // A domain going live closes the request that asked for it.
-  await supabase
-    .from("site_domain_requests")
-    .update({ status: "completed", handled_at: now, domain_id: domainId })
-    .eq("church_id", domain.church_id as string)
-    .in("status", OPEN_REQUEST_STATUSES);
-
-  await logAdminAction({
-    churchId: domain.church_id as string,
-    taskName: `Domain live: ${hostname}`,
-    triggerSource: "Control center",
-  });
-
   refresh(domain.church_id as string);
   return { ok: true };
 }
 
-export async function recheckDomain(
-  domainId: string,
-): Promise<AdminDomainResult> {
-  await requireSuperAdmin();
-
-  const supabase = createAdminClient();
-
-  const { data: domain } = await supabase
-    .from("site_domains")
-    .select("church_id, hostname, verified_at, status")
-    .eq("id", domainId)
-    .maybeSingle();
-
-  if (!domain) return fail("Domain not found.");
-
-  const hostname = domain.hostname as string;
-  const wasLive = domain.status === "live";
-  const dns = await checkDns(hostname);
-
-  const provider = getDomainProvider();
-  const platform = provider.automated ? await provider.status(hostname) : null;
-  const serving = platform?.ok === true && platform.serving;
-
-  // Same rule as the church-facing re-check: a domain already switched on
-  // stays on while its DNS resolves. Without automation there is nothing that
-  // could tell us otherwise, so a re-check must not be able to take a working
-  // site backwards.
-  const status: DomainStatus = serving
-    ? "live"
-    : dns.ok
-      ? wasLive
-        ? "live"
-        : "dns_ok"
-      : wasLive
-        ? "failed"
-        : "pending_dns";
-
-  const { error } = await supabase
-    .from("site_domains")
-    .update({
-      status,
-      dns_checked_at: new Date().toISOString(),
-      dns_detail: dns.detail,
-      verified_at:
-        status === "live"
-          ? ((domain.verified_at as string | null) ?? new Date().toISOString())
-          : null,
-    })
-    .eq("id", domainId);
-
-  if (error) return fail(error.message);
-
-  refresh(domain.church_id as string);
-  return { ok: true };
+export async function recheckDomain(domainId: string): Promise<AdminDomainResult> {
+  return markDomainLive(domainId);
 }
 
 /**
- * Detaches a hostname. Routing stops immediately, so this also releases it at
- * the provider — leaving it registered against the project would block another
- * church from ever claiming it.
+ * Stops routing and queues provider release. The reservation stays in place
+ * until that release succeeds, including through retries and provider outages.
  */
 export async function removeChurchDomain(
   domainId: string,
@@ -394,22 +212,13 @@ export async function removeChurchDomain(
 
   if (!domain) return fail("Domain not found.");
 
-  const hostname = domain.hostname as string;
-  const provider = getDomainProvider();
-
-  const released = await provider.remove(hostname);
-  if (!released.ok) return fail(released.error);
-
-  const { error } = await supabase
-    .from("site_domains")
-    .delete()
-    .eq("id", domainId);
-
-  if (error) return fail(error.message);
+  if (!(await disconnectDomain(domain.church_id as string, domainId, supabase))) {
+    return fail("We couldn't disconnect that address. Please try again.");
+  }
 
   await logAdminAction({
     churchId: domain.church_id as string,
-    taskName: `Domain removed: ${hostname}`,
+    taskName: `Domain disconnect requested: ${domain.hostname}`,
     triggerSource: "Control center",
   });
 

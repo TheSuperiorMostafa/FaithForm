@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { combineDomainSetup, domainSetupView, type DomainJobView, type DomainSetupView } from "./domain-setup-state";
 
 /**
  * Reads for the domain tables. Writes live in the two action files.
@@ -8,10 +9,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * these are the only queries that can see the full picture (a church's own
  * request plus which hostnames are already claimed platform-wide).
  *
- * Every function tolerates the tables being absent. Migration 0043 exists
- * because an audit found 0014 and 0041 had never fully applied in production;
- * a website page that 500s on an unmigrated environment repeats that failure
- * in a louder way, so a missing table reads as "nothing requested yet".
+ * Read failures reach the route's error state. An unavailable database must
+ * never look like an empty setup queue or a successful domain connection.
  */
 
 function isMissingDomainTable(message: string): boolean {
@@ -42,6 +41,8 @@ export type SiteDomainDetail = {
   providerDomainId: string | null;
   notes: string | null;
   createdAt: string;
+  redirectTo?: string | null;
+  setup?: DomainSetupView;
 };
 
 export type DomainRequestKind = "connect_existing" | "register_new";
@@ -171,7 +172,7 @@ export async function getChurchDomains(
 
   if (error) throw error;
 
-  return ((data ?? []) as unknown as Row[]).map(toDomain);
+  return withDomainSetup(((data ?? []) as unknown as Row[]).map(toDomain));
 }
 
 export async function getChurchDomainRequests(
@@ -284,7 +285,7 @@ export async function listDomainRequests(
     if (!isMissingDomainTable(error.message)) {
       console.error("listDomainRequests:", error.message);
     }
-    return [];
+    throw error;
   }
 
   return (data ?? []).map((row) => {
@@ -308,7 +309,7 @@ export async function countOpenDomainRequests(): Promise<number> {
     if (!isMissingDomainTable(error.message)) {
       console.error("countOpenDomainRequests:", error.message);
     }
-    return 0;
+    throw error;
   }
 
   return count ?? 0;
@@ -338,7 +339,7 @@ export async function listAllDomains(): Promise<AdminSiteDomain[]> {
     if (!isMissingDomainTable(error.message)) {
       console.error("listAllDomains:", error.message);
     }
-    return [];
+    throw error;
   }
 
   return ((data ?? []) as unknown as Row[]).map((row) => {
@@ -349,4 +350,54 @@ export async function listAllDomains(): Promise<AdminSiteDomain[]> {
       churchSlug: church?.slug ?? null,
     };
   });
+}
+
+/** Worker secrets and lease tokens never reach the browser. */
+export async function withDomainSetup<T extends SiteDomainDetail>(domains: T[]): Promise<T[]> {
+  if (!domains.length) return domains;
+  const columns = "domain_id, redirect_to, operation, phase, records, verification, checked_at, available_at, last_error_code";
+  const client = createAdminClient();
+  const [own, companions] = await Promise.all([
+    client.from("site_domain_jobs").select(columns).in("domain_id", domains.map(domain => domain.id)),
+    client.from("site_domain_jobs").select(`${columns}, site_domains!inner(church_id)`)
+      .in("redirect_to", domains.map(domain => domain.hostname)).in("site_domains.church_id", [...new Set(domains.map(domain => domain.churchId))]),
+  ]);
+  if (own.error) throw own.error;
+  if (companions.error) throw companions.error;
+  const jobs = new Map((own.data ?? []).map(row => [row.domain_id as string, row as unknown as DomainJobView]));
+  const familyJobs = (companions.data ?? []) as unknown as DomainJobView[];
+
+  const mapped = domains.map(domain => {
+    const job = jobs.get(domain.id);
+    return job ? { ...domain, redirectTo: job.redirect_to, setup: domainSetupView(job) } : domain;
+  });
+  return mapped.map(domain => {
+    if (domain.redirectTo || !domain.setup) return domain;
+    return { ...domain, setup: combineDomainSetup(domain.setup, familyJobs.filter(job => job.redirect_to === domain.hostname).map(domainSetupView)) };
+  });
+}
+
+type DomainCursor = { createdAt: string; id: string };
+export function parseDomainCursor(raw: string | undefined): DomainCursor | null {
+  if (!raw || raw.length > 300) return null;
+  try {
+    const value = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    return /^\d{4}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:\d{2})$/.test(value.createdAt) && Number.isFinite(Date.parse(value.createdAt)) && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
+      ? { createdAt: value.createdAt, id: value.id } : null;
+  } catch { return null; }
+}
+export async function listDomainConnections(cursor?: string): Promise<{ domains: AdminSiteDomain[]; nextCursor: string | null }> {
+  const before = parseDomainCursor(cursor);
+  let query = createAdminClient().from("site_domains").select(`${DOMAIN_COLUMNS}, churches(name, slug)`)
+    .order("created_at", { ascending: false }).order("id", { ascending: false }).limit(51);
+  if (before) query = query.or(`created_at.lt.${before.createdAt},and(created_at.eq.${before.createdAt},id.lt.${before.id})`);
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = ((data ?? []) as unknown as Row[]);
+  const page = rows.slice(0, 50).map(row => {
+    const church = row.churches as { name?: string; slug?: string } | null;
+    return { ...toDomain(row), churchName: church?.name ?? "Unknown church", churchSlug: church?.slug ?? null };
+  });
+  const last = page[page.length - 1];
+  return { domains: await withDomainSetup(page), nextCursor: rows.length > 50 && last ? Buffer.from(JSON.stringify({ createdAt: last.createdAt, id: last.id })).toString("base64url") : null };
 }

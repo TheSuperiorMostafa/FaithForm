@@ -15,10 +15,9 @@ import {
   type DomainStatus,
 } from "@/lib/sites/domain-queries";
 import {
-  checkDns,
-  getDomainProvider,
   normalizeHostname,
 } from "@/lib/sites/domains";
+import { disconnectDomain, requestDomainCheck, reserveDomainSetup } from "@/lib/sites/domain-onboarding";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -121,7 +120,7 @@ export async function submitDomainRequest(
   const supabase = createAdminClient();
 
   const existing = await getOpenDomainRequest(auth.churchId);
-  if (existing) {
+  if (existing && values.kind === "register_new") {
     return fail(
       "You already have a domain request open. Cancel it first if you'd like to start over.",
     );
@@ -161,20 +160,17 @@ export async function submitDomainRequest(
     }
   }
 
-  // For connect_existing, the routing row goes in first: if the request insert
-  // fails, a church with a working domain is a better outcome than a queue
-  // entry pointing at nothing.
-  let domainId: string | null = null;
-
+  // Reserve the complete address family and durable work in one transaction.
+  // Repeated submissions reuse the same rows; the worker owns all provider I/O.
   if (values.kind === "connect_existing" && hostname) {
-    const created = await ensureDomainRow({
-      churchId: auth.churchId,
-      hostname,
-      userId: auth.userId,
-    });
-
-    if (!created.ok) return fail(created.error);
-    domainId = created.domainId;
+    const saved = await reserveDomainSetup({
+      churchId: auth.churchId, hostname, userId: auth.userId,
+      details: { registrar: values.registrar || null, contact_name: values.contactName || null,
+        contact_email: values.contactEmail || null, contact_phone: values.contactPhone || null, notes: values.notes || null },
+    }, supabase);
+    if (!saved.ok) return saved;
+    refresh(auth.churchId);
+    return { ok: true, kind: "connect_existing", hostname: saved.hostname };
   }
 
   const { error } = await supabase.from("site_domain_requests").insert({
@@ -189,7 +185,7 @@ export async function submitDomainRequest(
     contact_phone: values.contactPhone || null,
     notes: values.notes || null,
     status: "submitted",
-    domain_id: domainId,
+    domain_id: null,
   });
 
   if (error) {
@@ -223,88 +219,7 @@ export async function submitDomainRequest(
 
   refresh(auth.churchId);
 
-  return values.kind === "connect_existing"
-    ? { ok: true, kind: "connect_existing", hostname: hostname as string }
-    : { ok: true, kind: "register_new", hostname };
-}
-
-/**
- * Creates the `site_domains` row for a hostname, or returns the existing one.
- *
- * Registers with the platform provider first. When Vercel automation is
- * configured this is what actually makes the hostname servable; when it is not,
- * the manual provider is a no-op and a platform admin does it from the control
- * center.
- */
-async function ensureDomainRow(params: {
-  churchId: string;
-  hostname: string;
-  userId: string | null;
-}): Promise<{ ok: true; domainId: string } | { ok: false; error: string }> {
-  const supabase = createAdminClient();
-
-  const { data: existing } = await supabase
-    .from("site_domains")
-    .select("id, church_id")
-    .eq("hostname", params.hostname)
-    .maybeSingle();
-
-  if (existing) {
-    if (existing.church_id !== params.churchId) {
-      return { ok: false, error: "That domain belongs to another account." };
-    }
-    return { ok: true, domainId: existing.id as string };
-  }
-
-  const provider = getDomainProvider();
-  const registered = await provider.register(params.hostname);
-
-  if (!registered.ok) {
-    // The provider's own wording is written for engineers; log it, say it plainly.
-    console.error("[domains] provider register failed:", registered.error);
-    return {
-      ok: false,
-      error:
-        "We couldn't add that address right now. Please try again in a few minutes, or ask FaithForm to do it for you.",
-    };
-  }
-
-  const dns = await checkDns(params.hostname);
-  const status: DomainStatus = registered.serving
-    ? "live"
-    : dns.ok
-      ? "dns_ok"
-      : "pending_dns";
-
-  // First domain for a church becomes primary; middleware resolves any of them,
-  // but the dashboard needs one canonical URL to show.
-  const { count } = await supabase
-    .from("site_domains")
-    .select("id", { count: "exact", head: true })
-    .eq("church_id", params.churchId);
-
-  const { data, error } = await supabase
-    .from("site_domains")
-    .insert({
-      church_id: params.churchId,
-      hostname: params.hostname,
-      is_primary: (count ?? 0) === 0,
-      status,
-      verified_at: status === "live" ? new Date().toISOString() : null,
-      dns_checked_at: new Date().toISOString(),
-      dns_detail: dns.detail,
-      provider: provider.name,
-      provider_domain_id: registered.providerDomainId,
-      requested_by: params.userId,
-    })
-    .select("id")
-    .single();
-
-  if (error) {
-    return { ok: false, error: toUserError(error, "We couldn't add that address.") };
-  }
-
-  return { ok: true, domainId: data.id as string };
+  return { ok: true, kind: "register_new", hostname };
 }
 
 // ---------------------------------------------------------------------------
@@ -383,52 +298,13 @@ export async function recheckDomainDns(
     };
   }
 
-  const dns = await checkDns(domain.hostname);
-
-  const provider = getDomainProvider();
-  const platform = provider.automated
-    ? await provider.status(domain.hostname)
-    : null;
-  const serving = platform?.ok === true && platform.serving;
-
-  const status: DomainStatus = serving
-    ? "live"
-    : dns.ok
-      ? // A domain already switched on stays on while its DNS still resolves.
-        // Only the automated provider can tell us more than "DNS is correct",
-        // so without it, demoting a working site to "finishing setup" would be
-        // a regression the check invented.
-        domain.status === "live"
-        ? "live"
-        : "dns_ok"
-      : domain.status === "live"
-        ? // A live domain whose DNS stopped resolving is a real regression, but
-          // "failed" is the honest label for it rather than silently staying green.
-          "failed"
-        : "pending_dns";
-
-  const { error } = await createAdminClient()
-    .from("site_domains")
-    .update({
-      status,
-      dns_checked_at: new Date().toISOString(),
-      dns_detail: dns.detail,
-      verified_at:
-        status === "live"
-          ? (domain.verifiedAt ?? new Date().toISOString())
-          : null,
-      ...(platform?.ok && platform.providerDomainId
-        ? { provider_domain_id: platform.providerDomainId, provider: provider.name }
-        : {}),
-    })
-    .eq("id", domainId)
-    .eq("church_id", auth.churchId);
-
-  if (error) return fail(toUserError(error, "We couldn't check your web address."));
+  if (!(await requestDomainCheck(auth.churchId, domainId))) {
+    return fail("We couldn't schedule the connection check. Please try again.");
+  }
 
   refresh(auth.churchId);
 
-  return { ok: true, dnsOk: dns.ok, detail: dns.detail, status };
+  return { ok: true, dnsOk: domain.status === "live", detail: "Your connection check is scheduled. This page updates automatically.", status: domain.status };
 }
 
 // ---------------------------------------------------------------------------
@@ -458,32 +334,8 @@ export async function removeDomain(domainId: string): Promise<DomainActionResult
   const domain = domains.find((d) => d.id === domainId);
   if (!domain) return fail("We couldn't find that web address on your account.");
 
-  const released = await getDomainProvider().remove(domain.hostname);
-  if (!released.ok) {
-    console.error("[domains] provider remove failed:", released.error);
-    return fail(
-      "We couldn't remove that web address right now. Please try again in a few minutes.",
-    );
-  }
-
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("site_domains")
-    .delete()
-    .eq("id", domainId)
-    .eq("church_id", auth.churchId);
-
-  if (error) return fail(toUserError(error, "We couldn't remove that web address."));
-
-  if (domain.isPrimary) {
-    const next = domains.find((d) => d.id !== domainId);
-    if (next) {
-      await supabase
-        .from("site_domains")
-        .update({ is_primary: true })
-        .eq("id", next.id)
-        .eq("church_id", auth.churchId);
-    }
+  if (!(await disconnectDomain(auth.churchId, domainId))) {
+    return fail("We couldn't disconnect that address. Please try again.");
   }
 
   refresh(auth.churchId);

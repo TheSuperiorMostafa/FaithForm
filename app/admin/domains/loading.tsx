@@ -1,24 +1,14 @@
-import { AdminTableSkeleton } from "@/components/admin/skeletons";
-import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { PageHeader } from "@/components/admin/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
 export default function AdminDomainsLoading() {
   return (
-    <SkeletonContainer
-      className="mx-auto flex w-full max-w-6xl flex-col gap-6"
-      label="domain requests"
-    >
-      <div className="space-y-1">
-        <Skeleton className="h-8 w-44" />
-        <Skeleton className="h-4 w-96 max-w-full" />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-7 w-20 rounded-full" />
-        ))}
-      </div>
-
-      <AdminTableSkeleton rows={8} />
+    <SkeletonContainer className="mx-auto flex w-full max-w-6xl flex-col gap-6" label="domain requests">
+      <PageHeader title="Domains" description="Churches connecting a domain they own, and churches asking us to get them one." action={<Skeleton className="h-7 w-36 rounded-full" />} />
+      <div><p className="mb-3 text-sm text-muted-foreground">Connection counts for this page</p><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{["Connected addresses", "Waiting for church", "Finishing connection", "Needs attention"].map(label => <div key={label} className="rounded-2xl border border-border bg-card p-5"><p className="text-sm text-muted-foreground">{label}</p><Skeleton className="mt-2 h-9 w-12" /></div>)}</div></div>
+      <Card><CardHeader className="gap-3"><CardTitle>Requests</CardTitle><div className="flex flex-wrap gap-2">{["Open", "New", "Awaiting church", "In progress", "Completed", "All"].map(label => <span key={label} className="inline-flex min-h-11 items-center rounded-full border border-border px-4 py-2 text-sm font-semibold text-muted-foreground">{label}</span>)}</div></CardHeader><CardContent><div className="divide-y divide-border rounded-xl border border-border">{Array.from({ length: 2 }, (_, index) => <div key={index} className="flex flex-col gap-4 p-5"><div className="flex justify-between gap-3"><div className="flex-1"><Skeleton className="my-3 h-5 w-full max-w-sm" /><SkeletonText className="mt-2 max-w-md" lines={1} size="sm" /></div><Skeleton className="h-6 w-24 rounded-full" /></div><div className="grid gap-3 sm:grid-cols-3">{["Contact", "Requested", "Next step"].map(label => <div key={label}><p className="text-sm font-semibold text-muted-foreground">{label}</p><SkeletonText className="mt-2" lines={2} size="sm" /></div>)}</div><Skeleton className="h-11 w-44 rounded-lg" /></div>)}</div></CardContent></Card>
+      <Card><CardHeader><CardTitle>Website connections</CardTitle><p className="text-sm text-muted-foreground">Connection progress and the next action for every church address. A connected address does not publish a draft website.</p></CardHeader><CardContent><div className="divide-y divide-border rounded-xl border border-border">{Array.from({ length: 2 }, (_, index) => <div key={index} className="flex flex-col gap-4 p-5"><div className="flex justify-between gap-3"><div className="flex-1"><Skeleton className="h-5 w-full max-w-sm" /><SkeletonText className="mt-2 max-w-md" lines={1} size="sm" /></div><Skeleton className="h-6 w-32 rounded-full" /></div><SkeletonText lines={1} size="sm" /><div className="flex flex-wrap justify-between gap-3"><Skeleton className="h-5 w-44" /><Skeleton className="h-11 w-36 rounded-lg" /></div></div>)}</div></CardContent></Card>
     </SkeletonContainer>
   );
 }

@@ -118,6 +118,9 @@ dependencies:
   tailwind-merge:
     specifier: ^3.6.0
     version: 3.6.0
+  tldts:
+    specifier: 7.5.4
+    version: 7.5.4
   tw-animate-css:
     specifier: ^1.4.0
     version: 1.4.0
@@ -6469,6 +6472,17 @@ packages:
       fdir: 6.5.0(picomatch@4.0.4)
       picomatch: 4.0.4
     dev: true
+
+  /tldts-core@7.5.4:
+    resolution: {integrity: sha512-9+4zWtKEDZ3V3FoZ1B97rv+5z5oqp7yeXGVze3CxgQ+CJro9do9DCPD00wxstYZDXDMXsurkBerFfiB6GYtPbA==}
+    dev: false
+
+  /tldts@7.5.4:
+    resolution: {integrity: sha512-Rn2ABgjHZrA+jzqom5zhxA0hLohzYrIgfCPyhpTUxqsUrcsBYuab49LseR9waB9Jr8/MxdodvMHA91oRiGLO3Q==}
+    hasBin: true
+    dependencies:
+      tldts-core: 7.5.4
+    dev: false
 
   /to-regex-range@5.0.1:
     resolution: {integrity: sha512-65P7iz6X5yEr1cwcgvQxbbIw7Uk3gOy5dIdtZ4rDveLqhrdJP+Li/Hx6tyK0NEb+2GCyneCMJiGqrADCSNk8sQ==}
