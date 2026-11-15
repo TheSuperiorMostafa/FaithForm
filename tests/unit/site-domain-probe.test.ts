@@ -69,6 +69,8 @@ test("DNS and TLS errors are recoverable checks, with no redirect or alternate-h
 test("published pages need a fresh response proof and the expected church marker", async t => {
   configure(t);
   assert.deepEqual(await probeChurchDomain(input, dependencies((host, _address, token) => signedResponse(host, token))), { ok: true });
+  assert.deepEqual(await probeChurchDomain(input, dependencies((host, _address, token) => signedResponse(host, token, { body: `<div data-site="loading">Loading</div><main data-site="${input.slug}">Church website</main>` }))), { ok: true });
+  assert.equal((await probeChurchDomain(input, dependencies((host, _address, token) => signedResponse(host, token, { body: '<div data-site="loading">Loading</div><main data-site="foreign-church">Other website</main>' })))).ok, false);
   for (const options of [{ proof: null }, { proof: "a".repeat(64) }, { body: '<main data-site="foreign-church">Wrong church</main>' }, { body: "FaithForm landing page" }, { status: 404 }]) {
     const result = await probeChurchDomain(input, dependencies((host, _address, token) => signedResponse(host, token, options)));
     assert.equal(result.ok, false, JSON.stringify(options));

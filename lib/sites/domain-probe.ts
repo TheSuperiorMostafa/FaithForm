@@ -84,7 +84,9 @@ export async function probeChurchDomain(input: { hostname: string; slug: string;
       ? { ok: true } : { ok: false, code: "wrong_website" };
   }
   if (!(await validDomainProof(input.hostname, input.slug, token, response.proof))) return { ok: false, code: "wrong_website" };
-  const marker = response.body.match(/\bdata-site=["\']([^"\']+)["\']/)?.[1];
-  if (response.status === 200) return marker === input.slug ? { ok: true } : { ok: false, code: "wrong_website" };
+  // App Router streams the loading shell before the completed church page.
+  // A skeleton's data-site="loading" must not hide the actual tenant marker.
+  const expectedPage = Array.from(response.body.matchAll(/\bdata-site=["\']([^"\']+)["\']/g)).some(match => match[1] === input.slug);
+  if (response.status === 200) return expectedPage ? { ok: true } : { ok: false, code: "wrong_website" };
   return !input.published && response.status === 404 ? { ok: true } : { ok: false, code: "website_unavailable" };
 }
