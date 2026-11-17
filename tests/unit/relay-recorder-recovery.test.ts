@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
+import { recorderUploadTypes } from "../support/relay-recorder-mime";
+
+test("the actual signed uploader sends the initialization and fragmented media MIME types", () => {
+  assert.deepEqual(recorderUploadTypes(), { init: "video/mp4", segment: "video/iso.segment" });
+});
 
 test("a draining uploader and the sweeper cannot concurrently upload or rewrite the same take", () => {
   const harness = `

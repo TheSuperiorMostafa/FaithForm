@@ -117,6 +117,10 @@ Every authorized ingest is recorded by `faithform-recorder.py` (see
 Every call is signed (HMAC over timestamp, nonce and body); the shared secret
 never crosses the wire. Local files stay until FaithForm acknowledges them.
 
+The private `stream-recordings` bucket must allow `video/mp4` initialization
+files and `video/iso.segment` media fragments. Migration `0167` adds the missing
+fragment type without changing privacy, upload limits, or other bucket settings.
+
 Install the sweeper once, which resumes any take whose recorder died:
 
 ```bash

@@ -124,19 +124,39 @@ export function BroadcastControlCenter({
   const studio = useStudioBroadcast(branding);
   /** Chosen in Setup ("This computer (camera)") or arrived with ?source=computer. */
   const [useComputer, setUseComputer] = useState(false);
+  const refreshRequests = useRef({
+    next: 0,
+    applied: 0,
+    active: true,
+    controllers: new Set<AbortController>(),
+  });
 
   const refresh = useCallback(async () => {
+    const requests = refreshRequests.current;
+    if (!requests.active) return;
+    const requestId = ++requests.next;
+    const controller = new AbortController();
+    requests.controllers.add(controller);
     try {
-      const res = await fetch("/api/stream/status", { cache: "no-store" });
+      const res = await fetch("/api/stream/status", { cache: "no-store", signal: controller.signal });
       if (!res.ok) return;
       const data = (await res.json()) as ControlCenterStatus;
-      if (data?.overview) setStatus(data);
+      // An earlier, slower poll must not overwrite a newer confirmed state.
+      // Still apply slow responses until a newer response has actually landed.
+      if (data?.overview && requests.active && !controller.signal.aborted && requestId > requests.applied) {
+        requests.applied = requestId;
+        setStatus(data);
+      }
     } catch {
       // The next poll will try again; the screen keeps what it last knew.
+    } finally {
+      requests.controllers.delete(controller);
     }
   }, []);
 
   useEffect(() => {
+    const requests = refreshRequests.current;
+    requests.active = true;
     const supported = isStudioSupported();
     setStudioSupported(supported);
     let computer = false;
@@ -159,6 +179,9 @@ export function BroadcastControlCenter({
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
+      requests.active = false;
+      for (const controller of requests.controllers) controller.abort();
+      requests.controllers.clear();
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
