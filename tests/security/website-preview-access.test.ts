@@ -123,12 +123,12 @@ test("published church metadata overrides all inherited platform icons on app an
   const { page } = await routes();
   for (const host of ["app.faithform.test", "grace-church.example.test"]) {
     state.host = host;
-    state.logoUrl = `https://images.example.test/${host}.png`;
+    state.logoUrl = `https://preview-access.example.test/storage/v1/object/public/church-logos/${churchId}/${host}.png`;
     const icons = (await page.generateMetadata(props())).icons as { icon: { url: string }[]; shortcut: { url: string }[]; apple: { url: string }[] };
-    const prefix = host === "app.faithform.test" ? "/sites/grace/favicon.ico?v=" : "/favicon.ico?v=";
+    const prefix = host === "app.faithform.test" ? "/sites/grace/site-icons/" : "/site-icons/";
     assert.ok(icons.icon[0].url.startsWith(prefix));
-    assert.deepEqual(icons.shortcut, icons.icon);
-    assert.deepEqual(icons.apple, icons.icon);
+    assert.deepEqual(icons.shortcut[0], icons.icon[0]);
+    assert.match(icons.apple[0].url, /\/apple-180\.png$/);
     state.logoUrl += "?v=replacement";
     const replacement = (await page.generateMetadata(props())).icons as typeof icons;
     assert.notEqual(replacement.icon[0].url, icons.icon[0].url);

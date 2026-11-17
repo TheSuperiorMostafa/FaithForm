@@ -118,8 +118,10 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   return {
     title,
     description,
-    icons: churchSiteIcons(bundle.profile, isPlatformSiteHost((await headers()).get("host") ?? "")
-      ? `/sites/${encodeURIComponent(slug)}/favicon.ico` : "/favicon.ico"),
+    icons: churchSiteIcons(bundle.profile, {
+      basePath: isPlatformSiteHost((await headers()).get("host") ?? "") ? `/sites/${encodeURIComponent(slug)}` : "",
+      churchId: bundle.churchId,
+    }),
     openGraph: {
       title,
       description,

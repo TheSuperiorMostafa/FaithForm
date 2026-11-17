@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
 import { domainProbeProof, validDomainProbe } from "@/lib/sites/domain-probe-token";
+import { CHURCH_ICON_ALIASES, CHURCH_ICON_SIZES } from "@/lib/sites/icon-paths";
 
 /**
  * Tenant resolution: incoming hostname -> which church's site to render.
@@ -232,7 +233,9 @@ export async function rewriteChurchSite(
   }
 
   const url = request.nextUrl.clone();
-  url.pathname = `/sites/${slug}${pathname === "/" ? "" : pathname}`;
+  const icon = CHURCH_ICON_ALIASES[pathname];
+  url.pathname = `/sites/${slug}${icon ? "/favicon.ico" : pathname === "/" ? "" : pathname}`;
+  if (icon) url.searchParams.set("size", String(CHURCH_ICON_SIZES[icon]));
   const response = NextResponse.rewrite(url);
   if (probe && probeToken) {
     const proof = await domainProbeProof(host, slug, probeToken);
