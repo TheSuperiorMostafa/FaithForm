@@ -17,7 +17,6 @@ function isReservedPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/") ||
     pathname.startsWith("/_next/") ||
-    pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
     pathname === "/sitemap.xml"
   );
