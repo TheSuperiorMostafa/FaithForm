@@ -47,12 +47,19 @@ test("the actual favicon route returns only the published church logo and refuse
   const route = compile("app/sites/[slug]/favicon.ico/route.ts", {
     "@/lib/features/access": { isChurchFeatureEnabled: async () => state.enabled },
     "@/lib/sites/queries": { getSiteBundle: async (slug: string) => ({ churchId: slug, profile: { name: "Grace Community", logoUrl: state.logo }, settings: { isPublished: state.published }, page: { status: "published" } }) },
-  }) as { GET: (request: Request, context: { params: Promise<{ slug: string }> }) => Promise<Response> };
+  }) as { dynamic: string; GET: (request: Request, context: { params: Promise<{ slug: string }> }) => Promise<Response> };
+  assert.equal(route.dynamic, "force-dynamic");
   const get = () => route.GET(new Request("https://grace.faithform.test/favicon.ico?url=https://foreign.example"), { params: Promise.resolve({ slug: "grace" }) });
   const image = await get();
   assert.equal(image.status, 302);
   assert.equal(image.headers.get("location"), state.logo);
   assert.equal(image.headers.get("cache-control"), "no-store");
+  // Saving a replacement logo must change the next response without a build.
+  state.logo = "https://images.example.test/grace-replacement.png";
+  const replacement = await get();
+  assert.equal(replacement.status, 302);
+  assert.equal(replacement.headers.get("location"), state.logo);
+  assert.equal(replacement.headers.get("cache-control"), "no-store");
   state.published = false; assert.equal((await get()).status, 404);
   state.published = true; state.enabled = false; assert.equal((await get()).status, 404);
   state.enabled = true; state.logo = null;
