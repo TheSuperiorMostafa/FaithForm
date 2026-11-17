@@ -1,7 +1,8 @@
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download } from "lucide-react";
 import { ArtworkPanelSkeleton } from "@/components/media/artwork-panel-skeleton";
 
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * Mirrors the recording page: back link, status + title + date, then the
@@ -17,10 +18,13 @@ export default function RecordingReviewLoading() {
         All recordings
       </span>
 
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-[34px] w-40 rounded-full" />
-        <Skeleton className="h-9 w-96 max-w-full" />
-        <Skeleton className="h-5 w-72 max-w-full" />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-3">
+          <Skeleton className="h-[34px] w-40 rounded-full" />
+          <Skeleton className="h-9 w-96 max-w-full" />
+          <Skeleton className="h-5 w-72 max-w-full" />
+        </div>
+        <span className={buttonVariants({ variant: "outline" })}><Download className="size-4" aria-hidden />Download recording</span>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

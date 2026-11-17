@@ -15,6 +15,7 @@ import {
 } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
 import { formatRecordingDate } from "@/lib/stream/recording-date";
+import { RecordingDownloadButton } from "@/components/live-streaming/recordings/recording-download-button";
 
 /**
  * Every recording as a big row: picture, title, date, one status in the
@@ -112,14 +113,19 @@ function RecordingRow({
       </Link>
       <div className="flex shrink-0 items-center justify-end gap-3 px-2 pb-2 sm:p-0 sm:pr-3">
         <span className="hidden sm:block">{badge}</span>
-        {action ? (
-          // Outline on every row: a list of solid buttons is no primary at all.
-          <Link href={action.href} className={cn(buttonVariants({ variant: "outline" }), "min-w-40")}>
-            {action.label}
-          </Link>
-        ) : (
-          <span className="min-w-40 text-center text-sm text-muted-foreground">Nothing to do yet</span>
-        )}
+        <div className="flex flex-col items-stretch gap-2">
+          {action ? (
+            // Outline on every row: a list of solid buttons is no primary at all.
+            <Link href={action.href} className={cn(buttonVariants({ variant: "outline" }), "min-w-40")}>
+              {action.label}
+            </Link>
+          ) : (
+            <span className="min-w-40 text-center text-sm text-muted-foreground">Nothing to do yet</span>
+          )}
+          {recording.status === "ready" || recording.status === "published" ? (
+            <RecordingDownloadButton recordingId={recording.id} title={recording.title} />
+          ) : null}
+        </div>
       </div>
     </li>
   );

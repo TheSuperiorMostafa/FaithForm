@@ -1,7 +1,8 @@
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
-import { Upload } from "lucide-react";
+import { Download, Upload } from "lucide-react";
 import { RECORDING_FILTERS } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * Mirrors the Recordings tab: the three filter chips and the search box (real labels, counts
@@ -55,7 +56,10 @@ export default function RecordingsLoading() {
             </div>
             <div className="flex shrink-0 items-center justify-end gap-3 px-2 pb-2 sm:p-0 sm:pr-3">
               <Skeleton className="hidden h-8 w-36 rounded-full sm:block" />
-              <Skeleton className="min-h-11 w-40 rounded-[10px]" />
+              <div className="flex flex-col items-stretch gap-2">
+                <Skeleton className="min-h-11 w-40 rounded-[10px]" />
+                <span className={buttonVariants({ variant: "outline" })}><Download className="size-4" aria-hidden />Download recording</span>
+              </div>
             </div>
           </li>
         ))}

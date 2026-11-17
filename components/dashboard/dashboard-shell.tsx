@@ -85,14 +85,19 @@ export function DashboardShell({
         lib/dashboard/sidebar-layout.ts — a dashboard of tables and charts must
         not reflow because a pointer crossed the nav.
       */}
-      <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px]">
+      <div className="flex h-dvh min-h-0 min-w-0 flex-col overflow-hidden md:ml-[72px]">
         {banner}
         <Topbar avatarUrl={avatarUrl} userEmail={userEmail} churchName={churchName} />
 
+        {/*
+          Keep absolutely positioned labels inside this scrollport. Without a
+          containing block, Safari can give the document a second scroll range
+          and move the whole viewport shell up into a blank area.
+        */}
         <main
           id="main-content"
           tabIndex={-1}
-          className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 pb-28 pt-6 outline-none sm:px-6 md:px-8 md:pb-10 md:pt-8"
+          className="relative min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 pb-28 pt-6 outline-none sm:px-6 md:px-8 md:pb-10 md:pt-8"
         >
           {/*
             One page width for the whole dashboard, so moving between sections

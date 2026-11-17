@@ -30,6 +30,7 @@ import {
   unpublishRecordingAction,
 } from "@/app/dashboard/live-streaming/recording-actions";
 import { RecordingPlayer } from "@/components/live-streaming/recording-player";
+import { RecordingDownloadButton } from "@/components/live-streaming/recordings/recording-download-button";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
@@ -369,18 +370,23 @@ export function RecordingReview({
         All recordings
       </Link>
 
-      <header className="flex flex-col gap-3">
-        {/* Not every recording gets published, so "Ready to publish" isn't a nag. */}
-        {phase !== "ready_to_publish" ? (
-          <StatusBadge tone={recordingTone(phase)} size="lg" className="w-fit">
-            {recording.phase.label}
-          </StatusBadge>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-3">
+          {/* Not every recording gets published, so "Ready to publish" isn't a nag. */}
+          {phase !== "ready_to_publish" ? (
+            <StatusBadge tone={recordingTone(phase)} size="lg" className="w-fit">
+              {recording.phase.label}
+            </StatusBadge>
+          ) : null}
+          <h2 className="font-heading text-3xl font-bold leading-tight">{recording.title}</h2>
+          <p className="text-base text-muted-foreground">
+            {recordedOn}
+            {recording.durationSec ? ` · ${formatClock(recording.durationSec)}` : ""}
+          </p>
+        </div>
+        {recording.status === "ready" || recording.status === "published" ? (
+          <RecordingDownloadButton recordingId={recording.id} title={recording.title} className="shrink-0" />
         ) : null}
-        <h2 className="font-heading text-3xl font-bold leading-tight">{recording.title}</h2>
-        <p className="text-base text-muted-foreground">
-          {recordedOn}
-          {recording.durationSec ? ` · ${formatClock(recording.durationSec)}` : ""}
-        </p>
       </header>
 
       {phase === "needs_attention" || phase === "preparing" || phase === "recording" ? (

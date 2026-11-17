@@ -4,17 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CheckCircle2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { getChurchEventLocation, resolveLocationSelection, searchLocations, trackLocationUsage, type EventLocationSuggestion } from "@/app/dashboard/announcements/location-actions";
 import { SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
-import { formatAddressLine } from "@/lib/utils/address";
-
-const addressFields = [
-  { key: "address", label: "Street address", complete: "address-line1" },
-  { key: "city", label: "City", complete: "address-level2" },
-  { key: "state", label: "State or province", complete: "address-level1" },
-  { key: "zip", label: "ZIP or postal code", complete: "postal-code" },
-] as const;
 
 export type EventLocationProvider = {
   search: typeof searchLocations;
@@ -45,9 +36,6 @@ export function EventLocationField({
   maxLength?: number;
   provider?: EventLocationProvider;
 }) {
-  const [addingAddress, setAddingAddress] = useState(false);
-  const [address, setAddress] = useState({ address: "", city: "", state: "", zip: "" });
-
   const [suggestions, setSuggestions] = useState<EventLocationSuggestion[]>([]);
   const [focused, setFocused] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string | null>(null);
@@ -144,20 +132,6 @@ export function EventLocationField({
     finally { if (selection.current === version) setChurchPending(false); }
   };
 
-  const addAddress = () => {
-    const line = formatAddressLine(address);
-    if (!line) return;
-    const fullLocation = [value.trim(), line].filter(Boolean).join(" · ");
-    selection.current++;
-    choosing.current = false;
-    setResolving(false);
-    setChurchPending(false);
-    if (!commit(fullLocation)) return;
-    void provider.trackUsage?.(fullLocation).catch(() => {});
-    setAddingAddress(false);
-    setAddress({ address: "", city: "", state: "", zip: "" });
-  };
-
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="relative">
@@ -214,51 +188,9 @@ export function EventLocationField({
       </div> : null}
       {message ? <p id={`${id}-location-message`} role="status" className="text-sm text-muted-foreground">{message}</p> : null}
       <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="px-3"
-          onClick={() => setAddingAddress((open) => !open)}
-          aria-expanded={addingAddress}
-          aria-controls={`${id}-address-fields`}
-        >
-          <MapPin className="size-4" aria-hidden />
-          {addingAddress ? "Close address" : "Add street address"}
-        </Button>
         {actions ?? <Button type="button" variant="outline" size="sm" disabled={churchPending || resolving} onClick={() => { void fillChurchAddress(); }}>
           {churchPending ? "Loading church address…" : "Use church address"}
         </Button>}
-      </div>
-      <div
-        id={`${id}-address-fields`}
-        hidden={!addingAddress}
-        className="grid gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:grid-cols-2 [&[hidden]]:hidden"
-      >
-        {addressFields.map((field) => (
-          <div
-            key={field.key}
-            className={field.key === "address" ? "min-w-0 space-y-2 sm:col-span-2" : "min-w-0 space-y-2"}
-          >
-            <Label htmlFor={`${id}-${field.key}`}>{field.label}</Label>
-            <Input
-              id={`${id}-${field.key}`}
-              autoComplete={field.complete}
-              value={address[field.key]}
-              onChange={(event) => setAddress((current) => ({ ...current, [field.key]: event.target.value }))}
-            />
-          </div>
-        ))}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="justify-self-start sm:col-span-2"
-          disabled={!address.address.trim()}
-          onClick={addAddress}
-        >
-          Use this address
-        </Button>
       </div>
     </div>
   );
