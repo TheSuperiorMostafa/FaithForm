@@ -129,6 +129,8 @@ eligible for the sweeper, including takes that an older recorder incorrectly
 marked done after an upload timeout. Existing failed recordings can recover
 when their retained local segments and init file upload successfully; media
 that was never recorded or has already been removed cannot be reconstructed.
+Each take has its own upload lock, so the sweeper retries later while a
+stopped recorder finishes saving that take instead of racing its uploads.
 
 For an upgrade, deploy the app first and then run the deployment command above
 outside service hours. The app's recordings reconciler must run every two

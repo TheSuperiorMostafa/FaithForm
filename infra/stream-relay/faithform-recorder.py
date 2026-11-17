@@ -160,6 +160,19 @@ def make_frame(take_dir, seg):
 
 
 def process_take(take_dir, final=False):
+    # A stopped path releases its PID immediately so a reconnect can record.
+    # Its old uploader may still be draining when the sweeper finds the take.
+    # Serialize that take's prepare/upload/commit and state-file writes without
+    # blocking the recorder or delaying a different take.
+    with open(take_dir / "upload.lock", "a") as upload_lock:
+        try:
+            fcntl.flock(upload_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        return process_take_locked(take_dir, final)
+
+
+def process_take_locked(take_dir, final=False):
     """Uploads whatever is ready. Returns True when nothing is left to do."""
     meta = read_json(take_dir / "meta.json", None)
     if not meta:

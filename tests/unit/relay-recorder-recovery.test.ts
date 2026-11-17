@@ -2,6 +2,52 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
+test("a draining uploader and the sweeper cannot concurrently upload or rewrite the same take", () => {
+  const harness = `
+import importlib.util, sys, tempfile, threading
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+sys.path.insert(0, "infra/stream-relay")
+spec = importlib.util.spec_from_file_location("recorder", "infra/stream-relay/faithform-recorder.py")
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory() as tmp:
+    take = Path(tmp)
+    m.write_json(take / "meta.json", {"path": "live/11111111-1111-4111-8111-111111111111", "takeId": "draining-take", "startedAt": "2026-11-15T15:00:00Z"})
+    (take / "index.m3u8").write_text("#EXTM3U\\n#EXTINF:6.000,\\n#EXT-X-PROGRAM-DATE-TIME:2026-11-15T15:00:00Z\\nseg_000000.m4s\\n")
+    (take / "seg_000000.m4s").write_bytes(b"media")
+    (take / "init.mp4").write_bytes(b"init")
+    entered, release = threading.Event(), threading.Event()
+    prepares = []
+    def call(route, payload):
+        if route.endswith("prepare"):
+            prepares.append(payload)
+            if len(prepares) > 1: return None
+            entered.set()
+            assert release.wait(3), "test uploader was never released"
+            return {"items": [{**item, "action": "upload", "uploadUrl": item["kind"]} for item in payload["items"]]}
+        return {"committed": len(payload["items"])}
+    m.call = call
+    m.put = lambda url, path, content_type: Path(path).stat().st_size
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        foreground = pool.submit(m.process_take, take, True)
+        try:
+            assert entered.wait(3), "foreground uploader did not start"
+            assert m.process_take(take, final=True) is False, "busy take must remain eligible for retry"
+            assert len(prepares) == 1, "sweeper must not race the draining prepare/upload/commit"
+            assert not (take / "state.json").exists(), "contender must not rewrite upload state"
+        finally:
+            release.set()
+        assert foreground.result(timeout=3) is True
+    state = m.read_json(take / "state.json", {})
+    assert state["segments"] == {"0": "done"} and state["init"] == "done", state
+    assert m.process_take(take, final=True) is True, "lock must be released after upload"
+    assert len(prepares) == 1
+`;
+  const result = spawnSync("python3", ["-B", "-c", harness], { encoding: "utf8", timeout: 10_000 });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 test("the real recorder retries init and frames after media commits, and retains unacknowledged frame uploads", () => {
   const harness = `
 import importlib.util, json, sys, tempfile
