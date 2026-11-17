@@ -11,36 +11,30 @@ This optional agent runs on the church computer that has OBS open. It receives *
 
 1. In FaithForm, open **Live Streaming → Pair streaming PC**
 2. Copy the 6-digit code
-3. Download the streaming helper from FaithForm Setup on the OBS computer.
-   Extract the ZIP into Downloads; it contains a `faithform-stream-agent` folder.
-4. On a Mac, open Terminal and run the commands below. Replace `123456` with a
-   freshly generated code. The `&&` stops if the folder or install is missing.
+3. On the streaming PC:
 
 ```bash
-cd "$HOME/Downloads/faithform-stream-agent" &&
-npm install &&
+cd infra/stream-agent
+npm install
 FAITHFORM_PAIRING_CODE=123456 npm start
 ```
 
-If OBS WebSocket authentication is enabled, add
-`OBS_WEBSOCKET_PASSWORD="your OBS password"` before `npm start` (on the same line
-as `FAITHFORM_PAIRING_CODE`). Keep the password private.
-
-If you saved the helper somewhere other than Downloads, use that folder in the
-`cd` command. Do not run npm from your home folder.
-
-Developers with a repository checkout can instead use
-`cd /path/to/FaithForm/infra/stream-agent`.
-
-The agent saves `.faithform-agent.json` locally and keeps polling FaithForm.
+The agent saves `.faithform-agent.json` locally and keeps polling FaithForm. It also listens for OBS's confirmed streaming stop event, so stopping OBS directly or through a remote control ends the current paired FaithForm service. A temporary reconnect does not end the service.
 
 ## Run every Sunday
 
 ```bash
-cd "$HOME/Downloads/faithform-stream-agent" && npm start
+cd infra/stream-agent
+npm start
 ```
 
 Open OBS first, then start the agent. When an admin clicks **Go Live** in FaithForm, the agent configures OBS and starts streaming.
+
+## Update an existing agent
+
+Deploy the FaithForm app first, then copy the entire `infra/stream-agent/` directory to the streaming computer, including `faithform-stream-agent.mjs`, `obs-stream-state.mjs`, and `package.json`. Keep the computer's existing `.faithform-agent.json` pairing file. Stop the old agent process and run `npm install` followed by `npm start` from that directory. Copying only the main script leaves its stop-event listener missing.
+
+Confirmed OBS stops end services controlled through that paired computer immediately. Services started with the church's permanent key (including ATEM) use the relay's signed disconnect signal and 60-second reconnect grace period; the reconciler then ends the service on its next run.
 
 ## Environment
 

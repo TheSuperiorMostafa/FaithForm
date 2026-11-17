@@ -10,8 +10,8 @@ import { CODE_SITE_THEMES } from "../../lib/sites/themes";
 
 const churchId = "d1d65673-2d45-4825-9e6e-c2d85d4583fd";
 type Viewer = { churchId: string; isAdmin: boolean; featurePermissions: string[] };
-type Fixture = { viewer: Viewer | null; allowed: string[]; enabled: boolean; published: boolean; homeStatus: string; aboutStatus: string; authReads: number; host: string; navigation: boolean };
-const state: Fixture = { viewer: null, allowed: [], enabled: true, published: true, homeStatus: "published", aboutStatus: "draft", authReads: 0, host: "app.faithform.test", navigation: false };
+type Fixture = { viewer: Viewer | null; allowed: string[]; enabled: boolean; published: boolean; homeStatus: string; aboutStatus: string; authReads: number; host: string; navigation: boolean; logoUrl: string | null };
+const state: Fixture = { viewer: null, allowed: [], enabled: true, published: true, homeStatus: "published", aboutStatus: "draft", authReads: 0, host: "app.faithform.test", navigation: false, logoUrl: null };
 Object.assign(globalThis, { __websitePreviewAccessTest: state });
 
 test("anonymous publication requires both page and settings to be published", () => {
@@ -69,7 +69,7 @@ function routes() {
 
 function configure(t: TestContext) {
   state.viewer = null; state.allowed = []; state.enabled = true; state.published = true; state.homeStatus = "published"; state.aboutStatus = "draft"; state.authReads = 0;
-  state.host = "app.faithform.test"; state.navigation = false;
+  state.host = "app.faithform.test"; state.navigation = false; state.logoUrl = null;
   for (const [key, value] of Object.entries({ NEXT_PUBLIC_SUPABASE_URL: "https://preview-access.example.test", SUPABASE_SECRET_KEY: "safe-test-key", NEXT_PUBLIC_SITE_URL: "https://app.faithform.test" })) {
     const previous = process.env[key]; process.env[key] = value;
     t.after(() => { if (previous === undefined) delete process.env[key]; else process.env[key] = previous; });
@@ -80,7 +80,7 @@ function configure(t: TestContext) {
     assert.equal(url.hostname, "preview-access.example.test");
     const page = (path: string) => ({ id: path === "/" ? "home" : "about", path, title: path === "/" ? "Private home title" : "Related draft title", meta_description: "Private metadata description", status: path === "/" ? state.homeStatus : state.aboutStatus });
     switch (url.pathname.split("/").pop()) {
-      case "churches": return Response.json({ id: churchId, slug: "grace", name: "Private church name", description: "Private church description", email: "office@example.test" });
+      case "churches": return Response.json({ id: churchId, slug: "grace", name: "Private church name", description: "Private church description", email: "office@example.test", logo_url: state.logoUrl });
       case "site_settings": return Response.json({ theme_key: "grace", layout_mode: "website", is_published: state.published, contact_email: "office@example.test" });
       case "site_pages": {
         if (url.searchParams.get("select")?.includes("site_sections")) return Response.json(["/", "/about"].map(path => ({ ...page(path), site_sections: [{ type: path === "/" ? "hero" : "about_text", is_visible: true, church_id: churchId }] })));
@@ -116,6 +116,18 @@ test("actual public page and metadata allow anonymous published content without 
   assert.equal(result.props.page.sections.some(section => section.type === "about_text"), false);
   assert.equal(state.authReads, 0);
   assert.equal((await page.generateMetadata(props())).title, "Private home title");
+});
+
+test("published church metadata overrides all inherited platform icons on app and church hosts", async t => {
+  configure(t);
+  const { page } = await routes();
+  for (const host of ["app.faithform.test", "grace-church.example.test"]) {
+    state.host = host;
+    state.logoUrl = `https://images.example.test/${host}.png`;
+    assert.deepEqual((await page.generateMetadata(props())).icons, {
+      icon: [{ url: state.logoUrl }], shortcut: [{ url: state.logoUrl }], apple: [{ url: state.logoUrl }],
+    });
+  }
 });
 
 test("church navigation uses root paths even when Vercel selects its domain as the production URL", async t => {

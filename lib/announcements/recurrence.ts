@@ -50,9 +50,10 @@ export function buildEventRecurrence(
   startAt: string,
   timeZone?: string | null,
   customRepeat?: unknown,
+  allDay = false,
 ) {
   if (repeat === undefined || repeat === null || repeat === "none") return null;
-  const zone = resolveScheduleTimeZone(timeZone || "UTC");
+  const zone = allDay ? "UTC" : resolveScheduleTimeZone(timeZone || "UTC");
   const custom = repeat === "custom" && customRepeat && typeof customRepeat === "object"
     ? customRepeat as Record<string, unknown>
     : null;
@@ -96,7 +97,7 @@ export function buildEventRecurrence(
       parts.push(`BYDAY=${repeatWeekdays.join(",")}`, "WKST=SU");
     }
   }
-  parts.push(`UNTIL=${end.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`);
+  parts.push(`UNTIL=${allDay ? until.replace(/-/g, "") : end.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`);
   return {
     rule: `RRULE:${parts.join(";")}`,
     frequency: frequency.value,

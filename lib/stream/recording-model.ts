@@ -536,7 +536,7 @@ export function recordingPhase(row: RecordingRowState): RecordingPhaseView {
 export function failureExplanation(reason: string | null): string {
   switch (reason) {
     case "nothing_recorded":
-      return "No video reached FaithForm during this broadcast, so there was nothing to record.";
+      return "FaithForm couldn't save a recording of this broadcast. If you have a copy from your streaming software, upload it here.";
     case "segments_missing":
       return "Parts of this recording didn't finish saving. Your livestream information has been saved.";
     case "storage_unavailable":

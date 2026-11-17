@@ -1,13 +1,13 @@
 "use server";
 
 import { getLocationSuggestions, saveLocation } from "@/lib/announcements/location-suggestions";
-import { searchPlaceSuggestions } from "@/lib/announcements/place-suggestions";
+import { resolvePlaceAddress, searchPlaceSuggestions } from "@/lib/announcements/place-suggestions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import { formatAddressLine } from "@/lib/utils/address";
 
-export type EventLocationSuggestion = { label: string; value: string; source: "saved" | "google" };
+export type EventLocationSuggestion = { label: string; value: string; source: "saved" | "google"; placeId?: string };
 
 async function locationAuth() {
   const auth = await getChurchAuth();
@@ -15,7 +15,7 @@ async function locationAuth() {
   return await featureActionError("announcements") ? null : auth;
 }
 
-export async function searchLocations(query: string): Promise<
+export async function searchLocations(query: string, sessionToken?: string): Promise<
   | { ok: true; suggestions: EventLocationSuggestion[]; addressSearch: "ready" | "unconfigured" | "unavailable"; notice?: string }
   | { ok: false; error: string }
 > {
@@ -25,7 +25,7 @@ export async function searchLocations(query: string): Promise<
     if (typeof query !== "string" || query.trim().length < 3 || query.length > 200) return { ok: true, suggestions: [], addressSearch: "ready" };
     const [savedResult, placesResult] = await Promise.allSettled([
       getLocationSuggestions(auth.churchId, query.trim(), createAdminClient()),
-      searchPlaceSuggestions(query),
+      searchPlaceSuggestions(query, sessionToken),
     ]);
     const saved = savedResult.status === "fulfilled" ? savedResult.value : [];
     const places = placesResult.status === "fulfilled" ? placesResult.value : { status: "unavailable" as const, suggestions: [] };
@@ -37,6 +37,17 @@ export async function searchLocations(query: string): Promise<
     return { ok: true, suggestions, addressSearch: places.status, ...(savedResult.status === "rejected" ? { notice: "Saved locations couldn't load. You can still search or type the full address." } : {}) };
   } catch {
     return { ok: false, error: "Address suggestions couldn't load. You can still type the full address." };
+  }
+}
+
+export async function resolveLocationSelection(placeId: string, sessionToken?: string): Promise<
+  { ok: true; value: string } | { ok: false; error: string }
+> {
+  try {
+    if (!(await locationAuth())) return { ok: false, error: "Sign in with access to Announcements to choose an address." };
+    return await resolvePlaceAddress(placeId, sessionToken);
+  } catch {
+    return { ok: false, error: "We couldn't load that address. Choose it again or add the street address yourself." };
   }
 }
 

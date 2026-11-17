@@ -51,6 +51,8 @@ export default async function StreamSetupPage() {
       />
 
       <StreamingSetupGuide
+        key={auth.churchId}
+        churchId={auth.churchId}
         ingestServerUrl={status.settings.ingestServerUrl}
         autoGoLive={status.autoGoLive}
         isAdmin={auth.isAdmin}

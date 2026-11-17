@@ -98,7 +98,8 @@ export async function handleEncoderSignal(churchId: string, body: z.infer<typeof
     if (session) {
       const event = session.streamEventId ? await getStreamEvent(session.streamEventId, client) : null;
       if (event?.simulated) return;
-      if (!state.enabled && session.id !== state.session_id) return;
+      // Track this authorized source for manually started services too, so
+      // stopping its encoder can close the service after reconnect grace.
 
       // A preparing row seen under this lease belongs to an interrupted start.
       // Its event link tells us whether setup completed before the interruption.

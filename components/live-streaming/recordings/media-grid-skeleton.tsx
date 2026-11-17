@@ -1,4 +1,5 @@
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { ArtworkPanelSkeleton } from "@/components/media/artwork-panel-skeleton";
 
 /**
  * Loading state for the series and topic pages under Recordings: the back
@@ -29,14 +30,7 @@ export function MediaGridSkeleton({
       </div>
 
       {withPanel ? (
-        <div className="rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
-          <Skeleton className="mb-5 h-5 w-36" />
-          <div className="grid gap-5 sm:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <Skeleton key={index} className="aspect-video w-full rounded-lg" />
-            ))}
-          </div>
-        </div>
+        <ArtworkPanelSkeleton series />
       ) : null}
 
       <div

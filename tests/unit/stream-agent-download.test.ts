@@ -6,8 +6,8 @@ import JSZip from "jszip";
 test("the downloadable helper includes current source and installs without a repository checkout", async () => {
   const zip = await JSZip.loadAsync(await readFile("public/downloads/faithform-stream-agent.zip"));
   const names = Object.keys(zip.files).filter(name => !zip.files[name].dir).sort();
-  assert.deepEqual(names, ["README.md", "faithform-stream-agent.mjs", "package.json"].map(name => `faithform-stream-agent/${name}`));
-  for (const name of ["package.json", "faithform-stream-agent.mjs", "README.md"]) {
+  assert.deepEqual(names, ["README.md", "faithform-stream-agent.mjs", "obs-stream-state.mjs", "package.json"].map(name => `faithform-stream-agent/${name}`));
+  for (const name of ["package.json", "faithform-stream-agent.mjs", "obs-stream-state.mjs", "README.md"]) {
     assert.equal(await zip.file(`faithform-stream-agent/${name}`)!.async("string"), await readFile(`infra/stream-agent/${name}`, "utf8"));
   }
   const pkg = JSON.parse(await zip.file("faithform-stream-agent/package.json")!.async("string"));

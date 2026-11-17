@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import { ArtworkPanelSkeleton } from "@/components/media/artwork-panel-skeleton";
 
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
@@ -47,6 +48,7 @@ export default function RecordingReviewLoading() {
             ))}
             <Skeleton className="min-h-[88px] w-full rounded-xl" />
             <Skeleton className="min-h-[88px] w-full rounded-xl" />
+            <ArtworkPanelSkeleton />
             <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
               <span className="text-[15px] font-semibold">More options</span>
             </div>

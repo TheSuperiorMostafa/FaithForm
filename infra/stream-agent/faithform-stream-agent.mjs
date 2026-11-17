@@ -10,6 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import OBSWebSocket from "obs-websocket-js";
+import { observeObsStreamState } from "./obs-stream-state.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = join(__dirname, ".faithform-agent.json");
@@ -124,9 +125,23 @@ async function ackCommand(config, commandId, status, error) {
 
 async function pollLoop(config) {
   const obs = new OBSWebSocket();
+  const streamState = observeObsStreamState(obs, async (sessionId) => {
+    const response = await fetch(`${APP_URL}/api/stream/encoder/state`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.deviceSecret}`,
+      },
+      body: JSON.stringify({ event: "stopped", sessionId }),
+    });
+    if (!response.ok) throw new Error("Could not report the OBS stop. Retrying.");
+  });
 
   while (true) {
     try {
+      // Keep the event listener connected even when the dashboard has no
+      // command: OBS may be controlled directly or through a remote control.
+      await ensureObsConnected(obs, config);
       const res = await fetch(`${APP_URL}/api/stream/encoder/poll`, {
         headers: {
           Authorization: `Bearer ${config.deviceSecret}`,
@@ -142,9 +157,12 @@ async function pollLoop(config) {
       if (!res.ok) {
         throw new Error(data.error ?? "Poll failed");
       }
+      streamState.setSession(data.sessionId);
+      await streamState.flush();
 
       if (data.command && data.commandId) {
         try {
+          if (data.command === "start_stream") streamState.setSession(data.payload?.sessionId);
           await executeCommand(obs, config, data);
           await ackCommand(config, data.commandId, "completed");
         } catch (error) {

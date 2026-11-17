@@ -16,12 +16,14 @@ type Signal = { path: string; sourceId: string; event: "publish" | "unpublish" }
 type Automation = {
   authorizeEncoderSource: (churchId: string, sourceId: unknown) => Promise<void>;
   handleEncoderSignal: (churchId: string, body: Signal) => Promise<void>;
+  endDisconnectedEncoderBroadcasts: () => Promise<void>;
 };
 const state = {
   db: createClient("https://encoder-start.example.test", "safe-test-service-key", { auth: { persistSession: false, autoRefreshToken: false } }),
   row: null as Row | null, active: null as Session | null, starts: 0, ingests: 0,
   queries: [] as { method: string; url: URL; body: Record<string, unknown> }[],
   failRegistration: false, failAuthRegistration: false, authRegistrations: 0, feature: true,
+  ends: 0, previewActive: false,
 };
 Object.assign(globalThis, { __encoderAutoStartTest: state });
 const require = createRequire(import.meta.url);
@@ -53,8 +55,8 @@ function automation() {
     "@/lib/stream/go-live": `export async function startLiveBroadcastLocked(id,actor,options){
       if(id!==${JSON.stringify(churchId)}||actor!==null||!options.encoderIngestReady)throw new Error('wrong start authority');
       const s=globalThis.__encoderAutoStartTest;s.starts++;s.active={id:'session-1',status:'waiting_for_encoder',streamEventId:null};return s.active;
-    } export async function onIngestStarted(){const s=globalThis.__encoderAutoStartTest;s.ingests++;s.active.status='live'} export async function endLiveBroadcastLocked(){throw new Error('unexpected stop')}`,
-    "@/lib/stream/preview-ingest": "export async function isPreviewIngestActive(){return false}",
+    } export async function onIngestStarted(){const s=globalThis.__encoderAutoStartTest;s.ingests++;s.active.status='live'} export async function endLiveBroadcastLocked(id,db,options){if(options.stopPairedEncoder!==false)throw new Error('disconnect must not stop a replacement encoder');const s=globalThis.__encoderAutoStartTest;s.ends++;s.active=null}`,
+    "@/lib/stream/preview-ingest": "export async function isPreviewIngestActive(){return globalThis.__encoderAutoStartTest.previewActive}",
     "@/lib/stream/sessions": "export async function getActiveStreamSession(){return globalThis.__encoderAutoStartTest.active} export async function updateStreamSession(id,patch){Object.assign(globalThis.__encoderAutoStartTest.active,patch);return globalThis.__encoderAutoStartTest.active}",
   });
   return automationModule;
@@ -77,6 +79,7 @@ function initialRow(enabled = false): Row {
 function configure(t: TestContext) {
   state.row = null; state.active = null; state.starts = 0; state.ingests = 0; state.queries = [];
   state.failRegistration = false; state.failAuthRegistration = false; state.authRegistrations = 0; state.feature = true;
+  state.ends = 0; state.previewActive = false;
   const oldSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
   process.env.STREAM_RELAY_WEBHOOK_SECRET = "safe-relay-test-secret";
   t.after(() => { if (oldSecret === undefined) delete process.env.STREAM_RELAY_WEBHOOK_SECRET; else process.env.STREAM_RELAY_WEBHOOK_SECRET = oldSecret; });
@@ -89,6 +92,9 @@ function configure(t: TestContext) {
     state.queries.push({ method, url, body });
     if (url.pathname.endsWith("/church_features")) return Response.json({ enabled: state.feature });
     assert.ok(url.pathname.endsWith("/stream_encoder_automation"));
+    if (method === "GET" && url.searchParams.get("select") === "church_id") {
+      return Response.json(state.row?.session_id && state.row.stop_after && Date.parse(state.row.stop_after) <= Date.now() ? [{ church_id: churchId }] : []);
+    }
     if (method === "POST") {
       assert.equal(body.church_id, churchId);
       assert.equal(url.searchParams.get("on_conflict"), "church_id");
@@ -181,6 +187,34 @@ test("a reconnect keeps the existing broadcast and late callbacks cannot replace
   assert.equal(state.row.session_id, "session-1");
   assert.equal(state.row.source_id, otherSourceId);
   assert.equal(state.row.source_stopped, false);
+});
+
+test("stopping a manually started encoder ends its service after the reconnect grace period", async t => {
+  configure(t); state.row = initialRow(false);
+  state.active = { id: "manual-session", status: "live", streamEventId: null };
+  const api = await automation();
+  await api.authorizeEncoderSource(churchId, sourceId);
+  await api.handleEncoderSignal(churchId, publish);
+  assert.equal(state.row.session_id, "manual-session");
+  await api.handleEncoderSignal(churchId, { ...publish, event: "unpublish" });
+  await api.endDisconnectedEncoderBroadcasts();
+  assert.equal(state.ends, 0, "a short reconnect gap must preserve the service");
+  state.row.stop_after = new Date(Date.now() - 1).toISOString();
+  await api.endDisconnectedEncoderBroadcasts();
+  assert.equal(state.ends, 1);
+  assert.equal(state.active, null);
+});
+
+test("a live replacement source prevents a disconnect deadline ending its service", async t => {
+  configure(t); state.row = initialRow(true);
+  const api = await automation();
+  await api.authorizeEncoderSource(churchId, sourceId);
+  await api.handleEncoderSignal(churchId, publish);
+  await api.handleEncoderSignal(churchId, { ...publish, event: "unpublish" });
+  state.row.stop_after = new Date(Date.now() - 1).toISOString();
+  state.previewActive = true;
+  await api.endDisconnectedEncoderBroadcasts();
+  assert.equal(state.ends, 0);
 });
 
 test("publish authentication refuses a lost encoder registration so hardware can reconnect and retry", async t => {

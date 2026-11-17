@@ -123,6 +123,7 @@ export async function insertChurchCalendarEvent(
     description?: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
   },
   supabase?: SupabaseClient,
 ): Promise<CalendarEventPreview> {

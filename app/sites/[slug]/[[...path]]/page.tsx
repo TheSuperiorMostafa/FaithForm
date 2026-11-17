@@ -6,6 +6,7 @@ import { canAccessFeature, getFeatureAccess } from "@/lib/features/access";
 import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
 import { availableWebsitePaths, canViewChurchSitePage, filterUnavailableSiteLinks, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
 import { isPlatformSiteHost } from "@/lib/sites/tenant";
+import { churchSiteIcons } from "@/lib/sites/icons";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
@@ -117,6 +118,7 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   return {
     title,
     description,
+    icons: churchSiteIcons(bundle.profile),
     openGraph: {
       title,
       description,

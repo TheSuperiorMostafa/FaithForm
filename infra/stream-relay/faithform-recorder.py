@@ -18,6 +18,7 @@ and never carries the secret itself. Nothing here logs a URL, key or token.
 """
 
 import hashlib
+import fcntl
 import json
 import os
 import re
@@ -128,7 +129,7 @@ def parse_playlist(take_dir):
         if line.startswith("#EXTINF:"):
             duration = float(line[8:].split(",")[0])
         elif line.startswith("#EXT-X-PROGRAM-DATE-TIME:"):
-            started = datetime.strptime(line[25:], "%Y-%m-%dT%H:%M:%S.%f%z")
+            started = datetime.fromisoformat(line[25:].replace("Z", "+00:00"))
         elif line and not line.startswith("#"):
             match = re.match(r"seg_(\d+)\.m4s$", line)
             if match and duration and started and (take_dir / line).exists():
@@ -165,9 +166,15 @@ def process_take(take_dir, final=False):
         return True
     state = read_json(take_dir / "state.json", {"segments": {}, "init": None, "frames": {}})
     segments = parse_playlist(take_dir)
-    pending = [s for s in segments if str(s["seq"]) not in state["segments"]]
-    if not pending:
-        return state["init"] in ("done", None) or not any(v == "done" for v in state["segments"].values())
+    # A segment commit can succeed while its init upload or thumbnail fails.
+    # Keep those segments in the retry pass; looking only at pending media
+    # silently stranded the init, making an otherwise complete recording
+    # unplayable forever.
+    pending = [s for s in segments if
+               str(s["seq"]) not in state["segments"] or
+               (state["segments"].get(str(s["seq"])) == "done" and
+                (state["init"] != "done" or
+                 (s["seq"] % FRAME_EVERY == FRAME_OFFSET and str(s["seq"]) not in state["frames"])))]
 
     for start in range(0, len(pending), BATCH):
         batch = pending[start:start + BATCH]
@@ -175,9 +182,10 @@ def process_take(take_dir, final=False):
         if state["init"] != "done" and (take_dir / "init.mp4").exists():
             items.append({"kind": "init", "seq": 0, "bytes": (take_dir / "init.mp4").stat().st_size})
         for seg in batch:
-            items.append({"kind": "segment", "seq": seg["seq"], "startedAt": seg["startedAt"],
-                          "durationSec": seg["durationSec"], "bytes": (take_dir / seg["file"]).stat().st_size})
-            if seg["seq"] % FRAME_EVERY == FRAME_OFFSET and str(seg["seq"]) not in state["frames"]:
+            if str(seg["seq"]) not in state["segments"]:
+                items.append({"kind": "segment", "seq": seg["seq"], "startedAt": seg["startedAt"],
+                              "durationSec": seg["durationSec"], "bytes": (take_dir / seg["file"]).stat().st_size})
+            if state["segments"].get(str(seg["seq"])) != "skip" and seg["seq"] % FRAME_EVERY == FRAME_OFFSET and str(seg["seq"]) not in state["frames"]:
                 items.append({"kind": "frame", "seq": seg["seq"], "startedAt": seg["startedAt"]})
         answer = call("/api/stream/relay/recording/prepare",
                       {"path": meta["path"], "takeId": meta["takeId"],
@@ -212,7 +220,8 @@ def process_take(take_dir, final=False):
                     size = put(decision["uploadUrl"], frame, "image/jpeg") if frame else None
                     if size:
                         committed.append({"kind": "frame", "seq": seq, "bytes": size})
-                        handled = True
+                        # Only the commit acknowledgement makes a frame
+                        # durable; retry if that request is lost.
                 elif action in ("done", "skip"):
                     handled = True
                 # Keep failed or deferred frames eligible for the next prepare
@@ -232,8 +241,18 @@ def process_take(take_dir, final=False):
                     state["segments"][str(item["seq"])] = "done"
                 elif item["kind"] == "init":
                     state["init"] = "done"
+                elif item["kind"] == "frame":
+                    state["frames"][str(item["seq"])] = "handled"
         write_json(take_dir / "state.json", state)
-    return all(str(s["seq"]) in state["segments"] for s in parse_playlist(take_dir))
+    return (all(str(s["seq"]) in state["segments"] for s in parse_playlist(take_dir)) and
+            (not any(v == "done" for v in state["segments"].values()) or state["init"] == "done"))
+
+
+def has_pending_media(take_dir):
+    """Also repairs old 'done' markers written after an upload timeout."""
+    state = read_json(take_dir / "state.json", {"segments": {}, "init": None})
+    return (any(str(s["seq"]) not in state["segments"] for s in parse_playlist(take_dir)) or
+            (any(v == "done" for v in state["segments"].values()) and state.get("init") != "done"))
 
 
 def finish_take(take_dir):
@@ -297,9 +316,20 @@ def cmd_take(mtx_path):
         return 1
     PIDS.mkdir(parents=True, exist_ok=True)
     pidfile = PIDS / f"rec_{digest(mtx_path)}.pid"
+    # Ready hooks and their supervision ticks can overlap. Claim startup
+    # before making any HTTP request, without delaying the next tick.
+    startup_lock = open(PIDS / f"rec_{digest(mtx_path)}.lock", "a")
+    try:
+        fcntl.flock(startup_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        startup_lock.close()
+        return 0
     if pidfile.exists():
         try:
-            os.kill(int(pidfile.read_text().split()[0]), 0)
+            recorder_pid, ffmpeg_pid, _ = pidfile.read_text().split()
+            os.kill(int(recorder_pid), 0)
+            os.kill(int(ffmpeg_pid), 0)
+            startup_lock.close()
             return 0  # already recording this path
         except Exception:  # noqa: BLE001
             pass
@@ -325,7 +355,9 @@ def cmd_take(mtx_path):
          "-hls_segment_filename", str(take_dir / "seg_%06d.m4s"), str(take_dir / "index.m3u8")],
         stderr=open(take_dir / "ffmpeg.log", "ab"),
     )
-    pidfile.write_text(f"{os.getpid()} {ffmpeg.pid} {take_id}")
+    ownership = f"{os.getpid()} {ffmpeg.pid} {take_id}"
+    pidfile.write_text(ownership)
+    startup_lock.close()
     log("recording started")
 
     info, last_beat, last_bytes, last_bytes_at = {}, 0.0, None, None
@@ -358,19 +390,36 @@ def cmd_take(mtx_path):
 
     # The encoder is gone. Upload everything that is left, then say so.
     deadline = time.time() + 15 * 60
-    while not process_take(take_dir, final=True) and time.time() < deadline:
+    drained = process_take(take_dir, final=True)
+    while not drained and time.time() < deadline:
         time.sleep(10)
-    finish_take(take_dir)
-    pidfile.unlink(missing_ok=True)
+        drained = process_take(take_dir, final=True)
+    if drained:
+        finish_take(take_dir)
+    else:
+        # Keep the unfinished take eligible for the sweeper. Marking it done
+        # after a timeout permanently abandoned media still waiting on disk.
+        log("uploads deferred; the recording sweeper will retry")
+    # A reconnect may already own this path while our old take drains.
+    try:
+        if pidfile.read_text() == ownership:
+            pidfile.unlink(missing_ok=True)
+    except FileNotFoundError:
+        pass
     return 0
 
 
 def cmd_stop(mtx_path):
     pidfile = PIDS / f"rec_{digest(mtx_path)}.pid"
     try:
-        _, ffmpeg_pid, _ = pidfile.read_text().split()
+        ownership = pidfile.read_text()
+        _, ffmpeg_pid, _ = ownership.split()
         # SIGINT lets ffmpeg close the segment in progress and the playlist.
         os.kill(int(ffmpeg_pid), signal.SIGINT)
+        # The old recorder keeps uploading independently. Release this path
+        # now so a reconnect can start a new take immediately.
+        if pidfile.read_text() == ownership:
+            pidfile.unlink(missing_ok=True)
     except Exception:  # noqa: BLE001 - nothing running is fine
         pass
     return 0
@@ -392,6 +441,11 @@ def cmd_sweep():
         if not take_dir.is_dir() or take_dir.name in active:
             continue
         done = take_dir / "done"
+        if done.exists() and has_pending_media(take_dir):
+            # Previous recorder versions marked a take done even after their
+            # upload deadline expired. Resume retained files before purging
+            # them; late media revives the existing failed recording in-app.
+            done.unlink()
         if done.exists():
             if time.time() - done.stat().st_mtime > KEEP_DONE_DAYS * 86400:
                 for child in take_dir.iterdir():

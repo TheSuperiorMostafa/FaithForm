@@ -337,9 +337,12 @@ supervise_pushes() {
 # Recording (P15): segmented, uploaded as it goes, and detached from this hook
 # so MediaMTX restarting or killing it can never cut a recording short. The
 # recorder guards against running twice for one path.
+ensure_recorder() {
+  setsid nohup python3 /home/mostafa/scripts/faithform-recorder.py take "$MTX_PATH" \
+    >>"/home/mostafa/mediamtx/logs/recorder.log" 2>&1 < /dev/null &
+}
 echo "[relay] starting the segmented recorder" >>"$LOG_FILE"
-setsid nohup python3 /home/mostafa/scripts/faithform-recorder.py take "$MTX_PATH" \
-  >>"/home/mostafa/mediamtx/logs/recorder.log" 2>&1 < /dev/null &
+ensure_recorder
 
 notify_lifecycle publish
 
@@ -359,6 +362,10 @@ while true; do
   NOW=$(date +%s)
 
   if (( NOW - LAST_HEARTBEAT >= HEARTBEAT_SEC )); then
+    # The feed can be healthy while the recording reader has failed. Starting
+    # an already-running recorder is a guarded no-op; a dead one gets a new
+    # take while its predecessor finishes any outstanding uploads.
+    ensure_recorder
     notify_lifecycle publish
     LAST_HEARTBEAT=$NOW
   fi

@@ -1,7 +1,10 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, CalendarPlus, ClipboardCheck, MapPin, Pencil, Plus, Repeat, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { EventLocationField, type EventLocationProvider } from "@/components/announcements/event-location-field";
+import { searchGroupMeetingLocations, resolveGroupMeetingLocation, getGroupMeetingChurchAddress } from "@/app/dashboard/groups/location-actions";
 import type { AttendanceSheet } from "@/lib/groups/gatherings";
 import type { StaffGroupDetail } from "@/lib/groups/staff/groups";
 import type { listStaffGatherings, getStaffGathering } from "@/lib/groups/staff/gatherings";
@@ -34,6 +37,13 @@ export function Gatherings({ detail, upcoming, past, timezone }: { detail: Staff
 }
 function GatheringForm({ groupId, timezone, close, existing }: { groupId: string; timezone: string; close: () => void; existing?: EventDetail }) {
   const { pending, error, setError, run } = useGroupAction();
+  const [location, setLocation] = useState(existing?.event.locationName ?? "");
+  const locationId = `${groupId}-meeting-location`;
+  const locationProvider = useMemo<EventLocationProvider>(() => ({
+    search: (query, sessionToken) => searchGroupMeetingLocations(groupId, query, sessionToken),
+    resolve: (placeId, sessionToken) => resolveGroupMeetingLocation(groupId, placeId, sessionToken),
+    churchAddress: () => getGroupMeetingChurchAddress(groupId),
+  }), [groupId]);
   // Preserve the zone of an existing meeting. New meetings use church time,
   // including when a staff member is scheduling from another time zone.
   const formZone = existing?.event.timezone ?? timezone;
@@ -57,7 +67,8 @@ function GatheringForm({ groupId, timezone, close, existing }: { groupId: string
         startsAt,
         endsAt,
         timezone: formZone,
-        locationName: String(fields.get("location") ?? ""),
+        locationName: location.trim(),
+        locationAddress: location.trim() === (existing?.event.locationName ?? "").trim() ? existing?.locationAddress ?? null : null,
         onlineMeetingUrl: String(fields.get("url") ?? ""),
       }),
       existing ? `${title} updated.` : `${title} planned. Members can see it in the app.`,
@@ -74,7 +85,10 @@ function GatheringForm({ groupId, timezone, close, existing }: { groupId: string
     <p className="text-sm text-muted-foreground">
       Times use {existing ? "this meeting’s" : "your church’s"} time zone ({formatTimezoneLabel(formZone)}).
     </p>
-    <Field label="Where (optional)"><input name="location" defaultValue={existing?.event.locationName ?? ""} maxLength={200} placeholder="e.g. Fellowship hall" /></Field>
+    <div className="space-y-2">
+      <Label htmlFor={locationId}>Location <span className="font-normal text-muted-foreground">(optional)</span></Label>
+      <EventLocationField id={locationId} name="location" value={location} onChange={setLocation} maxLength={200} provider={locationProvider} />
+    </div>
     <Field label="Online meeting link (optional)"><input name="url" defaultValue={existing?.onlineMeetingUrl ?? ""} type="url" placeholder="https://" /></Field>
     <Field label="Anything to know? (optional)"><textarea name="description" defaultValue={existing?.description ?? ""} rows={3} maxLength={4000} placeholder="What to bring, what to expect…" /></Field>
     {error && <Notice>{error}</Notice>}

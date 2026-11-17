@@ -31,11 +31,13 @@ export function calendarEditFor(input: {
     location: string;
     startAt: string;
     endAt: string;
+    allDay?: boolean;
   };
 }): { changed: boolean; endAt: string | null } {
   const { original } = input;
 
   const changed =
+    (original.allDay !== undefined && input.allDay !== original.allDay) ||
     input.title !== original.title ||
     input.location !== original.location ||
     !sameInstant(input.startAt, original.startAt) ||
@@ -47,6 +49,7 @@ export function calendarEditFor(input: {
   const originalStart = Date.parse(original.startAt);
   const originalEnd = Date.parse(original.endAt);
   const length =
+    original.allDay !== false &&
     Number.isFinite(originalStart) &&
     Number.isFinite(originalEnd) &&
     originalEnd > originalStart

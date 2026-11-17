@@ -19,7 +19,6 @@ import { CopyBothButton, StreamTechnicalDetails, useStreamKey } from "@/componen
 import {
   atemSettingsDownloadUrl,
   STREAMING_TOOLS,
-  STREAMING_TOOL_KEY,
   type StreamingToolId,
 } from "@/components/live-streaming/encoder-docs-card";
 import {
@@ -34,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import { GO_LIVE_HREF } from "@/lib/stream/recording-status";
+import { readStreamingTool, streamingToolStorageKey } from "@/lib/stream/streaming-tool-preference";
 import { cn } from "@/lib/utils";
 
 const TOOL_ICONS: Record<StreamingToolId, React.ComponentType<{ className?: string }>> = {
@@ -46,6 +46,7 @@ const TOOL_ICONS: Record<StreamingToolId, React.ComponentType<{ className?: stri
 };
 
 type Props = {
+  churchId: string;
   ingestServerUrl: string;
   autoGoLive: boolean;
   isAdmin: boolean;
@@ -57,6 +58,7 @@ type Props = {
 };
 
 export function StreamingSetupGuide({
+  churchId,
   ingestServerUrl,
   autoGoLive,
   isAdmin,
@@ -71,17 +73,16 @@ export function StreamingSetupGuide({
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(STREAMING_TOOL_KEY) as StreamingToolId | null;
-      if (saved && STREAMING_TOOLS.some((entry) => entry.id === saved)) setTool(saved);
+      setTool(readStreamingTool(window.localStorage, churchId));
     } catch {
       // No storage (private window): the choice just isn't remembered.
     }
-  }, []);
+  }, [churchId]);
 
   const choose = (id: StreamingToolId) => {
     setTool(id);
     try {
-      window.localStorage.setItem(STREAMING_TOOL_KEY, id);
+      window.localStorage.setItem(streamingToolStorageKey(churchId), id);
     } catch {
       // Ignore; see above.
     }

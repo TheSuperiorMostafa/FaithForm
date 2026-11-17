@@ -246,6 +246,7 @@ function parsePublishForm(formData: FormData) {
       location: originalLocation,
       startAt: originalStartAt,
       endAt: originalEndAt,
+      allDay: formData.has("original_all_day") ? formData.get("original_all_day") === "true" : undefined,
     },
   });
 
@@ -431,6 +432,7 @@ export async function publishAnnouncement(
         payload.startAt,
         payload.allDay ? "UTC" : recurrenceTimeZone,
         payload.customRepeat,
+        payload.allDay,
       );
     } catch (error) {
       return {

@@ -665,6 +665,7 @@ export async function insertAppleCalendarEvent(
     description?: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
   },
   supabase?: SupabaseClient,
 ): Promise<CalendarEventPreview> {
@@ -697,10 +698,11 @@ export async function insertAppleCalendarEvent(
     title: input.title,
     location: input.location ?? "",
     startAt: start.toISOString(),
-    endAt: input.endAt,
+    endAt: input.allDay ? `${allDaySpan(input.startAt, input.endAt).end}T00:00:00.000Z` : input.endAt,
     description: calendarDescriptionText(input.description),
     source: "apple",
     recurring: Boolean(input.recurrence?.length),
+    allDay: input.allDay === true,
   };
 }
 

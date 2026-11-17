@@ -45,6 +45,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SuccessState } from "@/components/ui/success-state";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   announcementWhen,
@@ -119,6 +120,7 @@ type Values = {
   details: string;
   /** About something happening on a particular day. */
   dated: boolean;
+  allDay: boolean;
   date: string;
   startTime: string;
   endTime: string;
@@ -277,6 +279,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
     title: "",
     details: "",
     dated: mode.kind === "new" && Boolean(mode.date),
+    allDay: false,
     date: mode.kind === "new" ? mode.date ?? "" : "",
     startTime: "",
     endTime: "",
@@ -310,6 +313,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
         title: event.title,
         details: event.description?.trim() ?? "",
         dated: true,
+        allDay,
         ...splitWhen(event.startAt, event.endAt, allDay),
         location: event.location,
         // Something that already happened is not on Home and is not worth a
@@ -332,6 +336,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
         title: row.title,
         details: row.body ?? "",
         dated: !undated,
+        allDay,
         ...(undated
           ? { date: "", startTime: "", endTime: "" }
           : splitWhen(row.start_at, row.end_at, allDay)),
@@ -370,6 +375,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
         title: item.title,
         details: item.body,
         dated: !item.undated,
+        allDay: item.allDay,
         ...(item.undated
           ? { date: "", startTime: "", endTime: "" }
           : splitWhen(item.startAt, item.endAt, item.allDay)),
@@ -390,6 +396,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
           title: draft.title,
           details: draft.details,
           dated: draft.dated,
+          allDay: draft.allDay ?? !draft.startTime,
           date: draft.date,
           startTime: draft.startTime,
           endTime: draft.endTime,
@@ -474,13 +481,13 @@ export function AnnouncementComposer({
     setValues((prev) => ({ ...prev, [key]: value }));
 
   // Changing what the picture shows makes an AI picture out of date.
-  const setDetail = <K extends "title" | "details" | "date" | "startTime" | "endTime" | "location">(
+  const setDetail = <K extends "title" | "details" | "date" | "allDay" | "startTime" | "endTime" | "location">(
     key: K,
     value: Values[K],
   ) => {
     set(key, value);
     dispatchGraphic({ type: "details-changed" });
-    if (key === "date" || key === "startTime") setPostAt(null);
+    if (key === "date" || key === "startTime" || key === "allDay") setPostAt(null);
   };
 
   // ---- derived -------------------------------------------------------------
@@ -488,9 +495,10 @@ export function AnnouncementComposer({
   const dated = calendar ? true : values.dated;
   const when = announcementWhen({
     dated,
+    allDay: values.allDay,
     date: values.date,
-    startTime: calendar?.allDay ? "" : values.startTime,
-    endTime: calendar?.allDay ? "" : values.endTime,
+    startTime: values.startTime,
+    endTime: values.endTime,
     timeZone: settings.churchTimeZone,
   });
   const whenOk = "startAt" in when ? when : null;
@@ -551,6 +559,7 @@ export function AnnouncementComposer({
       before.details.trim() !== values.details.trim() ||
       before.location.trim() !== values.location.trim() ||
       before.dated !== values.dated ||
+      before.allDay !== values.allDay ||
       before.date !== values.date ||
       before.startTime !== values.startTime ||
       before.endTime !== values.endTime ||
@@ -579,6 +588,7 @@ export function AnnouncementComposer({
         title: values.title,
         details: values.details,
         dated: values.dated,
+        allDay: values.allDay,
         date: values.date,
         startTime: values.startTime,
         endTime: values.endTime,
@@ -611,7 +621,7 @@ export function AnnouncementComposer({
     setRepeatUntil("");
     setCustomRepeat(DEFAULT_CUSTOM_EVENT_REPEAT);
     clearComposerDraft(settings.churchId);
-    setValues({ ...initial.values, title: "", details: "", dated: false, date: "", startTime: "", endTime: "", location: "", audience: "followers" });
+    setValues({ ...initial.values, title: "", details: "", dated: false, allDay: false, date: "", startTime: "", endTime: "", location: "", audience: "followers" });
     setRestoredDraft(false);
   };
 
@@ -725,7 +735,7 @@ export function AnnouncementComposer({
   const validate = (): string | null => {
     if (!values.title.trim()) return "Give the event a title.";
     if ("error" in when) return when.error;
-    if (calendar && !calendar.allDay && !values.startTime.trim()) {
+    if (calendar && !values.allDay && !values.startTime.trim()) {
       return "Choose a start time for this event.";
     }
     const emailOn = values.emailOn && settings.emailAvailable;
@@ -843,6 +853,7 @@ export function AnnouncementComposer({
           form.set("original_location", calendar.original.location);
           form.set("original_start_at", calendar.original.startAt);
           form.set("original_end_at", calendar.original.endAt ?? "");
+          form.set("original_all_day", calendar.allDay ? "true" : "false");
         }
         if (canRepeat && repeat !== "none") {
           form.set("repeat", repeat);
@@ -1074,11 +1085,15 @@ export function AnnouncementComposer({
                     )}
                     {dated && (
                       <div className="flex flex-col gap-4">
+                        <div className="flex min-h-11 items-center justify-between gap-4">
+                          <Label htmlFor="composer-all-day" className="text-[15px]">All day</Label>
+                          <Switch id="composer-all-day" checked={values.allDay} onCheckedChange={(checked) => setDetail("allDay", checked)} />
+                        </div>
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                           <div
                             className={cn(
                               "col-span-full flex min-w-0 flex-col gap-2",
-                              calendar?.allDay ? "sm:col-span-2" : "sm:col-span-1",
+                              values.allDay ? "sm:col-span-full" : "sm:col-span-1",
                             )}
                           >
                             <Label htmlFor="composer-date" className="text-[15px]">
@@ -1092,14 +1107,11 @@ export function AnnouncementComposer({
                               className="min-w-0 tabular-nums"
                             />
                           </div>
-                          {!calendar?.allDay && (
+                          {!values.allDay && (
                             <>
                               <div className="flex min-w-0 flex-col gap-2">
                                 <Label htmlFor="composer-start" className="text-[15px]">
-                                  Starts{" "}
-                                  {!calendar && (
-                                    <span className="font-normal text-muted-foreground">(optional)</span>
-                                  )}
+                                  Starts
                                 </Label>
                                 <Input
                                   id="composer-start"
@@ -1125,9 +1137,6 @@ export function AnnouncementComposer({
                             </>
                           )}
                         </div>
-                        {calendar?.allDay && (
-                          <p className="text-[15px] text-muted-foreground">An all-day event on your calendar.</p>
-                        )}
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="composer-location" className="text-[15px]">
                             Location <span className="font-normal text-muted-foreground">(optional)</span>

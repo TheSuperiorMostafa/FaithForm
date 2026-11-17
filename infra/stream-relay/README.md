@@ -123,6 +123,20 @@ Install the sweeper once, which resumes any take whose recorder died:
 ./infra/stream-relay/deploy.sh --install-recorder-cron
 ```
 
+The ready hook checks the recorder every 30 seconds and replaces a failed
+recording reader while the live feed continues. Unfinished uploads remain
+eligible for the sweeper, including takes that an older recorder incorrectly
+marked done after an upload timeout. Existing failed recordings can recover
+when their retained local segments and init file upload successfully; media
+that was never recorded or has already been removed cannot be reconstructed.
+
+For an upgrade, deploy the app first and then run the deployment command above
+outside service hours. The app's recordings reconciler must run every two
+minutes (configured in `vercel.json`) so signed encoder disconnects close the
+service after the reconnect grace period. No MediaMTX restart is needed for
+these script updates. Existing OBS computer agents must also receive the full
+`infra/stream-agent/` directory and restart to activate their stop listener.
+
 Deploy the app (and migration 0095) **before** the relay. Deploy outside
 service hours.
 

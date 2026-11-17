@@ -85,6 +85,7 @@ export async function insertCalendarEvent(
     location?: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
     description?: string;
     calendarId?: string;
   },
@@ -108,8 +109,10 @@ export async function insertCalendarEvent(
         recurrence: input.recurrence,
         location: input.location || undefined,
         description: input.description || undefined,
-        start: { dateTime: input.startAt, timeZone },
-        end: { dateTime: endDateTime, timeZone },
+        ...(input.allDay ? allDayRange(input.startAt, input.endAt) : {
+          start: { dateTime: input.startAt, timeZone },
+          end: { dateTime: endDateTime, timeZone },
+        }),
       },
     }));
   } catch (err) {
@@ -142,6 +145,7 @@ export async function insertCalendarEvent(
     description: calendarDescriptionText(created.description ?? input.description),
     htmlLink: created.htmlLink ?? undefined,
     recurring: Boolean(input.recurrence?.length),
+    allDay: Boolean(!created.start?.dateTime && created.start?.date) || input.allDay === true,
   };
 }
 

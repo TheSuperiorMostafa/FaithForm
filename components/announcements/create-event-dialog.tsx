@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   DEFAULT_EVENT_ATTENDANCE_DRAFT,
@@ -33,6 +34,7 @@ import type { AttendanceSetupPolicy } from "@/lib/attendance/v2/setup";
 import type { EventAttendanceSettings } from "@/lib/attendance/v2/event-attendance-types";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { fromDatetimeLocalValue } from "@/lib/utils/announcement-placeholders";
+import { announcementWhen } from "@/lib/announcements/composer";
 
 type CreateEventDialogProps = {
   open: boolean;
@@ -66,6 +68,7 @@ export function CreateEventDialog({
   const [repeatUntil, setRepeatUntil] = useState("");
   const [customRepeat, setCustomRepeat] = useState(DEFAULT_CUSTOM_EVENT_REPEAT);
   const [title, setTitle] = useState("");
+  const [allDay, setAllDay] = useState(false);
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [location, setLocation] = useState("");
@@ -76,14 +79,18 @@ export function CreateEventDialog({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
-  const startIso = fromDatetimeLocalValue(startAt);
+  const allDayWhen = announcementWhen({ dated: true, allDay: true, date: startAt.slice(0, 10), startTime: "", endTime: "" });
+  const startIso = allDay
+    ? ("startAt" in allDayWhen ? allDayWhen.startAt : null)
+    : fromDatetimeLocalValue(startAt);
   const repeatStartDate = startIso
-    ? eventRepeatStartDate(startIso, resolveScheduleTimeZone(timeZone))
+    ? (allDay ? startIso.slice(0, 10) : eventRepeatStartDate(startIso, resolveScheduleTimeZone(timeZone)))
     : "";
 
   useEffect(() => {
     if (open) {
       setTitle("");
+      setAllDay(false);
       setRepeat("none");
       setRepeatUntil("");
       setCustomRepeat(DEFAULT_CUSTOM_EVENT_REPEAT);
@@ -112,11 +119,11 @@ export function CreateEventDialog({
       return;
     }
     if (!startIso) {
-      setError("Choose a start date and time.");
+      setError(allDay ? "Choose the day it's happening." : "Choose a start date and time.");
       return;
     }
-    const endIso = fromDatetimeLocalValue(endAt);
-    if (attendance.enabled && !endIso) {
+    const endIso = allDay ? null : fromDatetimeLocalValue(endAt);
+    if (!allDay && attendance.enabled && !endIso) {
       setError("Choose an end time before counting attendance.");
       return;
     }
@@ -138,8 +145,9 @@ export function CreateEventDialog({
           location: location.trim() || undefined,
           startAt: startIso,
           endAt: endIso,
+          allDay,
           description: description.trim() || undefined,
-          attendance,
+          attendance: { ...attendance, enabled: !allDay && attendance.enabled },
         }),
       });
       const data = await res.json();
@@ -193,22 +201,27 @@ export function CreateEventDialog({
               />
             </div>
 
+            <div className="flex min-h-11 items-center justify-between gap-4">
+              <Label htmlFor="event-all-day">All day</Label>
+              <Switch id="event-all-day" checked={allDay} onCheckedChange={setAllDay} />
+            </div>
+
             {/* `min-w-0` on each cell: a `datetime-local` control reports a wide
                 intrinsic size, and without it the two columns push past the
                 dialog and sit on top of each other. */}
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className={`grid gap-4 ${allDay ? "" : "sm:grid-cols-2"}`}>
               <div className="min-w-0 space-y-2">
-                <Label htmlFor="event-start">Starts</Label>
+                <Label htmlFor="event-start">{allDay ? "Day" : "Starts"}</Label>
                 <Input
                   id="event-start"
-                  type="datetime-local"
-                  value={startAt}
-                  onChange={(e) => setStartAt(e.target.value)}
+                  type={allDay ? "date" : "datetime-local"}
+                  value={allDay ? startAt.slice(0, 10) : startAt}
+                  onChange={(e) => setStartAt(allDay ? `${e.target.value}T${startAt.split("T")[1] || "09:00"}` : e.target.value)}
                   required
                   className="min-w-0 tabular-nums"
                 />
               </div>
-              <div className="min-w-0 space-y-2">
+              {!allDay && <div className="min-w-0 space-y-2">
                 <Label htmlFor="event-end">Ends</Label>
                 <Input
                   id="event-end"
@@ -217,7 +230,7 @@ export function CreateEventDialog({
                   onChange={(e) => setEndAt(e.target.value)}
                   className="min-w-0 tabular-nums"
                 />
-              </div>
+              </div>}
             </div>
 
             <div className="space-y-2">
@@ -251,6 +264,7 @@ export function CreateEventDialog({
               onChange={setAttendance}
               campuses={attendanceCampuses}
               policy={attendancePolicy}
+              allDay={allDay}
               disabled={submitting}
             />
 

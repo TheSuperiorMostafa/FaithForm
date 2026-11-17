@@ -34,12 +34,13 @@ export async function GET(request: Request) {
     }
 
     await touchEncoderDevice(device.id);
+    const active = await getActiveStreamSession(device.church_id);
+    const sessionId = active?.encoderDeviceId === device.id ? active.id : null;
     const pending = await getPendingStreamCommand(device.id);
     if (!pending) {
-      return NextResponse.json({ command: null });
+      return NextResponse.json({ command: null, sessionId });
     }
 
-    const active = await getActiveStreamSession(device.church_id);
     const commandSessionId = pending.payload.sessionId;
     const stillApplies = pending.command === "start_stream"
       ? active?.id === commandSessionId && active?.status === "waiting_for_encoder"
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
       await completeStreamCommand(
         pending.id, device.id, device.church_id, "failed", "This broadcast is no longer current.",
       );
-      return NextResponse.json({ command: null });
+      return NextResponse.json({ command: null, sessionId });
     }
 
     const settings = await getStreamRelaySettings(device.church_id, {
@@ -72,6 +73,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       command: pending.command,
       commandId: pending.id,
+      sessionId,
       payload: {
         ...safePayload,
         ingestServerUrl:

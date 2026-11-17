@@ -85,7 +85,7 @@ export function SeriesArtworkPanel({
           </p>
         </div>
 
-        <div className="grid gap-5 sm:grid-cols-3">
+        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-5">
           {ARTWORK_CROPS.map((crop) => (
             <ArtworkField
               key={crop}

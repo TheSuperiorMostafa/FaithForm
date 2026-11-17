@@ -5,6 +5,7 @@ import {
   buildVodPlaylist,
   defaultRecordingTitle,
   describeStreamHealth,
+  failureExplanation,
   finalizeDecision,
   frameStoragePath,
   initStoragePath,
@@ -23,6 +24,13 @@ import {
 const CHURCH = "11111111-2222-3333-4444-555555555555";
 const RECORDING = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const TAKE = "99999999-8888-7777-6666-555555555555";
+
+test("a missing saved recording does not claim the live feed never arrived", () => {
+  const detail = failureExplanation("nothing_recorded");
+  assert.match(detail, /couldn't save a recording/);
+  assert.match(detail, /upload it here/);
+  assert.doesNotMatch(detail, /No video reached|nothing to record/);
+});
 
 function segments(count: number, takeId = "t1", startIso = "2026-09-20T14:00:00Z", duration = 6): PlaylistSegment[] {
   return Array.from({ length: count }, (_, seq) => ({

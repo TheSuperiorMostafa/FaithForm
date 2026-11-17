@@ -4,7 +4,7 @@ import JSZip from "jszip";
 
 const root = resolve(import.meta.dirname, "..");
 const zip = new JSZip();
-for (const name of ["package.json", "faithform-stream-agent.mjs", "README.md"]) {
+for (const name of ["package.json", "faithform-stream-agent.mjs", "obs-stream-state.mjs", "README.md"]) {
   zip.file(`faithform-stream-agent/${name}`, await readFile(resolve(root, "infra/stream-agent", name)), { date: new Date("2026-01-01T00:00:00Z") });
 }
 const destination = resolve(root, "public/downloads/faithform-stream-agent.zip");

@@ -7,7 +7,7 @@ import ts from "typescript";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getLocationSuggestions, saveLocation } from "@/lib/announcements/location-suggestions";
 import { formatAddressLine } from "@/lib/utils/address";
-import type { searchPlaceSuggestions as SearchPlaces } from "@/lib/announcements/place-suggestions";
+import type { searchPlaceSuggestions as SearchPlaces, resolvePlaceAddress as ResolvePlace } from "@/lib/announcements/place-suggestions";
 import type * as LocationActions from "@/app/dashboard/announcements/location-actions";
 
 function compile(path: string, providers: Record<string, unknown>) {
@@ -26,14 +26,20 @@ function scenario(t: TestContext) {
   t.mock.method(globalThis, "fetch", async (resource: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(resource instanceof Request ? resource.url : String(resource)); state.requests.push({ url, init });
     if (url.hostname === "places.googleapis.com") {
+      if (url.pathname.startsWith("/v1/places/")) {
+        assert.equal(new Headers(init?.headers).get("X-Goog-Api-Key"), env.GOOGLE_PLACES_API_KEY);
+        assert.equal(new Headers(init?.headers).get("X-Goog-FieldMask"), "displayName,formattedAddress");
+        assert.equal(init?.cache, "no-store");
+        return state.placesFail ? Response.json({ error: { message: "private provider detail" } }, { status: 403 }) : Response.json({ displayName: { text: "Example Hall" }, formattedAddress: "123 Example Avenue, Exampletown, KY 40000, USA" });
+      }
       assert.equal(url.pathname, "/v1/places:autocomplete");
       assert.equal(init?.method, "POST");
       assert.equal(new Headers(init?.headers).get("X-Goog-Api-Key"), env.GOOGLE_PLACES_API_KEY);
-      assert.equal(new Headers(init?.headers).get("X-Goog-FieldMask"), "suggestions.placePrediction.text.text");
+      assert.equal(new Headers(init?.headers).get("X-Goog-FieldMask"), "suggestions.placePrediction.placeId,suggestions.placePrediction.text.text");
       assert.equal(url.search, "");
       assert.equal(init?.cache, "no-store");
-      assert.deepEqual(JSON.parse(String(init?.body)), { input: "123 Example" });
-      return state.placesFail ? Response.json({ error: { message: "private provider detail" } }, { status: 403 }) : Response.json({ suggestions: [{ placePrediction: { text: { text: "123 Example Avenue, Exampletown" } } }] });
+      assert.equal(JSON.parse(String(init?.body)).input, "123 Example");
+      return state.placesFail ? Response.json({ error: { message: "private provider detail" } }, { status: 403 }) : Response.json({ suggestions: [{ placePrediction: { placeId: "safe-place-id", text: { text: "123 Example Avenue, Exampletown" } } }] });
     }
     assert.equal(url.hostname, "event-locations.example.test", "tests must never contact the real database");
     if (url.pathname.endsWith("/churches")) {
@@ -44,16 +50,18 @@ function scenario(t: TestContext) {
     assert.equal(url.searchParams.get("church_id"), `eq.${churchId}`);
     return state.savedFail ? Response.json({ message: "private database detail" }, { status: 400 }) : Response.json([{ id: "saved", name: "123 Example Hall", full_address: "123 Example Hall, Exampletown", use_count: 3 }]);
   });
-  const places = compile("lib/announcements/place-suggestions.ts", { "server-only": {} }).searchPlaceSuggestions as typeof SearchPlaces;
+  const placeProvider = compile("lib/announcements/place-suggestions.ts", { "server-only": {} });
+  const places = placeProvider.searchPlaceSuggestions as typeof SearchPlaces;
+  const resolvePlace = placeProvider.resolvePlaceAddress as typeof ResolvePlace;
   const actions = compile("app/dashboard/announcements/location-actions.ts", {
     "@/lib/auth/church": { getChurchAuth: async () => state.auth },
     "@/lib/features/guard": { featureActionError: async () => state.denied ? "Not enabled" : null },
     "@/lib/supabase/admin": { createAdminClient },
     "@/lib/announcements/location-suggestions": { getLocationSuggestions, saveLocation },
-    "@/lib/announcements/place-suggestions": { searchPlaceSuggestions: places },
+    "@/lib/announcements/place-suggestions": { searchPlaceSuggestions: places, resolvePlaceAddress: resolvePlace },
     "@/lib/utils/address": { formatAddressLine },
   }) as typeof LocationActions;
-  return { state, actions, places };
+  return { state, actions, places, resolvePlace };
 }
 
 test("event addresses merge tenant-scoped saved locations with real Places autocomplete HTTP and keep the key server-only", async t => {
@@ -107,18 +115,47 @@ test("Use church address fills the actual saved profile and explains lookup fail
   assert.equal(state.requests.some(r => r.init?.method === "POST" || r.init?.method === "PATCH"), false);
 });
 
+test("selecting a Google place resolves its full postal address using the same session and never exposes the key", async t => {
+  const { state, actions } = scenario(t), sessionToken = "11111111-1111-4111-8111-111111111111";
+  const predictions = await actions.searchLocations("123 Example", sessionToken);
+  assert.ok(predictions.ok);
+  const chosen = predictions.suggestions.find(s => s.source === "google")!;
+  assert.equal(chosen.placeId, "safe-place-id");
+  const result = await actions.resolveLocationSelection(chosen.placeId!, sessionToken);
+  assert.deepEqual(result, { ok: true, value: "Example Hall, 123 Example Avenue, Exampletown, KY 40000, USA" });
+  const google = state.requests.filter(r => r.url.hostname === "places.googleapis.com");
+  assert.equal(JSON.parse(String(google[0].init?.body)).sessionToken, sessionToken);
+  assert.equal(google[1].url.searchParams.get("sessionToken"), sessionToken);
+  assert.doesNotMatch(JSON.stringify(result), /safe-places-test-key/);
+});
+
+test("place detail failures, unsafe place identifiers and denied staff never produce a selected address", async t => {
+  const { state, actions } = scenario(t);
+  assert.equal((await actions.resolveLocationSelection("../unsafe")).ok, false);
+  assert.equal(state.requests.length, 0);
+  state.placesFail = true;
+  const failed = await actions.resolveLocationSelection("safe-place-id");
+  assert.equal(failed.ok, false);
+  assert.doesNotMatch(JSON.stringify(failed), /private provider detail|safe-places-test-key/);
+  state.denied = true;
+  const before = state.requests.length;
+  assert.equal((await actions.resolveLocationSelection("safe-place-id")).ok, false);
+  assert.equal(state.requests.length, before);
+});
+
 type Element = { type: unknown; props: Record<string, unknown> };
 function all(node: unknown): Element[] { if (Array.isArray(node)) return node.flatMap(all); if (!node || typeof node !== "object" || !("props" in node)) return []; const element = node as Element; return [element, ...all(element.props.children)]; }
-function harness(search: typeof LocationActions.searchLocations) {
-  const cells: { value: unknown }[] = [], effects: { deps: unknown[]; cleanup?: () => void }[] = [];
+function harness(search: typeof LocationActions.searchLocations, resolveSelection: typeof LocationActions.resolveLocationSelection = async () => ({ ok: true, value: "Resolved full address" }), options: Record<string, unknown> = {}) {
+  const cells: { value?: unknown; current?: unknown }[] = [], effects: { deps: unknown[]; cleanup?: () => void }[] = [];
   const scheduled: (() => void)[] = []; let cursor = 0, value = ""; const tracked: string[] = [];
   const react = {
     useState(initial: unknown) { const index = cursor++; const cell = cells[index] ??= { value: initial }; return [cell.value, (next: unknown) => { cell.value = typeof next === "function" ? next(cell.value) : next; }]; },
+    useRef(initial: unknown) { return cells[cursor++] ??= { current: initial }; },
     useEffect(run: () => void | (() => void), deps: unknown[]) { const index = cursor++, previous = effects[index]; if (!previous || !deps.every((dep, i) => Object.is(dep, previous.deps[i]))) { previous?.cleanup?.(); effects[index] = { deps }; scheduled.push(() => { const cleanup = run(); if (typeof cleanup === "function") effects[index].cleanup = cleanup; }); } },
   };
-  const Field = compile("components/announcements/event-location-field.tsx", { react, "@/components/ui/button": { Button: "button" }, "@/components/ui/input": { Input: "input" }, "@/components/ui/label": { Label: "label" }, "@/components/ui/skeleton": { SkeletonContainer: "loading", SkeletonText: "skeleton" }, "@/lib/utils/address": { formatAddressLine }, "@/app/dashboard/announcements/location-actions": { searchLocations: search, trackLocationUsage: async (text: string) => { tracked.push(text); return { ok: true }; }, getChurchEventLocation: async () => ({ ok: true, value: "Existing Church, 123 Existing Road" }) } }).EventLocationField as (props: Record<string, unknown>) => unknown;
+  const Field = compile("components/announcements/event-location-field.tsx", { react, "@/components/ui/button": { Button: "button" }, "@/components/ui/input": { Input: "input" }, "@/components/ui/label": { Label: "label" }, "@/components/ui/skeleton": { SkeletonContainer: "loading", SkeletonText: "skeleton" }, "@/lib/utils/address": { formatAddressLine }, "@/app/dashboard/announcements/location-actions": { searchLocations: search, resolveLocationSelection: resolveSelection, trackLocationUsage: async (text: string) => { tracked.push(text); return { ok: true }; }, getChurchEventLocation: async () => ({ ok: true, value: "Existing Church, 123 Existing Road" }) } }).EventLocationField as (props: Record<string, unknown>) => unknown;
   let nodes: Element[] = [];
-  const render = () => { cursor = 0; nodes = all(Field({ id: "where", value, onChange: (next: string) => { value = next; } })); scheduled.splice(0).forEach(run => run()); return nodes; };
+  const render = () => { cursor = 0; nodes = all(Field({ id: "where", value, onChange: (next: string) => { value = next; }, ...options })); scheduled.splice(0).forEach(run => run()); return nodes; };
   const input = () => nodes.find(n => n.type === "input" && n.props.id === "where")!;
   const invoke = (node: Element, handler: string, event?: unknown) => (node.props[handler] as (e?: unknown) => unknown)(event);
   return { render, input, invoke, tracked, value: () => value, nodes: () => nodes, change(next: string) { invoke(input(), "onChange", { target: { value: next } }); render(); }, cleanup() { effects.forEach(e => e?.cleanup?.()); } };
@@ -154,4 +191,62 @@ test("both event entry points retain manual location editing and the shared fiel
   assert.match(readFileSync("components/announcements/create-event-dialog.tsx", "utf8"), /<EventLocationField id="event-location"/);
   const composer = readFileSync("components/announcements/announcement-composer.tsx", "utf8");
   assert.match(composer, /<EventLocationField/); assert.match(composer, /Use church address/);
+});
+
+test("missing address-provider setup is explained separately from a temporary outage without blocking manual addresses", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness(async () => ({ ok: true, addressSearch: "unconfigured", suggestions: [] })); t.after(h.cleanup);
+  h.render(); h.change("123 Example"); t.mock.timers.tick(300);
+  await Promise.resolve(); h.render();
+  const notice = h.nodes().find(node => node.props.id === "where-location-message");
+  assert.match(String(notice?.props.children), /hasn't been set up yet/);
+  assert.equal(h.value(), "123 Example");
+  assert.ok(h.nodes().some(node => node.props.children === "Use church address"));
+});
+
+test("choosing an address shows the resolved full location and Clear permits another search", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const sessions: (string | undefined)[] = [];
+  const h = harness(async (_query, token) => { sessions.push(token); return { ok: true, addressSearch: "ready", suggestions: [{ label: "Hall", value: "Hall prediction", source: "google", placeId: "hall-id" }] }; }, async (_id, token) => {
+    assert.equal(token, sessions[0]);
+    return { ok: true, value: "Hall, 123 Example Road, Exampletown KY 40000" };
+  });
+  t.after(h.cleanup);
+  h.render(); h.change("Example Hall"); t.mock.timers.tick(300); await Promise.resolve(); h.render();
+  const option = h.nodes().find(n => n.props.role === "option")!;
+  h.invoke(option, "onClick"); await Promise.resolve(); h.render();
+  assert.equal(h.value(), "Hall, 123 Example Road, Exampletown KY 40000");
+  assert.ok(h.nodes().some(n => n.props.children === "Location added"));
+  const clear = h.nodes().find(n => n.type === "button" && n.props.children === "Clear")!;
+  h.invoke(clear, "onClick"); h.render();
+  assert.equal(h.value(), "");
+  h.change("Another Hall"); t.mock.timers.tick(300); await Promise.resolve(); h.render();
+  assert.notEqual(sessions[0], sessions[1]);
+});
+
+test("late address resolution never overwrites newer typing, and failed lookup preserves the original query", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let finish!: (result: Awaited<ReturnType<typeof LocationActions.resolveLocationSelection>>) => void;
+  const h = harness(async () => ({ ok: true, addressSearch: "ready", suggestions: [{ label: "Hall", value: "Hall prediction", source: "google", placeId: "hall-id" }] }), () => new Promise(resolve => { finish = resolve; }));
+  t.after(h.cleanup);
+  h.render(); h.change("Example Hall"); t.mock.timers.tick(300); await Promise.resolve(); h.render();
+  h.invoke(h.nodes().find(n => n.props.role === "option")!, "onClick");
+  h.change("New address");
+  finish({ ok: true, value: "Old full address" }); await Promise.resolve(); h.render();
+  assert.equal(h.value(), "New address");
+  t.mock.timers.tick(300); await Promise.resolve(); h.render();
+  h.invoke(h.nodes().find(n => n.props.role === "option")!, "onClick");
+  finish({ ok: false, error: "Choose it again or add the address yourself." }); await Promise.resolve(); h.render();
+  assert.equal(h.value(), "New address");
+  assert.ok(h.nodes().some(n => n.props.children === "Choose it again or add the address yourself."));
+});
+
+test("an address longer than the destination allows is rejected without silently truncating it", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const h = harness(async () => ({ ok: true, addressSearch: "ready", suggestions: [{ label: "Hall", value: "Hall prediction", source: "google", placeId: "hall-id" }] }), async () => ({ ok: true, value: "a".repeat(201) }), { maxLength: 200 });
+  t.after(h.cleanup);
+  h.render(); h.change("Example Hall"); t.mock.timers.tick(300); await Promise.resolve(); h.render();
+  h.invoke(h.nodes().find(n => n.props.role === "option")!, "onClick"); await Promise.resolve(); h.render();
+  assert.equal(h.value(), "Example Hall");
+  assert.ok(h.nodes().some(n => String(n.props.children).includes("That address is too long")));
 });

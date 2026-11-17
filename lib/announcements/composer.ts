@@ -159,6 +159,7 @@ export type ComposerDraft = {
   title: string;
   details: string;
   dated: boolean;
+  allDay?: boolean;
   date: string;
   startTime: string;
   endTime: string;
@@ -192,6 +193,7 @@ export function loadComposerDraft(churchId: string, now = Date.now()): ComposerD
       title: String(parsed.title ?? ""),
       details: String(parsed.details ?? ""),
       dated: Boolean(parsed.dated),
+      allDay: typeof parsed.allDay === "boolean" ? parsed.allDay : !parsed.startTime,
       date: String(parsed.date ?? ""),
       startTime: String(parsed.startTime ?? ""),
       endTime: String(parsed.endTime ?? ""),
@@ -250,6 +252,7 @@ export function todayDateValue(timeZone?: string | null, now: Date = new Date())
  */
 export function announcementWhen(input: {
   dated: boolean;
+  allDay?: boolean;
   date: string;
   startTime: string;
   endTime: string;
@@ -258,8 +261,15 @@ export function announcementWhen(input: {
 }): { startAt: string; endAt: string | null; allDay: boolean } | { error: string } {
   const date = input.dated ? input.date.trim() : todayDateValue(input.timeZone, input.now);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: "Choose the day it's happening." };
+  const day = new Date(`${date}T00:00:00.000Z`);
+  if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== date) {
+    return { error: "Choose a valid day for the event." };
+  }
 
-  const startTime = input.dated ? input.startTime.trim() : "";
+  const startTime = input.dated && !input.allDay ? input.startTime.trim() : "";
+  if (input.dated && input.allDay === false && !startTime) {
+    return { error: "Choose a start time or turn on All day." };
+  }
   if (!startTime) {
     return { startAt: new Date(`${date}T00:00:00.000Z`).toISOString(), endAt: null, allDay: true };
   }

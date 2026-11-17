@@ -26,7 +26,7 @@ import {
 } from "@/app/dashboard/live-streaming/actions";
 import { LivePreview } from "@/components/live-streaming/broadcast/live-preview";
 import { PostLivePanel } from "@/components/live-streaming/broadcast/post-live-panel";
-import { STREAMING_TOOL_KEY } from "@/components/live-streaming/encoder-docs-card";
+import { readStreamingTool } from "@/lib/stream/streaming-tool-preference";
 import { StreamShareLinksPanel } from "@/components/live-streaming/stream-share-links-panel";
 import { StudioSourceControls } from "@/components/live-streaming/studio-source-controls";
 import {
@@ -67,6 +67,7 @@ export type UpcomingService = {
 };
 
 type Props = {
+  churchId: string;
   initialStatus: ControlCenterStatus;
   isAdmin: boolean;
   /** The church's FaithForm app is switched on; off never mentions the app. */
@@ -102,6 +103,7 @@ const HELP_HREF = "/dashboard/support";
  * everything technical is folded away under "Technical details".
  */
 export function BroadcastControlCenter({
+  churchId,
   initialStatus,
   isAdmin,
   appEnabled,
@@ -141,7 +143,7 @@ export function BroadcastControlCenter({
     try {
       computer =
         new URLSearchParams(window.location.search).get("source") === "computer" ||
-        window.localStorage.getItem(STREAMING_TOOL_KEY) === "browser";
+        readStreamingTool(window.localStorage, churchId) === "browser";
     } catch {
       // No storage (private window): the choice just isn't remembered.
     }
@@ -160,7 +162,7 @@ export function BroadcastControlCenter({
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [refresh]);
+  }, [refresh, churchId]);
 
   const overview = status.overview;
   const phase =

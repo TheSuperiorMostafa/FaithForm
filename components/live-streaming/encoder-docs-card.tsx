@@ -5,9 +5,6 @@
 
 export type StreamingToolId = "obs" | "atem" | "vmix" | "other" | "browser" | "someone_else";
 
-/** Where the Setup choice is remembered, so Go live can act on "This computer". */
-export const STREAMING_TOOL_KEY = "ff-streaming-tool";
-
 export type StreamingTool = {
   id: StreamingToolId;
   name: string;

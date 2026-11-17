@@ -17,7 +17,7 @@ test("camera failures are explained in words a volunteer can act on", () => {
 
 test("choosing This computer means Go live turns the camera on first", () => {
   const center = read("components/live-streaming/broadcast/control-center.tsx");
-  assert.match(center, /STREAMING_TOOL_KEY\) === "browser"/);
+  assert.match(center, /readStreamingTool\(window\.localStorage, churchId\) === "browser"/);
   assert.match(center, /get\("source"\) === "computer"/);
   assert.match(center, /if \(useComputer && studioSupported && !studio\.isLive\) \{\s+const started = await studio\.startStudio\(\);\s+if \(!started\) return;/);
   assert.match(center, /Use this computer&apos;s camera/);

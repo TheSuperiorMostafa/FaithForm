@@ -169,8 +169,8 @@ function ArtworkEditor({
   }
 
   return (
-    <div className="flex flex-col gap-2" aria-busy={busy}>
-      <div className="flex items-baseline justify-between gap-2">
+    <div className="flex min-w-0 flex-col gap-2" aria-busy={busy} data-artwork-field={crop}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">{spec.label}</p>
         {isInherited ? (
           <span className="text-sm text-muted-foreground">From series</span>
@@ -178,7 +178,7 @@ function ArtworkEditor({
       </div>
 
       {showing ? (
-        <div className="flex flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2">
           {/* eslint-disable-next-line @next/next/no-img-element -- church-supplied storage URL */}
           <img
             src={showing}
@@ -189,12 +189,13 @@ function ArtworkEditor({
             )}
             style={{ aspectRatio: String(spec.ratio) }}
           />
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-col gap-2">
             <Button
               type="button"
               variant="outline"
               disabled={disabled || busy}
               onClick={() => inputRef.current?.click()}
+              className="w-full min-w-0 whitespace-normal px-3 text-center"
             >
               {isInherited ? "Use its own image" : "Replace image"}
             </Button>
@@ -204,7 +205,7 @@ function ArtworkEditor({
                 variant="ghost"
                 disabled={disabled || busy}
                 onClick={() => void clear()}
-                className="gap-2"
+                className="w-full min-w-0 gap-2 whitespace-normal px-3 text-center"
               >
                 <Trash2 className="size-4" aria-hidden />
                 {inherited ? "Use series" : "Remove"}

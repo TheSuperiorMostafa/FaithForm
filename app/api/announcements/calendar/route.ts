@@ -33,6 +33,7 @@ type CreateEventBody = {
   location?: string;
   startAt?: string;
   endAt?: string | null;
+  allDay?: boolean;
   description?: string;
   attendance?: Record<string, unknown>;
   repeat?: unknown;
@@ -167,6 +168,7 @@ export async function POST(request: Request) {
   const title = body.title?.trim();
   const startAt = body.startAt?.trim();
   const endAt = body.endAt?.trim() || null;
+  const allDay = body.allDay === true;
   const location = body.location?.trim() || "";
   const description = body.description?.trim() || "";
 
@@ -194,11 +196,19 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (allDay && [startAt, endAt].some(value => value && (
+    !/T00:00:00(?:\.000)?Z$/.test(value) || new Date(value).toISOString().slice(0, 10) !== value.slice(0, 10)
+  ))) {
+    return NextResponse.json({ error: "Choose a valid day for this all-day event." }, { status: 400 });
+  }
+  if (allDay && body.attendance?.enabled === true) {
+    return NextResponse.json({ error: "Add exact start and end times before enabling attendance." }, { status: 400 });
+  }
 
   let recurrence: string | null;
   const timeZone = resolveScheduleTimeZone(auth.churchTimezone);
   try {
-    recurrence = eventRecurrenceRule(body.repeat, body.repeatUntil, startAt, timeZone, body.customRepeat);
+    recurrence = eventRecurrenceRule(body.repeat, body.repeatUntil, startAt, timeZone, body.customRepeat, allDay);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Check the repeat dates." }, { status: 400 });
   }
@@ -206,7 +216,7 @@ export async function POST(request: Request) {
   try {
     const event = await insertChurchCalendarEvent(
       auth.churchId,
-      { title, location, startAt, endAt, description, recurrence: recurrence ? [recurrence] : undefined, timeZone },
+      { title, location, startAt, endAt, allDay, description, recurrence: recurrence ? [recurrence] : undefined, timeZone },
       supabase,
     );
     let attendance = null;

@@ -1,4 +1,5 @@
 import { ArrowLeft } from "lucide-react";
+import { ArtworkPanelSkeleton } from "@/components/media/artwork-panel-skeleton";
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 
@@ -12,7 +13,7 @@ export default function UpcomingServiceLoading() {
         <div className="flex items-start gap-3"><Skeleton className="size-11 shrink-0 rounded-xl" /><div><h2 className="font-heading text-xl font-semibold">Service details</h2><p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">Prepare the same details and artwork used by your recording.</p></div></div>
         {["Title", "Series"].map(label => <div key={label} className="flex flex-col gap-2"><span className="text-[15px] font-medium">{label}</span><Skeleton className="h-11 w-full rounded-[10px]" /></div>)}
         {["Show it on your church website", "Show it in the FaithForm app"].map(label => <div key={label} className="flex min-h-14 items-start gap-3 rounded-xl border border-border p-4"><Skeleton className="mt-0.5 size-5 shrink-0 rounded-md" /><div className="flex flex-col gap-1"><span className="text-[15px] font-medium">{label}</span><SkeletonText lines={2} size="sm" /></div></div>)}
-        <div className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6"><h3 className="font-heading text-lg font-bold">Artwork</h3><SkeletonText lines={3} size="sm" /><div className="grid gap-5 sm:grid-cols-3">{["Tile", "Wide still", "Series banner"].map(label => <div key={label} className="flex flex-col gap-2"><span className="text-sm font-semibold">{label}</span><Skeleton className="h-28 w-full rounded-lg" /><SkeletonText lines={3} size="sm" /></div>)}</div></div>
+        <ArtworkPanelSkeleton />
         <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3"><span className="text-[15px] font-semibold">More options</span></div>
         <div className="border-t border-border pt-5"><span className="flex min-h-12 items-center justify-center rounded-[10px] bg-primary text-primary-foreground">Save service details</span></div>
       </div>

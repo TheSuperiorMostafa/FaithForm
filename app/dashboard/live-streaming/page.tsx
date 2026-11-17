@@ -53,6 +53,8 @@ export default async function LiveStreamingPage() {
 
   return (
     <BroadcastControlCenter
+      key={auth.churchId}
+      churchId={auth.churchId}
       initialStatus={{
         autoGoLive: broadcastStatus.autoGoLive,
         previewIngestActive: broadcastStatus.previewIngestActive,
