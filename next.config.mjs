@@ -5,7 +5,13 @@ const BASE_SECURITY_HEADERS = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
 ];
 
+// Safari does not reliably rediscover icons added after the initial head.
+// Preserve Next 15.5's crawler defaults; the regression test checks vendor parity.
+const defaultBlockingMetadata = /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight/;
+const safariBlockingMetadata = /^(?!.*(?:Chrome|Chromium|CriOS|Edg(?:e|A|iOS)?|OPR|Opera|SamsungBrowser|FxiOS)\/).*Version\/[\d.]+(?: Mobile\/[\w.]+)? Safari\/[\d.]+/;
+
 const nextConfig = {
+  htmlLimitedBots: new RegExp(`${defaultBlockingMetadata.source}|${safariBlockingMetadata.source}`, "i"),
   experimental: {
     serverActions: {
       // Next defaults this to 1MB, which is smaller than any photo a phone
