@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import test, { type TestContext } from "node:test";
 import { NextRequest } from "next/server";
 import ts from "typescript";
+import sharp from "sharp";
 import { rewriteChurchSite } from "@/lib/sites/tenant";
 
 function compile(path: string, mocks: Record<string, unknown>) {
@@ -40,6 +41,51 @@ test("browser fallback icons resolve per church while the platform keeps its own
   const platform = await routing.middleware(new NextRequest(`https://${host}/favicon.ico`, { headers: { host } }));
   assert.equal(platform.headers.get("x-middleware-next"), "1");
   assert.equal(platform.headers.get("x-middleware-rewrite"), null);
+});
+
+test("uploaded logos are served as fresh same-origin PNGs without fetching arbitrary URLs", async t => {
+  const before = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://favicon-storage.example.test";
+  t.after(() => { if (before === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = before; });
+  let logo = "https://favicon-storage.example.test/storage/v1/object/public/church-covers/grace/site/logo.jpg";
+  let color = "red";
+  let downloads = 0;
+  const route = compile("app/sites/[slug]/favicon.ico/route.ts", {
+    "@/lib/features/access": { isChurchFeatureEnabled: async () => true },
+    "@/lib/sites/queries": { getSiteBundle: async () => ({ churchId: "grace", profile: { name: "Grace Community", logoUrl: logo }, settings: { isPublished: true }, page: { status: "published" } }) },
+    "@/lib/supabase/admin": { createAdminClient: () => ({ storage: { from: (bucket: string) => ({ download: async (path: string) => {
+      assert.ok(["church-covers", "branding-images", "church-logos"].includes(bucket));
+      assert.ok(path.startsWith("grace/"));
+      downloads++;
+      const bytes = await sharp({ create: { width: 16, height: 8, channels: 3, background: color } }).jpeg().toBuffer();
+      return { data: new Blob([new Uint8Array(bytes)]), error: null };
+    } }) } }) },
+  }) as { GET: (request: Request, context: { params: Promise<{ slug: string }> }) => Promise<Response> };
+  const get = () => route.GET(new Request("https://grace.faithform.test/favicon.ico?v=old&url=http://127.0.0.1/secret"), { params: Promise.resolve({ slug: "grace" }) });
+  const first = await get();
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get("content-type"), "image/png");
+  assert.equal(first.headers.get("cache-control"), "no-store");
+  assert.equal(first.headers.get("location"), null);
+  const original = Buffer.from(await first.arrayBuffer());
+  const dimensions = await sharp(original).metadata();
+  assert.equal(dimensions.width, 64);
+  assert.equal(dimensions.height, 64);
+  color = "blue";
+  logo = logo.replace("logo.jpg", "replacement.jpg");
+  assert.notDeepEqual(Buffer.from(await (await get()).arrayBuffer()), original);
+  assert.equal(downloads, 2);
+  for (const unsafe of [
+    "http://127.0.0.1/secret", "https://foreign.example.test/logo.png",
+    "https://favicon-storage.example.test/storage/v1/object/public/church-covers/other/logo.png",
+    "https://favicon-storage.example.test/storage/v1/object/public/private-files/grace/logo.png",
+    "https://favicon-storage.example.test/storage/v1/object/public/church-covers/grace/%252e%252e/other/logo.png",
+    "https://favicon-storage.example.test/storage/v1/object/public/church-covers/grace/%2e%2e%2fother/logo.png",
+  ]) {
+    logo = unsafe;
+    await get();
+    assert.equal(downloads, 2);
+  }
 });
 
 test("the actual favicon route returns only the published church logo and refuses drafts or disabled sites", async () => {

@@ -124,9 +124,14 @@ test("published church metadata overrides all inherited platform icons on app an
   for (const host of ["app.faithform.test", "grace-church.example.test"]) {
     state.host = host;
     state.logoUrl = `https://images.example.test/${host}.png`;
-    assert.deepEqual((await page.generateMetadata(props())).icons, {
-      icon: [{ url: state.logoUrl }], shortcut: [{ url: state.logoUrl }], apple: [{ url: state.logoUrl }],
-    });
+    const icons = (await page.generateMetadata(props())).icons as { icon: { url: string }[]; shortcut: { url: string }[]; apple: { url: string }[] };
+    const prefix = host === "app.faithform.test" ? "/sites/grace/favicon.ico?v=" : "/favicon.ico?v=";
+    assert.ok(icons.icon[0].url.startsWith(prefix));
+    assert.deepEqual(icons.shortcut, icons.icon);
+    assert.deepEqual(icons.apple, icons.icon);
+    state.logoUrl += "?v=replacement";
+    const replacement = (await page.generateMetadata(props())).icons as typeof icons;
+    assert.notEqual(replacement.icon[0].url, icons.icon[0].url);
   }
 });
 

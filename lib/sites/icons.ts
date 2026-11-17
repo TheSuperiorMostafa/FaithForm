@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { createHash } from "node:crypto";
 
 /** One public icon source shared by page metadata and the browser fallback. */
 export function churchSiteIconUrl(profile: { name: string; logoUrl: string | null }): string {
@@ -11,7 +12,10 @@ export function churchSiteIconUrl(profile: { name: string; logoUrl: string | nul
 }
 
 /** Override every inherited platform icon, including the browser shortcut. */
-export function churchSiteIcons(profile: { name: string; logoUrl: string | null }): Metadata["icons"] {
-  const url = churchSiteIconUrl(profile);
+export function churchSiteIcons(profile: { name: string; logoUrl: string | null }, iconPath?: string): Metadata["icons"] {
+  const source = churchSiteIconUrl(profile);
+  // A replacement logo, including a legacy ?v change, gets a fresh icon URL.
+  const version = createHash("sha256").update(source).digest("hex").slice(0, 20);
+  const url = iconPath ? `${iconPath}?v=${version}` : source;
   return { icon: [{ url }], shortcut: [{ url }], apple: [{ url }] };
 }
