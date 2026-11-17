@@ -108,6 +108,45 @@ test("finalize waits, then times out, and never waits forever", () => {
   assert.equal(finalizeDecision({ broadcastEndedAt: ended, lastActivityAt: null, segmentCount: 3, completeness: { complete: true }, now: at(0) }), "finalize");
 });
 
+test("old recovery gets its own grace and successful uploads protect pending media past the original deadline", () => {
+  const endedAt = Date.parse("2026-09-20T15:00:00Z");
+  const recoveryAt = endedAt + 2 * 24 * 60 * 60_000;
+  const input = {
+    broadcastEndedAt: new Date(endedAt).toISOString(),
+    processingStartedAt: new Date(recoveryAt).toISOString(),
+    lastActivityAt: new Date(recoveryAt).toISOString(),
+    lastUploadAt: null as string | null,
+    segmentCount: 0,
+    completeness: { complete: false as const, waitingFor: "uploads" as const },
+    now: recoveryAt,
+  };
+  assert.equal(finalizeDecision(input), "wait", "a two-day-old broadcast is not a two-day-old recovery attempt");
+  const now = recoveryAt + 31 * 60_000;
+  const lastUploadAt = new Date(now - 5000).toISOString();
+  assert.equal(finalizeDecision({ ...input, now, segmentCount: 5, lastUploadAt }), "wait", "active uploads must not lose pending index rows to the hard timeout");
+  assert.equal(finalizeDecision({ ...input, now, processingStartedAt: null, segmentCount: 5, lastUploadAt }), "wait", "already-running old recovery also keeps its fresh media");
+});
+
+test("old batch recovery settles after quiet while metadata cannot keep dead uploads processing forever", () => {
+  const endedAt = Date.parse("2026-09-20T15:00:00Z");
+  const recoveryAt = endedAt + 2 * 24 * 60 * 60_000;
+  const input = {
+    broadcastEndedAt: new Date(endedAt).toISOString(),
+    processingStartedAt: new Date(recoveryAt).toISOString(),
+    lastActivityAt: new Date(recoveryAt).toISOString(),
+    lastUploadAt: new Date(recoveryAt).toISOString(),
+    segmentCount: 5,
+    completeness: { complete: true as const },
+    now: recoveryAt,
+  };
+  assert.equal(finalizeDecision(input), "wait", "a brief gap between recovery batches must not flash Ready");
+  assert.equal(finalizeDecision({ ...input, now: recoveryAt + 61_000 }), "finalize");
+  const now = recoveryAt + 31 * 60_000;
+  const incomplete = { complete: false as const, waitingFor: "uploads" as const };
+  assert.equal(finalizeDecision({ ...input, now, completeness: incomplete, lastActivityAt: new Date(now).toISOString() }), "timeout", "metadata churn without successful media cannot extend a dead attempt");
+  assert.equal(finalizeDecision({ ...input, now, completeness: incomplete, segmentCount: 0, lastUploadAt: null, lastActivityAt: new Date(now).toISOString() }), "empty");
+});
+
 test("trim snaps outward to segment boundaries and never drops what was asked for", () => {
   const list = segments(20); // 120s
   assert.deepEqual(snapTrim(list, 13, 50), { startSec: 12, endSec: 54, durationSec: 42 });

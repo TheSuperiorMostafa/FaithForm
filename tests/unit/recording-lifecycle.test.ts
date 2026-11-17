@@ -398,6 +398,91 @@ test("a broadcast with no video fails honestly, and comes back if late video arr
   assert.equal(back?.segmentCount, 2);
 });
 
+test("two-day-old failed uploads recover without deleting pending rows or moving the original service window", async () => {
+  const w = world();
+  const church = w.repo.addChurch();
+  const relay = new FakeRelay(w, church.id);
+  await relay.connect("old_pending");
+  const { session, recording } = await goLive(w, church.id, w.repo.addEvent(church.id).id);
+  await relay.record(4, { dropUpload: true });
+  await end(w, session);
+  await relay.disconnect();
+  const originalSession = await w.repo.getSession(church.id, session.id);
+  w.clock.advance(2 * 24 * 60 * 60_000);
+  await reconcileRecordings(w.deps);
+  assert.equal((await w.repo.getRecording(church.id, recording.id))?.status, "failed");
+  assert.equal((await w.repo.listSegments(recording.id)).length, 4);
+
+  const upload = (seqs: number[], dropUpload = false) => relay.deliver([
+    { kind: "init", seq: 0, bytes: H264_INIT.length },
+    ...seqs.map(seq => ({ kind: "segment" as const, seq, startedAt: relay.segmentStart(seq), durationSec: 6, bytes: 1000 + seq })),
+  ], { dropUpload });
+  const recoveryAt = w.clock.iso();
+  await upload([0]);
+  const recovering = await w.repo.getRecording(church.id, recording.id);
+  assert.equal(recovering?.status, "processing");
+  assert.equal(recovering?.processingStartedAt, recoveryAt);
+  assert.equal((await w.repo.listSegments(recording.id)).filter(segment => segment.status === "pending_upload").length, 3);
+  w.clock.advance(6000);
+  await upload([1]);
+  assert.equal((await w.repo.getRecording(church.id, recording.id))?.processingStartedAt, recoveryAt, "later batches cannot reset the attempt deadline");
+  w.clock.advance(6000);
+  await upload([2, 3]);
+  assert.equal((await w.repo.getRecording(church.id, recording.id))?.status, "processing", "wait through the inter-batch settlement grace");
+  assert.deepEqual(await w.repo.getSession(church.id, session.id), originalSession);
+  const outside = await upload([4]);
+  assert.equal(outside.find(item => item.kind === "segment")?.action, "skip", "recovery cannot extend the original broadcast into preview/trailing video");
+  w.clock.advance(61_000);
+  await reconcileRecordings(w.deps);
+  const ready = await w.repo.getRecording(church.id, recording.id);
+  assert.equal(ready?.status, "ready");
+  assert.equal(ready?.durationSec, 24);
+  assert.equal(ready?.segmentCount, 4);
+  assert.equal(ready?.failureReason, null);
+  assert.equal(ready?.failureDetail, null);
+  assert.equal(ready?.streamSessionId, session.id);
+  assert.equal(ready?.mobileVisibility, "none");
+  assert.equal(ready?.webPublishedAt, null);
+});
+
+test("a timed-out ready recording reopens for late batches and a stalled recovery still settles", async () => {
+  const w = world();
+  const church = w.repo.addChurch();
+  const relay = new FakeRelay(w, church.id);
+  await relay.connect("late_ready");
+  const { session, recording } = await goLive(w, church.id, w.repo.addEvent(church.id).id);
+  await relay.record(3);
+  w.clock.advance(18_000);
+  relay.seq = 6; // The closed take has three more real segments not reported yet.
+  await end(w, session);
+  await relay.disconnect();
+  w.clock.advance(16 * 60_000);
+  await reconcileRecordings(w.deps);
+  assert.equal((await w.repo.getRecording(church.id, recording.id))?.status, "ready");
+  const flags = { mobileVisibility: "members" as const, mobilePublishedAt: w.clock.iso(), webPublishedAt: w.clock.iso() };
+  Object.assign(w.repo.recordings.get(recording.id)!, flags);
+  w.clock.advance(2 * 24 * 60 * 60_000);
+  await relay.deliver([
+    { kind: "init", seq: 0, bytes: H264_INIT.length },
+    { kind: "segment", seq: 3, startedAt: relay.segmentStart(3), durationSec: 6, bytes: 1003 },
+    { kind: "segment", seq: 4, startedAt: relay.segmentStart(4), durationSec: 6, bytes: 1004 },
+  ]);
+  const recovering = await w.repo.getRecording(church.id, recording.id);
+  assert.equal(recovering?.status, "processing");
+  for (const [key, value] of Object.entries(flags)) assert.equal(recovering?.[key as keyof typeof flags], value);
+  // The relay dies before its final known segment. A heartbeat cannot keep
+  // this recording processing indefinitely without successful uploads.
+  w.clock.advance(31 * 60_000);
+  await w.repo.upsertTake(church.id, relay.takeId, { seen: { seq: 4, startedAt: relay.segmentStart(4) } });
+  await reconcileRecordings(w.deps);
+  const settled = await w.repo.getRecording(church.id, recording.id);
+  assert.equal(settled?.status, "ready");
+  assert.equal(settled?.durationSec, 30);
+  assert.equal(settled?.segmentCount, 5);
+  assert.equal(settled?.finalizedBy, "timeout");
+  for (const [key, value] of Object.entries(flags)) assert.equal(settled?.[key as keyof typeof flags], value);
+});
+
 test("a recording in a format phones cannot play is ready but needs attention, never publishable", async () => {
   const w = world();
   const church = w.repo.addChurch();

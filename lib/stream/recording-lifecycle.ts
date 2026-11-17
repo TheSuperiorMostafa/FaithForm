@@ -159,6 +159,27 @@ export async function onBroadcastEnded(
 // Relay: prepare
 // ---------------------------------------------------------------------------
 
+async function reopenRecordingForRecovery(deps: LifecycleDeps, recording: RecordingRecord): Promise<void> {
+  if (recording.deletedAt || (recording.status !== "failed" && recording.status !== "ready")) return;
+  const session = recording.streamSessionId
+    ? await deps.repo.getSession(recording.churchId, recording.streamSessionId)
+    : null;
+  await deps.repo.updateRecording(recording.churchId, recording.id, {
+    status: "processing",
+    // A known original end keeps attribution fixed while this attempt gets
+    // fresh grace. Preserve the existing fallback window for orphaned rows.
+    ...(session?.endedAt ? { processingStartedAt: iso(deps) } : {}),
+    failedAt: null,
+    failureReason: null,
+    failureDetail: null,
+  });
+  log(deps, "reconciliation_repair", {
+    churchId: recording.churchId,
+    recordingId: recording.id,
+    repair: "late_segments_revived_recording",
+  });
+}
+
 /**
  * The relay has closed some segments (and maybe an init segment and a frame)
  * and asks what to do with each.
@@ -208,6 +229,10 @@ export async function handlePrepare(
   for (const item of segments) {
     const existing = existingSegments.get(item.seq);
     if (existing) {
+      if (existing.status === "pending_upload") {
+        const recording = await deps.repo.getRecording(churchId, existing.recordingId);
+        if (recording) await reopenRecordingForRecovery(deps, recording);
+      }
       decisions.set(key("segment", item.seq), await uploadOrDone(deps, existing.status, existing.storagePath, "segment", item.seq, MEDIA_BUCKET));
       continue;
     }
@@ -245,19 +270,7 @@ export async function handlePrepare(
 
     // A broadcast declared empty that turns out to have video after all —
     // because the relay was unreachable and has just caught up — comes back.
-    if (recording.status === "failed") {
-      await deps.repo.updateRecording(churchId, recording.id, {
-        status: "processing",
-        failedAt: null,
-        failureReason: null,
-        failureDetail: null,
-      });
-      log(deps, "reconciliation_repair", {
-        churchId,
-        recordingId: recording.id,
-        repair: "late_segments_revived_recording",
-      });
-    }
+    await reopenRecordingForRecovery(deps, recording);
 
     decisions.set(
       key("segment", item.seq),
@@ -618,7 +631,9 @@ export async function advanceRecording(
 
   const decision = finalizeDecision({
     broadcastEndedAt: windowEnd,
+    processingStartedAt: recording.processingStartedAt,
     lastActivityAt: lastActivity,
+    lastUploadAt: recording.lastSegmentAt,
     segmentCount: uploaded.length,
     completeness,
     now: clock(deps),
@@ -783,6 +798,7 @@ async function verifyAndSettle(
     readyAt: recording.readyAt ?? iso(deps),
     failedAt: null,
     failureReason: null,
+    failureDetail: null,
   });
 
   if (!wasReady) {

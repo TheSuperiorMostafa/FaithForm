@@ -39,6 +39,9 @@ export const RELAY_HEARTBEAT_TTL_MS = 60_000;
 export const FINALIZE_QUIET_MS = 10 * 60_000;
 export const FINALIZE_TIMEOUT_MS = 30 * 60_000;
 
+/** Old recordings recover in batches; allow the next batch before settling. */
+export const RECOVERY_SETTLE_QUIET_MS = 60_000;
+
 /** A broadcast that ended with no video at all is declared empty after this. */
 export const NOTHING_RECORDED_AFTER_MS = 5 * 60_000;
 
@@ -184,24 +187,38 @@ export function recordingCompleteness(input: CompletenessInput): Completeness {
  */
 export function finalizeDecision(input: {
   broadcastEndedAt: string;
+  /** The current processing attempt; recovery never moves the broadcast window. */
+  processingStartedAt?: string | null;
   lastActivityAt: string | null;
+  /** Successful media commits, distinct from relay metadata/heartbeats. */
+  lastUploadAt?: string | null;
   segmentCount: number;
   completeness: Completeness;
   now: number;
 }): "finalize" | "timeout" | "empty" | "wait" {
+  const endedAt = ms(input.broadcastEndedAt);
+  const processingStartedAt = Math.max(endedAt, input.processingStartedAt ? ms(input.processingStartedAt) : endedAt);
+  const sinceProcessing = input.now - processingStartedAt;
+  const lastUpload = input.lastUploadAt ? ms(input.lastUploadAt) : null;
+  const recovering = processingStartedAt - endedAt >= FINALIZE_TIMEOUT_MS;
   if (input.completeness.complete) {
+    if (recovering && input.segmentCount > 0 && lastUpload !== null &&
+        input.now - lastUpload < RECOVERY_SETTLE_QUIET_MS) return "wait";
     return input.segmentCount > 0 ? "finalize" : "empty";
   }
-  const sinceEnd = input.now - ms(input.broadcastEndedAt);
-  const lastActivity = input.lastActivityAt ? ms(input.lastActivityAt) : ms(input.broadcastEndedAt);
+  const lastActivity = input.lastActivityAt ? ms(input.lastActivityAt) : processingStartedAt;
   const quiet = input.now - lastActivity;
 
   if (input.segmentCount === 0) {
-    return sinceEnd >= NOTHING_RECORDED_AFTER_MS && quiet >= NOTHING_RECORDED_AFTER_MS
+    return sinceProcessing >= NOTHING_RECORDED_AFTER_MS &&
+      (quiet >= NOTHING_RECORDED_AFTER_MS || sinceProcessing >= FINALIZE_TIMEOUT_MS)
       ? "empty"
       : "wait";
   }
-  if (sinceEnd >= FINALIZE_TIMEOUT_MS || (sinceEnd >= FINALIZE_QUIET_MS && quiet >= FINALIZE_QUIET_MS)) {
+  // Actual progress keeps pending index rows intact. Metadata alone cannot
+  // extend a dead attempt past its deadline.
+  if (lastUpload !== null && input.now - lastUpload < FINALIZE_QUIET_MS) return "wait";
+  if (sinceProcessing >= FINALIZE_TIMEOUT_MS || (sinceProcessing >= FINALIZE_QUIET_MS && quiet >= FINALIZE_QUIET_MS)) {
     return "timeout";
   }
   return "wait";
