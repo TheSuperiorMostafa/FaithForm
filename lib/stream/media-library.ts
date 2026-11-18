@@ -641,7 +641,8 @@ export type MediaTagSuggestions = { speakers: string[]; topics: string[] };
 
 /**
  * Every speaker and topic this church has used, most used first, so the
- * recording form can offer them as a list instead of retyping a name.
+ * recording form can offer them as a list instead of retyping a name. Speakers
+ * also include everyone active in People, so the list is never empty.
  */
 export async function listMediaTagSuggestions(
   churchId: string,
@@ -676,8 +677,27 @@ export async function listMediaTagSuggestions(
   };
 
   const rows = data as { speaker_tags: string[] | null; topic_tags: string[] | null }[];
+  const used = rank(rows.map((row) => row.speaker_tags));
+
+  const { data: people } = await db
+    .from("members")
+    .select("first_name, last_name")
+    .eq("church_id", churchId)
+    .eq("is_active", true)
+    .order("last_name", { ascending: true })
+    .limit(1000);
+  const seen = new Set(used.map((name) => name.toLowerCase()));
+  const fromPeople: string[] = [];
+  for (const person of (people ?? []) as { first_name: string | null; last_name: string | null }[]) {
+    const name = `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim();
+    if (name && !seen.has(name.toLowerCase())) {
+      seen.add(name.toLowerCase());
+      fromPeople.push(name);
+    }
+  }
+
   return {
-    speakers: rank(rows.map((row) => row.speaker_tags)),
+    speakers: [...used, ...fromPeople].slice(0, 500),
     topics: rank(rows.map((row) => row.topic_tags)),
   };
 }

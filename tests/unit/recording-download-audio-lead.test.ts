@@ -31,7 +31,8 @@ test("fragments whose audio runs ahead of their video export with every packet, 
     const result: Record<string, { packets: number; duration: number }> = {};
     for (const track of await input.getTracks()) {
       let packets = 0;
-      for await (const _packet of new EncodedPacketSink(track).packets()) packets++;
+      const sink = new EncodedPacketSink(track);
+      for (let packet = await sink.getFirstPacket(); packet; packet = await sink.getNextPacket(packet)) packets++;
       result[track.type] = { packets, duration: await track.computeDuration() };
     }
     assert.equal(result.video.packets, 72, "three copies of the 24-frame clip");

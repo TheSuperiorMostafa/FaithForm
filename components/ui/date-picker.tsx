@@ -123,7 +123,7 @@ function usePopover(panelWidth: number, panelHeight: number) {
     const below = viewportH - rect.bottom - 8;
     const above = rect.top - 8;
     const openAbove = below < Math.min(panelHeight, 260) && above > below;
-    const maxHeight = Math.max(160, (openAbove ? above : below) - 8);
+    const maxHeight = Math.min(panelHeight, Math.max(160, (openAbove ? above : below) - 8));
     const height = Math.min(panelHeight, maxHeight);
     const top = openAbove ? rect.top - 8 - height : rect.bottom + 8;
     setPosition({ top, left, width, maxHeight });

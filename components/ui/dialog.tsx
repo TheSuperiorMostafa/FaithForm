@@ -114,8 +114,15 @@ function DialogContent({
         "fixed inset-0 z-50 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-card-hover backdrop:bg-brand-navy/50 open:flex open:flex-col",
         className,
       )}
-      onClose={() => setOpen(false)}
+      // React delivers a nested dialog's close and cancel events to its
+      // ancestors too (through portals), so a picker closing inside the event
+      // composer used to close the composer. Only this dialog's own events count.
+      onClose={(e) => {
+        if (e.target !== e.currentTarget) return;
+        setOpen(false);
+      }}
       onCancel={(e) => {
+        if (e.target !== e.currentTarget) return;
         // Escape: route through the same guard as the other ways out.
         e.preventDefault();
         requestClose();
