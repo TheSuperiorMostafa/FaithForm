@@ -5,11 +5,13 @@ import { useState, useTransition } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { GiveForm } from "@/app/give/[slug]/give-form";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
-import { intervalLabel, recurringStatus } from "@/lib/giving/labels";
+import { giftStatus, intervalLabel, recurringState, recurringStatus } from "@/lib/giving/labels";
 import type { GivingFundRow } from "@/types/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { PORTAL_SECTIONS, type PortalSection } from "./portal-sections";
 
 type Subscription = {
   id: string;
@@ -26,18 +28,13 @@ type Gift = {
   amountCents: number;
   currency: string;
   status: string;
-  giftType: string;
   fundName: string;
   createdAt: string;
 };
 
 function CardUpdateForm({
-  slug,
-  stripeAccountId,
   onDone,
 }: {
-  slug: string;
-  stripeAccountId: string;
   onDone: () => void;
 }) {
   const stripe = useStripe();
@@ -90,7 +87,6 @@ export function PortalDashboard({
   gifts,
   yearGiftCount,
   timeZone,
-  donorId,
   year,
 }: {
   slug: string;
@@ -105,7 +101,6 @@ export function PortalDashboard({
   gifts: Gift[];
   yearGiftCount: number;
   timeZone?: string;
-  donorId: string;
   year: number;
 }) {
   const router = useRouter();
@@ -113,6 +108,9 @@ export function PortalDashboard({
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const [subscriptionError, setSubscriptionError] = useState<string | null>(null);
+  const [cardMessage, setCardMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const [section, setSection] = useState<PortalSection | null>(null);
 
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   const stripePromise =
@@ -120,38 +118,61 @@ export function PortalDashboard({
       ? loadStripe(publishableKey, { stripeAccount: stripeAccountId })
       : null;
 
-  const failedSubs = subscriptions.filter(
-    (s) => s.status === "past_due" || s.status === "unpaid",
+  const activeSubscriptions = subscriptions.filter(
+    (s) => recurringState(s.status, s.pausedAt) !== "cancelled",
   );
+  const inactiveSubscriptions = subscriptions.filter(
+    (s) => recurringState(s.status, s.pausedAt) === "cancelled",
+  );
+  const hasFailedPayment = activeSubscriptions.some(
+    (s) => recurringState(s.status, s.pausedAt) === "failed",
+  );
+  const canGive = givingEnabled && funds.length > 0;
 
   const subAction = (
     subId: string,
     action: "pause" | "resume" | "cancel" | "update_amount",
     newAmountCents?: number,
   ) => {
+    setSubscriptionError(null);
     startTransition(async () => {
-      await fetch("/api/give/portal/subscription", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug,
-          subscriptionId: subId,
-          action,
-          newAmountCents,
-        }),
-      });
-      window.location.reload();
+      try {
+        const response = await fetch("/api/give/portal/subscription", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ slug, subscriptionId: subId, action, newAmountCents }),
+        });
+        if (response.ok) {
+          if (action === "update_amount") setAmountEdits((prev) => ({ ...prev, [subId]: "" }));
+          router.refresh();
+          return;
+        }
+      } catch {
+        // Show the same recovery message when the connection fails.
+      }
+      setSubscriptionError("We couldn't update your recurring gift. Please try again.");
     });
   };
 
   const startCardUpdate = () => {
+    setCardMessage(null);
     startTransition(async () => {
-      const res = await fetch(
-        `/api/give/portal/setup-intent?slug=${encodeURIComponent(slug)}`,
-        { method: "POST" },
-      );
-      const data = await res.json();
-      if (data.clientSecret) setSetupSecret(data.clientSecret);
+      try {
+        const response = await fetch(
+          `/api/give/portal/setup-intent?slug=${encodeURIComponent(slug)}`,
+          { method: "POST" },
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.clientSecret) {
+            setSetupSecret(data.clientSecret);
+            return;
+          }
+        }
+      } catch {
+        // Show the same recovery message when the connection fails.
+      }
+      setCardMessage({ text: "We couldn't open the card form. Please try again.", error: true });
     });
   };
 
@@ -180,7 +201,7 @@ export function PortalDashboard({
     <div className="mx-auto max-w-lg space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-heading text-2xl font-bold">{churchName}</h1>
+          <h1 className="font-heading text-2xl font-bold">Donor portal</h1>
           <p className="text-sm text-muted-foreground">
             Signed in as {donor.name ?? donor.email}
           </p>
@@ -192,9 +213,130 @@ export function PortalDashboard({
 
       {signOutError && <p role="alert" className="text-sm text-destructive">{signOutError}</p>}
 
-      {givingEnabled && funds.length > 0 && (
-        <section id="give-now" className="space-y-3">
-          <h2 className="font-heading text-lg font-semibold">Give now</h2>
+      <section aria-labelledby="active-payments-title" className="space-y-3">
+        <h2 id="active-payments-title" className="font-heading text-lg font-semibold">Active payments</h2>
+        {hasFailedPayment && (
+          <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+            A recurring payment failed. Open Payment methods to update your card.
+          </p>
+        )}
+        {subscriptionError && <p role="alert" className="text-sm text-destructive">{subscriptionError}</p>}
+        {activeSubscriptions.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No active recurring payments.</p>
+        ) : (
+          <ul className="space-y-4">
+            {activeSubscriptions.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-lg border border-border p-4 text-sm"
+              >
+                <p className="font-medium">
+                  {formatCents(s.amountCents, s.currency)} · {intervalLabel(s.interval)} ·{" "}
+                  {s.fundName}
+                </p>
+                <p className="capitalize text-muted-foreground">{recurringStatus(s.status, s.pausedAt).label}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min="1"
+                      step="0.01"
+                      className="w-24"
+                      aria-label={`New gift amount for ${s.fundName}`}
+                      placeholder="New $"
+                      value={amountEdits[s.id] ?? ""}
+                      onChange={(e) =>
+                        setAmountEdits((prev) => ({
+                          ...prev,
+                          [s.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pending || Number(amountEdits[s.id] ?? "") < 1}
+                      onClick={() => {
+                        const dollars = Number.parseFloat(
+                          amountEdits[s.id] ?? "",
+                        );
+                        if (!dollars || dollars < 1) return;
+                        subAction(
+                          s.id,
+                          "update_amount",
+                          Math.round(dollars * 100),
+                        );
+                      }}
+                    >
+                      Change amount
+                    </Button>
+                  </div>
+                  {s.status === "paused" || s.pausedAt ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => subAction(s.id, "resume")}
+                    >
+                      Resume
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={pending}
+                      onClick={() => subAction(s.id, "pause")}
+                    >
+                      Pause
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="destructive"
+                    disabled={pending}
+                    onClick={async () => {
+                      if (await confirmAction({
+                        title: "Cancel this recurring gift?",
+                        confirmLabel: "Cancel recurring gift",
+                        cancelLabel: "Keep recurring gift",
+                        destructive: true,
+                      })) {
+                        subAction(s.id, "cancel");
+                      }
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div role="group" aria-label="Donor portal actions" className="grid grid-cols-2 gap-2">
+        {PORTAL_SECTIONS.map(({ id, label }) => (
+          <Button
+            key={id}
+            type="button"
+            variant={id === "give-now" || section === id ? "default" : "outline"}
+            className="min-w-0 whitespace-normal px-2"
+            aria-controls={id}
+            aria-expanded={section === id}
+            onClick={() => setSection(section === id ? null : id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      <section id="give-now" hidden={section !== "give-now"} aria-labelledby="give-now-title" className="space-y-3">
+        <h2 id="give-now-title" className="font-heading text-lg font-semibold">Give now</h2>
+        {canGive ? (
           <GiveForm
             timeZone={timeZone}
             mode="portal"
@@ -206,183 +348,94 @@ export function PortalDashboard({
             funds={funds}
             lockedEmail={donor.email}
             lockedName={donor.name ?? ""}
-            onPaymentSuccess={() => router.refresh()}
+            onPaymentSuccess={() => {
+              setSection("payment-history");
+              router.refresh();
+            }}
           />
-        </section>
-      )}
-
-      {failedSubs.length > 0 && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
-          <p className="font-medium text-destructive">Payment failed</p>
-          <p className="mt-1 text-muted-foreground">
-            Update your card below to keep your recurring gift active.
-          </p>
-        </div>
-      )}
-
-      {donor.hasStripeCustomer && (
-        <section className="space-y-3">
-          <h2 className="font-heading text-lg font-semibold">Payment method</h2>
-          {!setupSecret ? (
-            <Button type="button" variant="outline" onClick={startCardUpdate}>
-              Update card
-            </Button>
-          ) : (
-            stripePromise && (
-              <Elements
-                stripe={stripePromise}
-                options={{ clientSecret: setupSecret }}
-              >
-                <CardUpdateForm
-                  slug={slug}
-                  stripeAccountId={stripeAccountId}
-                  onDone={() => {
-                    setSetupSecret(null);
-                    window.location.reload();
-                  }}
-                />
-              </Elements>
-            )
-          )}
-        </section>
-      )}
-
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-semibold">Recurring gifts</h2>
-        {subscriptions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No recurring gifts.</p>
         ) : (
-          <ul className="space-y-4">
-            {subscriptions.map((s) => (
-              <li
-                key={s.id}
-                className="rounded-lg border border-border p-4 text-sm"
-              >
-                <p className="font-medium">
-                  {formatCents(s.amountCents, s.currency)} · {intervalLabel(s.interval)} ·{" "}
-                  {s.fundName}
-                </p>
-                <p className="capitalize text-muted-foreground">{recurringStatus(s.status, s.pausedAt).label}</p>
-                {s.status !== "canceled" && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min="1"
-                        step="0.01"
-                        className="h-8 w-24"
-                        placeholder="New $"
-                        value={amountEdits[s.id] ?? ""}
-                        onChange={(e) =>
-                          setAmountEdits((prev) => ({
-                            ...prev,
-                            [s.id]: e.target.value,
-                          }))
-                        }
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() => {
-                          const dollars = Number.parseFloat(
-                            amountEdits[s.id] ?? "",
-                          );
-                          if (!dollars || dollars < 1) return;
-                          subAction(
-                            s.id,
-                            "update_amount",
-                            Math.round(dollars * 100),
-                          );
-                        }}
-                      >
-                        Change amount
-                      </Button>
-                    </div>
-                    {s.status === "paused" || s.pausedAt ? (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() => subAction(s.id, "resume")}
-                      >
-                        Resume
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={pending}
-                        onClick={() => subAction(s.id, "pause")}
-                      >
-                        Pause
-                      </Button>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      disabled={pending}
-                      onClick={() => {
-                        if (
-                          window.confirm(
-                            "Cancel this recurring gift?",
-                          )
-                        ) {
-                          subAction(s.id, "cancel");
-                        }
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
+          <p className="text-sm text-muted-foreground">Online giving is currently unavailable.</p>
         )}
       </section>
 
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-semibold">Gift history</h2>
-        {gifts.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No gifts yet.</p>
-        ) : (
-          <ul className="divide-y divide-border text-sm">
-            {gifts.map((g) => (
-              <li key={g.id} className="flex justify-between py-2">
-                <span>
-                  {new Date(g.createdAt).toLocaleDateString()} · {g.fundName}
-                </span>
-                <span>
-                  {formatCents(g.amountCents, g.currency)}{" "}
-                  <span className="text-muted-foreground">({g.status})</span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-semibold">Tax statements</h2>
+      <section id="statements" hidden={section !== "statements"} aria-labelledby="statements-title" className="space-y-3">
+        <h2 id="statements-title" className="font-heading text-lg font-semibold">Statements</h2>
         {yearGiftCount > 0 ? (
           <a
-            href={`/api/give/portal/statement?slug=${slug}&year=${year}`}
-            className="inline-flex text-sm font-medium text-accent underline"
+            href={`/api/give/portal/statement?slug=${encodeURIComponent(slug)}&year=${year}`}
+            className={buttonVariants({ variant: "outline", className: "whitespace-normal" })}
           >
             Download {year} giving statement (PDF)
           </a>
         ) : (
+          <p className="text-sm text-muted-foreground">No gifts recorded for {year} yet.</p>
+        )}
+      </section>
+
+      <section id="payment-methods" hidden={section !== "payment-methods"} aria-labelledby="payment-methods-title" className="space-y-3">
+        <h2 id="payment-methods-title" className="font-heading text-lg font-semibold">Payment methods</h2>
+        {cardMessage && (
+          <p role={cardMessage.error ? "alert" : "status"} className={cardMessage.error ? "text-sm text-destructive" : "text-sm text-muted-foreground"}>
+            {cardMessage.text}
+          </p>
+        )}
+        {donor.hasStripeCustomer && stripePromise ? (
+          setupSecret ? (
+            <Elements stripe={stripePromise} options={{ clientSecret: setupSecret }}>
+              <CardUpdateForm
+                onDone={() => {
+                  setSetupSecret(null);
+                  setCardMessage({ text: "Your card was saved.", error: false });
+                  router.refresh();
+                }}
+              />
+            </Elements>
+          ) : (
+            <Button type="button" variant="outline" disabled={pending} onClick={startCardUpdate}>
+              Update card
+            </Button>
+          )
+        ) : (
           <p className="text-sm text-muted-foreground">
-            No gifts recorded for {year} yet.
+            {donor.hasStripeCustomer
+              ? "Card updates are currently unavailable."
+              : "Payment methods will be available after your first online gift."}
           </p>
         )}
       </section>
 
+      <section id="payment-history" hidden={section !== "payment-history"} aria-labelledby="payment-history-title" className="space-y-3">
+        <h2 id="payment-history-title" className="font-heading text-lg font-semibold">Payment history</h2>
+        {gifts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No gifts yet.</p>
+        ) : (
+          <ul className="divide-y divide-border text-sm">
+            {gifts.map((gift) => (
+              <li key={gift.id} className="flex flex-wrap justify-between gap-x-3 gap-y-1 py-2">
+                <span>
+                  {new Date(gift.createdAt).toLocaleDateString("en-US", { timeZone })} · {gift.fundName}
+                </span>
+                <span>
+                  {formatCents(gift.amountCents, gift.currency)}{" "}
+                  <span className="text-muted-foreground">({giftStatus(gift.status).label})</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {inactiveSubscriptions.length > 0 && (
+          <details className="rounded-lg border border-border p-4 text-sm">
+            <summary className="cursor-pointer font-medium">Cancelled recurring gifts</summary>
+            <ul className="mt-2 divide-y divide-border">
+              {inactiveSubscriptions.map((s) => (
+                <li key={s.id} className="py-2">
+                  {formatCents(s.amountCents, s.currency)} · {intervalLabel(s.interval)} · {s.fundName}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
     </div>
   );
 }

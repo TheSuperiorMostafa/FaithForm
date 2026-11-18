@@ -12,6 +12,12 @@ export function normalizeHexColor(value: string | null | undefined): string | nu
   return isValidHexColor(withHash) ? withHash.toUpperCase() : null;
 }
 
+/** Hide the demo name on giving pages while keeping configured church names. */
+export function givingChurchDisplayName(name: string | null | undefined): string | null {
+  const label = name?.trim();
+  return !label || /^faithform(?: church)?$/i.test(label) ? null : label;
+}
+
 export type GivingBrandingStyle = {
   "--give-primary": string;
   "--give-accent": string;
@@ -22,17 +28,9 @@ export function givingBrandingStyle(
   accent: string | null | undefined,
 ): GivingBrandingStyle {
   return {
-    "--give-primary": primary && isValidHexColor(primary) ? primary : "hsl(var(--primary))",
-    "--give-accent": accent && isValidHexColor(accent) ? accent : "hsl(var(--accent))",
+    "--give-primary": primary && isValidHexColor(primary) ? primary : "var(--primary)",
+    "--give-accent": accent && isValidHexColor(accent) ? accent : "var(--accent)",
   };
-}
-
-export function hasChurchBranding(
-  logoUrl: string | null | undefined,
-  primary: string | null | undefined,
-  accent: string | null | undefined,
-): boolean {
-  return Boolean(logoUrl || isValidHexColor(primary ?? "") || isValidHexColor(accent ?? ""));
 }
 
 /** Next occurrence of weekday (0=Sun … 6=Sat) at noon UTC for Stripe billing_cycle_anchor. */

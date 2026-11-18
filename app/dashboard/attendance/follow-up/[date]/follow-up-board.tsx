@@ -3,17 +3,20 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@base-ui/react/checkbox";
-import { AlertCircle, Check, Hash, MessageSquare, Pencil, PhoneOff, RotateCcw, Send } from "lucide-react";
+import { AlertCircle, Check, Hash, MessageSquare, Pencil, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { sendFollowUps } from "../actions";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list-row";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFollowUpFailure } from "@/lib/attendance/follow-up-errors";
+import { hasFollowUpPhone } from "@/lib/attendance/follow-up-order";
 import {
   NAME_PLACEHOLDER,
   describeTemplateAudience,
@@ -72,17 +75,17 @@ export function FollowUpBoard({
   const [customMessage, setCustomMessage] = useState<string | null>(null);
 
   // Someone already texted for this service is history, not a choice.
-  const pending = useMemo(
-    () => candidates.filter((candidate) => !candidate.sentAt),
+  const reachable = useMemo(
+    () => candidates.filter((candidate) => !candidate.sentAt && hasFollowUpPhone(candidate)),
     [candidates],
   );
   const alreadySent = useMemo(
-    () => candidates.filter((candidate) => candidate.sentAt),
+    () => candidates.filter((candidate) => candidate.sentAt && hasFollowUpPhone(candidate)),
     [candidates],
   );
-  const reachable = useMemo(
-    () => pending.filter((candidate) => Boolean(candidate.phone?.trim())),
-    [pending],
+  const withoutPhone = useMemo(
+    () => candidates.filter((candidate) => !hasFollowUpPhone(candidate)),
+    [candidates],
   );
 
   const chosen = useMemo(
@@ -194,13 +197,13 @@ export function FollowUpBoard({
       ) : candidates.length === 0 ? (
         <EmptyState
           icon={Check}
-          title="Everyone was here"
-          description="Nobody on the list missed this Sunday. Nothing to follow up on."
+          title="No one to follow up with"
+          description="Nobody is on the follow-up list for this Sunday."
         />
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+        <div className={cn("grid gap-6 lg:items-start", reachable.length > 0 && "lg:grid-cols-[minmax(0,1fr)_24rem]")}>
           <div className="flex min-w-0 flex-col gap-8">
-            {pending.length > 0 ? (
+            {reachable.length > 0 || withoutPhone.length > 0 ? (
               <section className="flex flex-col gap-3" aria-labelledby="missed-heading">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <h2 id="missed-heading" className="font-heading text-xl font-bold text-foreground">
@@ -223,70 +226,89 @@ export function FollowUpBoard({
                   ) : null}
                 </div>
 
-                <ul className="flex flex-col gap-2">
-                  {pending.map((candidate) => {
-                    const hasPhone = Boolean(candidate.phone?.trim());
-                    const checked = selected.has(candidate.memberId);
-                    const failure = describeFollowUpFailure(candidate.error);
+                {reachable.length > 0 ? (
+                  <ul className="flex flex-col gap-2">
+                    {reachable.map((candidate) => {
+                      const checked = selected.has(candidate.memberId);
+                      const failure = describeFollowUpFailure(candidate.error);
 
-                    return (
-                      <li key={candidate.memberId}>
-                        <label
-                          className={cn(
-                            "flex min-h-[4.5rem] items-center gap-4 rounded-2xl border bg-card px-4 py-3 shadow-card transition-colors dark:shadow-none",
-                            checked ? "border-accent bg-accent/[0.06]" : "border-border",
-                            candidate.consecutiveAbsent >= 4 && !checked && "border-amber-400/50",
-                            hasPhone ? "cursor-pointer hover:border-accent/50" : "cursor-not-allowed opacity-70",
-                          )}
-                        >
-                          <Checkbox.Root
-                            checked={checked}
-                            disabled={!hasPhone}
-                            onCheckedChange={() => toggle(candidate.memberId)}
-                            aria-label={`Text ${candidate.name}`}
-                            className="flex size-7 shrink-0 items-center justify-center rounded-lg border-2 border-input bg-background data-[checked]:border-accent data-[checked]:bg-accent data-[disabled]:opacity-50"
+                      return (
+                        <li key={candidate.memberId}>
+                          <label
+                            className={cn(
+                              "flex min-h-[4.5rem] cursor-pointer items-center gap-4 rounded-2xl border bg-card px-4 py-3 shadow-card transition-colors hover:border-accent/50 dark:shadow-none",
+                              checked ? "border-accent bg-accent/[0.06]" : "border-border",
+                              candidate.consecutiveAbsent >= 4 && !checked && "border-amber-400/50",
+                            )}
                           >
-                            <Checkbox.Indicator className="text-accent-foreground">
-                              <Check className="size-5" strokeWidth={2} />
-                            </Checkbox.Indicator>
-                          </Checkbox.Root>
+                            <Checkbox.Root
+                              checked={checked}
+                              onCheckedChange={() => toggle(candidate.memberId)}
+                              aria-label={`Text ${candidate.name}`}
+                              className="flex size-7 shrink-0 items-center justify-center rounded-lg border-2 border-input bg-background data-[checked]:border-accent data-[checked]:bg-accent"
+                            >
+                              <Checkbox.Indicator className="text-accent-foreground">
+                                <Check className="size-5" strokeWidth={2} />
+                              </Checkbox.Indicator>
+                            </Checkbox.Root>
 
-                          <span className="flex min-w-0 flex-1 flex-col gap-1">
-                            <span className="text-base font-medium text-foreground">{candidate.name}</span>
-                            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                              {candidate.consecutiveAbsent >= 2 ? (
-                                <span
-                                  className={cn(
-                                    "font-semibold",
-                                    candidate.consecutiveAbsent >= 4
-                                      ? "text-amber-700 dark:text-amber-300"
-                                      : "text-accent",
-                                  )}
-                                >
-                                  Missed {candidate.consecutiveAbsent} Sundays in a row
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">Missed this Sunday</span>
-                              )}
-                              {!hasPhone ? (
-                                <span className="inline-flex items-center gap-1 text-muted-foreground">
-                                  <PhoneOff className="size-4" strokeWidth={1.75} aria-hidden />
-                                  No phone number on file
-                                </span>
-                              ) : null}
-                              {failure ? (
-                                <span className="inline-flex items-center gap-1 font-medium text-destructive">
-                                  <AlertCircle className="size-4" strokeWidth={1.75} aria-hidden />
-                                  {failure}
-                                </span>
-                              ) : null}
+                            <span className="flex min-w-0 flex-1 flex-col gap-1">
+                              <span className="text-base font-medium text-foreground">{candidate.name}</span>
+                              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                                {candidate.consecutiveAbsent >= 2 ? (
+                                  <span
+                                    className={cn(
+                                      "font-semibold",
+                                      candidate.consecutiveAbsent >= 4
+                                        ? "text-amber-700 dark:text-amber-300"
+                                        : "text-accent",
+                                    )}
+                                  >
+                                    Missed {candidate.consecutiveAbsent} Sundays in a row
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">Missed this Sunday</span>
+                                )}
+                                {failure ? (
+                                  <span className="inline-flex items-center gap-1 font-medium text-destructive">
+                                    <AlertCircle className="size-4" strokeWidth={1.75} aria-hidden />
+                                    {failure}
+                                  </span>
+                                ) : null}
+                              </span>
                             </span>
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+
+                {withoutPhone.length > 0 ? (
+                  <AdvancedSection title={`No phone number (${withoutPhone.length})`}>
+                    <List label="People without a phone number">
+                      {withoutPhone.map((candidate) => (
+                        <ListRow
+                          key={candidate.memberId}
+                          title={candidate.name}
+                          subtitle={
+                            candidate.consecutiveAbsent >= 2
+                              ? `Missed ${candidate.consecutiveAbsent} Sundays in a row`
+                              : "Missed this Sunday"
+                          }
+                          status={
+                            candidate.sentAt ? (
+                              <StatusBadge tone={candidate.deliveryStatus === "queued" ? "working" : "done"}>
+                                {candidate.deliveryStatus === "queued" ? "Waiting for phone" : "Text sent"}
+                              </StatusBadge>
+                            ) : null
+                          }
+                          compact
+                        />
+                      ))}
+                    </List>
+                  </AdvancedSection>
+                ) : null}
               </section>
             ) : null}
 
@@ -312,7 +334,7 @@ export function FollowUpBoard({
             ) : null}
           </div>
 
-          {pending.length > 0 ? (
+          {reachable.length > 0 ? (
             <aside className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card lg:sticky lg:top-6 dark:shadow-none">
               <div className="flex flex-col gap-1">
                 <h2 className="font-heading text-lg font-semibold text-foreground">The text they&apos;ll get</h2>

@@ -79,7 +79,7 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
   const { data: gifts } = await admin
     .from("giving_donations")
     .select(
-      `id, amount_cents, currency, status, gift_type, created_at,
+      `id, amount_cents, currency, status, created_at,
        giving_funds ( name )`,
     )
     .eq("church_id", session.churchId)
@@ -129,12 +129,10 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
         amountCents: g.amount_cents as number,
         currency: g.currency as string,
         status: g.status as string,
-        giftType: g.gift_type as string,
         fundName: fundNameFromJoin(g.giving_funds),
         createdAt: g.created_at as string,
       }))}
       yearGiftCount={yearGifts?.length ?? 0}
-      donorId={session.donorId}
       year={year}
     />
   );

@@ -9,7 +9,11 @@ import { hasUncheckedAttendanceTexts } from "@/lib/attendance/sms-delivery";
 import { sortFollowUpCandidates } from "@/lib/attendance/follow-up-order";
 import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { getChurchAuth } from "@/lib/auth/church";
-import { getPriorConsecutiveAbsences, getRecordByDate } from "@/lib/queries/attendance";
+import {
+  getFamilyMinorIds,
+  getPriorConsecutiveAbsences,
+  getRecordByDate,
+} from "@/lib/queries/attendance";
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getChurchSmsStatus } from "@/lib/sms/church-sender";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -33,26 +37,35 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
+  const admin = createAdminClient();
 
   const [record, presence, texting, templates] = await Promise.all([
     getRecordByDate(supabase, auth.churchId, selectedDate),
     getPresenceOnDate(supabase, auth.churchId, selectedDate),
     getChurchSmsStatus(auth.churchId),
     // Read the way the sender reads them, so the preview is exactly what goes out.
-    getFollowUpMessageTemplates(auth.churchId, createAdminClient()),
+    getFollowUpMessageTemplates(auth.churchId, admin),
   ]);
   if (!record) redirect("/dashboard/attendance/follow-up");
-  if (await hasUncheckedAttendanceTexts(createAdminClient(), auth.churchId, selectedDate)) {
+  if (await hasUncheckedAttendanceTexts(admin, auth.churchId, selectedDate)) {
     redirect(`/dashboard/attendance/follow-up/${selectedDate}/check-texts`);
   }
   // Marked absent, but checked in by the app, a code, the kiosk or a room:
   // they were there, and a "we missed you" text would be wrong.
   const cameAnyway = (memberId: string) =>
     checkedInOtherwise(presence?.get(memberId)).length > 0;
-  const absentEntries = record.entries.filter(
+  const possibleAbsentees = record.entries.filter(
     (entry) =>
       entry.status === "absent" && entry.member && !cameAnyway(entry.member.id),
   );
+  const possibleGuests = record.entries.filter((entry) => entry.is_first_time_guest && entry.member);
+  const minorIds = await getFamilyMinorIds(
+    admin,
+    auth.churchId,
+    [...possibleAbsentees, ...possibleGuests].map((entry) => entry.member!.id),
+  );
+  const absentEntries = possibleAbsentees.filter((entry) => !minorIds.has(entry.member!.id));
+  const guestEntries = possibleGuests.filter((entry) => !minorIds.has(entry.member!.id));
 
   // Without migration 0014 there is nowhere to record a send, so the request
   // flag is the only evidence someone was contacted. Treating it as such is
@@ -68,7 +81,7 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
 
   // Phone numbers first (those are the people a text can reach), then the
   // longest streak, then name.
-  const { data: textLogs } = await createAdminClient().from("attendance_follow_up_log")
+  const { data: textLogs } = await admin.from("attendance_follow_up_log")
     .select("entry_id, status").eq("church_id", auth.churchId).eq("service_date", selectedDate)
     .order("created_at", { ascending: false }).limit(1000);
   const textStatus = new Map<string, string>();
@@ -108,14 +121,12 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
       <FirstTimeGuestPanel
         serviceDate={selectedDate}
         churchName={auth.churchName?.trim() || "our church"}
-        guests={record.entries
-          .filter((entry) => entry.is_first_time_guest && entry.member)
-          .map((entry) => ({
-            memberId: entry.member!.id,
-            firstName: entry.member!.first_name,
-            lastName: entry.member!.last_name,
-            phone: entry.member!.phone,
-          }))}
+        guests={guestEntries.map((entry) => ({
+          memberId: entry.member!.id,
+          firstName: entry.member!.first_name,
+          lastName: entry.member!.last_name,
+          phone: entry.member!.phone,
+        }))}
       />
       <FollowUpBoard
         selectedDate={selectedDate}

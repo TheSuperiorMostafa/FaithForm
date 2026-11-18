@@ -34,7 +34,7 @@ export function useBankConnection() {
           toast.error(
             res.status === 403
               ? "Only church admins can connect the bank account."
-              : "We couldn't open the secure bank connection page. Please try again. If it keeps happening, contact FaithForm support.",
+              : "We couldn't open the secure bank connection page. Please try again. If it keeps happening, contact support.",
           );
           return;
         }

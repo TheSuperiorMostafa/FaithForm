@@ -322,7 +322,7 @@ export function GiveForm({
     return (
       <div className="space-y-4">
         {!isPortal && (
-          <GivePageHeader churchName={churchName} logoUrl={logoUrl} showRateNote={false} titleAs="h2" />
+          <GivePageHeader churchName={churchName} logoUrl={logoUrl} titleAs="h2" />
         )}
         <Elements
           stripe={stripePromise}
@@ -353,14 +353,16 @@ export function GiveForm({
       <div className="flex gap-2">
         <button
           type="button"
-          className={cn(giveBtnPrimary(giftType === "one_time"), "h-10 flex-1 px-4")}
+          aria-pressed={giftType === "one_time"}
+          className={cn(giveBtnPrimary(giftType === "one_time"), "min-h-11 flex-1 px-4")}
           onClick={() => setGiftType("one_time")}
         >
           One-time
         </button>
         <button
           type="button"
-          className={cn(giveBtnPrimary(giftType === "recurring"), "h-10 flex-1 px-4")}
+          aria-pressed={giftType === "recurring"}
+          className={cn(giveBtnPrimary(giftType === "recurring"), "min-h-11 flex-1 px-4")}
           onClick={() => setGiftType("recurring")}
         >
           Recurring
@@ -372,17 +374,19 @@ export function GiveForm({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className={cn(giveBtnPrimary(interval === "week"), "min-h-11 px-3 text-sm")}
+              aria-pressed={interval === "week"}
+            className={cn(giveBtnPrimary(interval === "week"), "min-h-11 px-3 text-sm")}
               onClick={() => setInterval("week")}
             >
               Weekly
             </button>
-            <button type="button" className={cn(giveBtnPrimary(interval === "biweekly"), "min-h-11 px-3 text-sm")} onClick={() => setInterval("biweekly")}>
+            <button type="button" aria-pressed={interval === "biweekly"} className={cn(giveBtnPrimary(interval === "biweekly"), "min-h-11 px-3 text-sm")} onClick={() => setInterval("biweekly")}>
               Every 2 weeks
             </button>
             <button
               type="button"
-              className={cn(giveBtnPrimary(interval === "month"), "min-h-11 px-3 text-sm")}
+              aria-pressed={interval === "month"}
+            className={cn(giveBtnPrimary(interval === "month"), "min-h-11 px-3 text-sm")}
               onClick={() => setInterval("month")}
             >
               Monthly
@@ -446,9 +450,10 @@ export function GiveForm({
           <button
             key={cents}
             type="button"
+            aria-pressed={amountMode === "preset" && amountCents === cents}
             className={cn(
               giveBtnPrimary(amountMode === "preset" && amountCents === cents),
-              "h-10 px-3",
+              "min-h-11 px-3",
             )}
             onClick={() => {
               setAmountCents(cents);
@@ -461,7 +466,8 @@ export function GiveForm({
         ))}
         <button
           type="button"
-          className={cn(giveBtnPrimary(amountMode === "custom"), "h-10 px-3")}
+          aria-pressed={amountMode === "custom"}
+          className={cn(giveBtnPrimary(amountMode === "custom"), "min-h-11 px-3")}
           onClick={() => {
             setAmountMode("custom");
             setCustomAmount("");

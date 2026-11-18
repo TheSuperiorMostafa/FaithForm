@@ -84,7 +84,7 @@ export default async function GiftsPage({ searchParams }: PageProps) {
         <GiftsHeader exportHref={null} />
         <ErrorState
           title="Gifts didn't load"
-          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

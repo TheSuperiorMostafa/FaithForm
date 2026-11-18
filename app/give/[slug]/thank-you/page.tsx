@@ -20,7 +20,6 @@ export default async function ThankYouPage({ params, searchParams }: PageProps) 
         <GivePageHeader
           churchName={church.churchName}
           logoUrl={church.logoUrl}
-          showRateNote={false}
         />
       )}
       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-accent/20 text-2xl">

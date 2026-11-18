@@ -14,15 +14,15 @@
 }
 
 [data-give-branded] .give-btn-primary-active {
-  background-color: var(--give-primary);
-  color: #fff;
+  background-color: var(--give-primary, var(--primary));
+  color: var(--give-primary-foreground, var(--primary-foreground));
   border: 1px solid var(--give-primary);
 }
 
 [data-give-branded] .give-btn-primary-outline {
   background-color: transparent;
-  color: var(--give-primary);
-  border: 1px solid color-mix(in srgb, var(--give-primary) 35%, transparent);
+  color: var(--foreground);
+  border: 1px solid color-mix(in srgb, var(--foreground) 65%, var(--give-primary));
 }
 
 [data-give-branded] .give-btn-primary-outline:hover {
@@ -34,8 +34,8 @@
   padding: 0.625rem 1rem;
   font-size: 1rem;
   font-weight: 600;
-  background-color: var(--give-primary);
-  color: #fff;
+  background-color: var(--give-primary, var(--primary));
+  color: var(--give-primary-foreground, var(--primary-foreground));
   border: none;
 }
 
@@ -52,6 +52,6 @@
 }
 
 [data-give-branded] .give-shell-header {
-  background-color: var(--give-primary);
-  color: #fff;
+  background-color: var(--give-primary, var(--primary));
+  color: var(--give-primary-foreground, var(--primary-foreground));
 }

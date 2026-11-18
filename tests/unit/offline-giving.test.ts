@@ -14,6 +14,18 @@ test("offline gift amounts stay exact cents and reject rounding, negative and in
   assert.equal(offlineGiftSchema.safeParse({date:"2026-02-30", amount:"1", fundId:funds[0].id}).success, false);
 });
 
+test("an offline gift accepts one donor identity", () => {
+  const gift = { date: "2026-11-06", amount: "25", fundId: funds[0].id };
+  const donorId = "bbbbbbbb-1111-4444-8888-112233445566";
+  const details = { donorName: "Jane Doe", donorEmail: "jane@example.org" };
+
+  assert.equal(offlineGiftSchema.safeParse(gift).success, true);
+  assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId }).success, true);
+  assert.equal(offlineGiftSchema.safeParse({ ...gift, ...details }).success, true);
+  assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId, ...details }).success, false);
+  assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId: [donorId, funds[0].id] }).success, false);
+});
+
 test("spreadsheet imports preserve quoted names and monetary cents with exact known funds", () => {
   const rows = parseDonationCsv('\uFEFFDate,Amount,Fund,Donor name,Donor email\r\n2026-01-02,"$1,234.56",General,"Doe, Jane",jane@example.org\r\n');
   const gifts = donationRowsFromSheet(rows, funds);

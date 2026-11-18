@@ -49,7 +49,7 @@ export async function GivingOverview({
     return (
       <ErrorState
         title="Your giving totals didn't load"
-        description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+        description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact support."
       />
     );
   }

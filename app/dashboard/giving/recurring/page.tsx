@@ -45,7 +45,7 @@ export default async function RecurringGivingPage() {
         <GivingSubpageHeader page="recurring" />
         <ErrorState
           title="Recurring gifts didn't load"
-          description="Nothing was changed. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="Nothing was changed. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

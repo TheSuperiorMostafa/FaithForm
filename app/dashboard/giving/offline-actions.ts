@@ -29,6 +29,13 @@ export async function recordOfflineGifts(input: unknown): Promise<{ok: boolean; 
     return {ok: true, count: Number(data)};
   } catch(error) {
     console.error("[giving] offline gifts save failed", error);
-    return {ok: false, error: toUserError(error, "We couldn't record these donations. Your entries are kept here so you can try again.")};
+    return {
+      ok: false,
+      error: toUserError(
+        error,
+        "We couldn't record these donations. Your entries are kept here so you can try again.",
+        { supportLabel: "support" },
+      ),
+    };
   }
 }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { GiveForm } from "@/app/give/[slug]/give-form";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
+import { givingChurchDisplayName } from "@/lib/giving/branding";
 import { getActiveFundsForChurch } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
@@ -44,7 +45,7 @@ export default async function GivePage({ params, searchParams }: PageProps) {
   if (!church.stripeChargesEnabled || !church.stripeAccountId) {
     return (
       <div className="text-center">
-        <h1 className="font-heading text-xl font-bold">{church.churchName}</h1>
+        <h1 className="font-heading text-xl font-bold">{givingChurchDisplayName(church.churchName) ?? "Online giving"}</h1>
         <p className="mt-4 text-sm text-muted-foreground">
           Online giving is not available yet. Please check back soon.
         </p>

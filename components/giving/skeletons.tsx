@@ -227,12 +227,12 @@ const STEP_COPY: Record<SetupStep, { title: string; description: string }> = {
   connect: {
     title: "Connect your bank",
     description:
-      "Gifts go straight to your church's bank account. Our secure payment partner, Stripe, handles cards and bank details, so FaithForm never sees them. You'll leave this page for a few minutes, then come right back here.",
+      "Gifts go straight to your church's bank account. Our secure payment partner, Stripe, handles cards and bank details. You'll leave this page for a few minutes, then come right back here.",
   },
   funds: {
     title: "Choose where people can give",
     description:
-      "All your funds are on your giving page. Tick the ones to show in the FaithForm app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later.",
+      "All your funds are on your giving page. Tick the ones to show in your church app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later.",
   },
   ready: { title: "You're ready to receive gifts", description: "" },
 };
@@ -580,8 +580,8 @@ export function GivingSettingsSkeleton({ appEnabled = true }: { appEnabled?: boo
         </div>
       </Card>
       <SettingsCardSkeleton
-        title="Giving in the FaithForm app"
-        description="Choose which funds people can give to in the FaithForm app, and who sees them."
+        title="Giving in your church app"
+        description="Choose which funds people can give to in your church app, and who sees them."
         rows={2}
       />
       <SettingsCardSkeleton

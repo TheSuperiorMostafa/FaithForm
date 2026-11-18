@@ -26,7 +26,7 @@ function isConnectionError(error: unknown): boolean {
   return type === "StripeConnectionError" || type === "StripeAPIError";
 }
 
-const SUPPORT = "If it keeps happening, contact FaithForm support.";
+const SUPPORT = "If it keeps happening, contact support.";
 
 export function refundErrorMessage(error: unknown): string {
   const code = codeOf(error);

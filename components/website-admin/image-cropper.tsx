@@ -32,7 +32,7 @@ export function ImageCropper({
   extra,
 }: {
   file: File;
-  /** Extra choices shown in the footer, e.g. "Apply this image to all sizes". */
+  /** Extra choices in the header, e.g. "Apply this image to all sizes". */
   extra?: React.ReactNode;
   /** A website aspect. Ignored when `shape` is given. */
   aspectKey?: ImageAspectKey;
@@ -79,12 +79,15 @@ export function ImageCropper({
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel(); }}>
       <DialogContent className="max-w-3xl overflow-hidden" aria-labelledby={titleId} aria-describedby={descriptionId}>
-        <DialogHeader className="pr-16">
-          <DialogTitle id={titleId}>Position your photo</DialogTitle>
-          <DialogDescription id={descriptionId}>
-            {aspect.label} — {aspect.hint} Drag to move, and zoom to fill the
-            frame. Everything outside it is trimmed off.
-          </DialogDescription>
+        <DialogHeader className="gap-2 pr-16 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="space-y-1.5">
+            <DialogTitle id={titleId}>Position your photo</DialogTitle>
+            <DialogDescription id={descriptionId}>
+              {aspect.label} — {aspect.hint} Drag to move, and zoom to fill the
+              frame. Everything outside it is trimmed off.
+            </DialogDescription>
+          </div>
+          {extra && <div className="shrink-0">{extra}</div>}
         </DialogHeader>
         <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto p-4 sm:p-6">
           <div className="relative h-[min(380px,45dvh)] min-h-40 shrink-0 overflow-hidden rounded-xl bg-muted">
@@ -149,8 +152,7 @@ export function ImageCropper({
           </div>
 
         </div>
-        <DialogFooter className={extra ? "sm:items-center" : undefined}>
-          {extra ? <div className="flex min-h-11 items-center sm:mr-auto">{extra}</div> : null}
+        <DialogFooter>
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

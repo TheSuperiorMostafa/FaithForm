@@ -111,7 +111,7 @@ function publicationError(reason: FailureReason): string {
     case "not_found":
       return "That fund is no longer available. Refresh the page to see your funds.";
     default:
-      return "We couldn't save that. Please try again. If it keeps happening, contact FaithForm support.";
+      return "We couldn't save that. Please try again. If it keeps happening, contact support.";
   }
 }
 

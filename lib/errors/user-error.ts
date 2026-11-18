@@ -50,7 +50,7 @@ function messageOf(error: unknown): string {
 }
 
 /** A specific sentence for failures we recognise, or null. */
-function knownFailure(error: unknown): string | null {
+function knownFailure(error: unknown, tryAgain: string): string | null {
   if (!error || typeof error !== "object") return null;
   const e = error as ErrorLike;
   const code = codeOf(e);
@@ -82,7 +82,7 @@ function knownFailure(error: unknown): string | null {
     message.includes("timeout") ||
     message.includes("econnreset")
   ) {
-    return `We couldn't reach the server. Nothing was changed. ${TRY_AGAIN}`;
+    return `We couldn't reach the server. Nothing was changed. ${tryAgain}`;
   }
   return null;
 }
@@ -92,18 +92,26 @@ function knownFailure(error: unknown): string | null {
  *
  * @param error    Whatever was caught or returned (Supabase error, Error, string, unknown).
  * @param fallback What failed, in plain words ("We couldn't save this person.").
+ * @param options An optional support label for pages with their own branding.
  */
-export function toUserError(error: unknown, fallback: string): string {
+export function toUserError(
+  error: unknown,
+  fallback: string,
+  options?: { supportLabel: string },
+): string {
   if (isUserFacingError(error)) return error.message;
 
-  const known = knownFailure(error);
+  const tryAgain = options
+    ? `Please try again. If it keeps happening, contact ${options.supportLabel}.`
+    : TRY_AGAIN;
+  const known = knownFailure(error, tryAgain);
   if (error) {
     // Keep the engineering detail where engineers look for it.
     console.error("[faithform]", fallback, error);
   }
   if (known) return known;
   const base = fallback.trim().replace(/\s*$/, "");
-  return /[.!?]$/.test(base) ? `${base} ${TRY_AGAIN}` : `${base}. ${TRY_AGAIN}`;
+  return /[.!?]$/.test(base) ? `${base} ${tryAgain}` : `${base}. ${tryAgain}`;
 }
 
 /** For client code: a thrown fetch/response failure, kept human. */

@@ -22,8 +22,8 @@ export function feeExplanation(platformFeeCents: number): {
 } {
   const platform =
     platformFeeCents > 0
-      ? `FaithForm keeps $${(platformFeeCents / 100).toFixed(2)} of each gift.`
-      : "FaithForm doesn't take any part of your gifts.";
+      ? `The platform fee is $${(platformFeeCents / 100).toFixed(2)} per gift.`
+      : "There is no platform fee.";
   return {
     summary: `${platform} A small card processing fee comes out of each gift before it reaches your bank.`,
     details: [

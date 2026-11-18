@@ -145,8 +145,8 @@ test("fee copy is accurate: fees come out of gifts, and the nonprofit rate needs
   assert.match(all, /comes out of each gift/);
   assert.match(all, /approved/);
   assert.match(all, /2\.2% \+ 30¢/);
-  assert.match(copy.summary, /doesn't take any part/);
-  assert.match(feeExplanation(50).summary, /keeps \$0\.50/);
+  assert.match(copy.summary, /no platform fee/);
+  assert.match(feeExplanation(50).summary, /platform fee is \$0\.50 per gift/);
   // The old claim is gone from the giving surfaces.
   // (give-page-header.tsx belongs to the public give page, which is out of scope here.)
   for (const path of walk("components/giving").filter((p) => !p.endsWith("give-page-header.tsx"))) {

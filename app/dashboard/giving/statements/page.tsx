@@ -69,7 +69,7 @@ export default async function StatementsPage({
         <YearPicker year={year} />
         <ErrorState
           title="Statements didn't load"
-          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

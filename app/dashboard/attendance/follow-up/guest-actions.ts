@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
+import { getFamilyMinorIds } from "@/lib/queries/attendance";
 import {
   validatePastorMessage,
   validateWelcomeMessage,
@@ -270,6 +272,14 @@ async function loadFirstTimeGuests(
     });
   }
 
-  return { ok: true, guests };
+  try {
+    const minorIds = await getFamilyMinorIds(createAdminClient(), churchId, guests.map((guest) => guest.memberId));
+    return { ok: true, guests: guests.filter((guest) => !minorIds.has(guest.memberId)) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: toUserError(error, "We couldn't check who can receive a follow-up text. Nothing was sent."),
+    };
+  }
 }
 

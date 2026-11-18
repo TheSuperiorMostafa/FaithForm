@@ -36,7 +36,7 @@ export default async function DonorsPage() {
         <GivingSubpageHeader page="donors" />
         <ErrorState
           title="Donors didn't load"
-          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

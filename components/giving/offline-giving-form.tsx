@@ -37,11 +37,11 @@ export function OfflineGivingForm({funds, donors, people = []}: {
   const manualBatch = useRef<string | null>(null);
   const importBatch = useRef<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
-  const [chosenDonor, setChosenDonor] = useState("");
+  const [refocusGiverSearch, setRefocusGiverSearch] = useState(false);
   const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [amount, setAmount] = useState("");
   // "person:<id>" for someone in People, "donor:<id>" for an existing giving donor.
-  const [giver, setGiver] = useState<string[]>([]);
+  const [giver, setGiver] = useState<string>();
   const donorByEmail = new Map(donors.map(donor => [donor.email.toLowerCase(), donor]));
   const peopleEmails = new Set(people.map(person => person.email?.toLowerCase()).filter(Boolean));
   const giverItems: PickerItem[] = [
@@ -57,20 +57,16 @@ export function OfflineGivingForm({funds, donors, people = []}: {
       description: donor.name ? `${donor.email} · Giving donor` : "Giving donor",
     })),
   ];
-  const chosenPerson = giver[0]?.startsWith("person:") ? people.find(person => `person:${person.id}` === giver[0]) ?? null : null;
+  const chosenGiver = giverItems.find(item => item.id === giver);
+  const chosenPerson = people.find(person => `person:${person.id}` === giver);
+  const chosenDonor = giver?.startsWith("donor:")
+    ? giver.slice("donor:".length)
+    : donorByEmail.get(chosenPerson?.email?.toLowerCase() ?? "")?.id ?? "";
 
-  function chooseGiver(next: string[]) {
+  function chooseGiver(next?: string) {
     manualBatch.current = null;
-    const pick = next[0] ?? "";
-    setGiver(next.slice(0, 1));
-    if (pick.startsWith("donor:")) { setChosenDonor(pick.slice(6)); return; }
-    if (pick.startsWith("person:")) {
-      const person = people.find(row => `person:${row.id}` === pick);
-      const existing = person?.email ? donorByEmail.get(person.email.toLowerCase()) : undefined;
-      setChosenDonor(existing?.id ?? "");
-      return;
-    }
-    setChosenDonor("");
+    setRefocusGiverSearch(!next);
+    setGiver(next);
   }
 
   function save(gifts: OfflineGiftInput[], batchId: string, imported: boolean) {
@@ -82,7 +78,13 @@ export function OfflineGivingForm({funds, donors, people = []}: {
       if (!result.ok) {setError(result.error ?? "The donations couldn't be recorded. Please try again."); return;}
       toast.success(`${result.count} donation${result.count === 1 ? "" : "s"} recorded.`);
       if (imported) {setPreview([]); importBatch.current = null;}
-      else {formRef.current?.reset(); setChosenDonor(""); setGiver([]); setAmount(""); manualBatch.current = null;}
+      else {
+        formRef.current?.reset();
+        setRefocusGiverSearch(false);
+        setGiver(undefined);
+        setAmount("");
+        manualBatch.current = null;
+      }
     });
   }
 
@@ -101,8 +103,12 @@ export function OfflineGivingForm({funds, donors, people = []}: {
         const gift: OfflineGiftInput = {
           date, amount, fundId: String(values.get("fundId")),
           donorId: chosenDonor,
-          donorName: chosenPerson && !chosenDonor ? `${chosenPerson.first_name} ${chosenPerson.last_name}`.trim() : String(values.get("donorName") ?? ""),
-          donorEmail: chosenPerson && !chosenDonor ? (chosenPerson.email ?? "").toLowerCase() : String(values.get("donorEmail") ?? ""),
+          ...(!chosenDonor && {
+            donorName: chosenPerson
+              ? `${chosenPerson.first_name} ${chosenPerson.last_name}`.trim()
+              : String(values.get("donorName") ?? ""),
+            donorEmail: chosenPerson?.email ?? String(values.get("donorEmail") ?? ""),
+          }),
           method: String(values.get("method")) as "cash" | "check" | "other", giftType: "one_time",
         };
         manualBatch.current ??= crypto.randomUUID();
@@ -121,10 +127,36 @@ export function OfflineGivingForm({funds, donors, people = []}: {
             </div>
             <label className="space-y-2"><span>Fund</span><select required name="fundId" className={selectClass}><option value="">Choose a fund</option>{funds.map(fund => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select></label>
             <div className="space-y-2">
-              <SearchPicker label="Who gave? (optional)" items={giverItems} value={giver} onChange={chooseGiver} placeholder="Start typing a name from People…" />
+              {chosenGiver ? (
+                <div className="space-y-2">
+                  <p className="text-[15px] font-semibold">Who gave? (optional)</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2">
+                    <span className="min-w-0 break-words font-medium">{chosenGiver.label}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      autoFocus
+                      onClick={() => chooseGiver()}
+                      aria-label={`Remove donor ${chosenGiver.label}`}
+                    >
+                      Remove donor
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <SearchPicker
+                  label="Who gave? (optional)"
+                  items={giverItems}
+                  value={[]}
+                  onChange={next => chooseGiver(next[0])}
+                  placeholder="Start typing a name from People…"
+                  autoFocus={refocusGiverSearch}
+                />
+              )}
               {chosenPerson && !chosenPerson.email && !chosenDonor ? <p className="text-sm text-muted-foreground">{chosenPerson.first_name} has no email in People, so this gift is saved under their name but won&apos;t appear on a contribution statement until an email is added.</p> : null}
             </div>
-            {!giver.length && <>
+            {!chosenGiver && <>
               <label className="space-y-2"><span>Donor name (optional)</span><Input name="donorName" maxLength={200} autoComplete="name" /></label>
               <label className="space-y-2"><span>Donor email (optional)</span><Input name="donorEmail" type="email" autoComplete="email" /></label>
             </>}
@@ -138,7 +170,7 @@ export function OfflineGivingForm({funds, donors, people = []}: {
     <Card className="space-y-5 p-6">
       <h2 className="text-xl font-semibold">Import a spreadsheet</h2>
       <p>Choose an Excel (.xlsx) or CSV file with up to 500 donations. The first sheet needs Date (YYYY-MM-DD), Amount (dollars), and Fund columns. Optional columns: Donor name, Donor email, Method (cash/check/other), Gift type (one_time/recurring).</p>
-      <p className="text-sm text-muted-foreground">Use each fund&apos;s exact name. Import only gifts received outside FaithForm to avoid duplicating online donations. Donor email connects imported gifts to contribution statements.</p>
+      <p className="text-sm text-muted-foreground">Use each fund&apos;s exact name. Import only gifts received outside your online giving page to avoid duplicate donations. Donor email connects imported gifts to contribution statements.</p>
       <a className="inline-flex min-h-11 items-center text-primary underline" download="donations-template.csv" href={"data:text/csv;charset=utf-8," + encodeURIComponent("Date,Amount,Fund,Donor name,Donor email,Method,Gift type\r\n2026-01-01,50.00," + (funds[0]?.name ? '"' + funds[0].name.replaceAll('"', '""') + '"' : "General") + ",Jane Doe,jane@example.org,cash,one_time\r\n")}>Download a spreadsheet template</a>
       <label className="block space-y-2"><span>Donation spreadsheet</span><Input type="file" accept=".csv,.xlsx" disabled={pending || reading} onChange={async event => {
         const file = event.target.files?.[0];

@@ -8,7 +8,7 @@ import { sendAttendanceFollowUpTexts } from "@/lib/attendance/send-follow-up-tex
 import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import { getChurchAuth } from "@/lib/auth/church";
-import { getPriorConsecutiveAbsences } from "@/lib/queries/attendance";
+import { getFamilyMinorIds, getPriorConsecutiveAbsences } from "@/lib/queries/attendance";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,20 +124,30 @@ export async function sendFollowUps(input: {
   // cannot text them.
   const presence = await getPresenceOnDate(supabase, auth.churchId, input.serviceDate);
 
-  const eligible = ((entries ?? []) as unknown as EntryRow[]).filter((entry) => {
-    if (entry.status !== "absent") return false;
-    if (entry.member_id && checkedInOtherwise(presence?.get(entry.member_id)).length > 0) {
-      return false;
-    }
-    return trackingDelivery
-      ? !entry.follow_up_sent_at
-      : !entry.follow_up_requested;
-  });
+  const absentees = ((entries ?? []) as unknown as EntryRow[]).filter(
+    (entry): entry is EntryRow & { member_id: string } => {
+      if (entry.status !== "absent" || !entry.member_id) return false;
+      if (checkedInOtherwise(presence?.get(entry.member_id)).length > 0) return false;
+      return trackingDelivery ? !entry.follow_up_sent_at : !entry.follow_up_requested;
+    },
+  );
+
+  let minorIds: Set<string>;
+  try {
+    minorIds = await getFamilyMinorIds(
+      admin,
+      auth.churchId,
+      absentees.map((entry) => entry.member_id),
+    );
+  } catch (error) {
+    return { ok: false, error: toUserError(error, "We couldn't check who can receive a follow-up text. Nothing was sent.") };
+  }
+  const eligible = absentees.filter((entry) => !minorIds.has(entry.member_id));
 
   if (eligible.length === 0) {
     return {
       ok: false,
-      error: "Everyone you picked has already been contacted or checked in.",
+      error: "Nobody you picked can receive a follow-up text for this service.",
     };
   }
 
@@ -159,7 +169,7 @@ export async function sendFollowUps(input: {
     return { ok: false, error: toUserError(markError, "We couldn't start the texts. Nothing was sent.") };
   }
 
-  const eligibleMemberIds = eligible.map((entry) => entry.member_id as string);
+  const eligibleMemberIds = eligible.map((entry) => entry.member_id);
 
   const [priorAbsences, { data: memberRows }] = await Promise.all([
     getPriorConsecutiveAbsences(
@@ -184,7 +194,7 @@ export async function sendFollowUps(input: {
     summary = await sendAttendanceFollowUpTexts(
       auth.churchId,
       eligible.map((entry) => {
-        const member = memberById.get(entry.member_id as string);
+        const member = memberById.get(entry.member_id);
         const firstName = (member?.first_name as string | undefined) ?? "Friend";
         const lastName = (member?.last_name as string | null | undefined) ?? "";
         return {
@@ -194,7 +204,7 @@ export async function sendFollowUps(input: {
           fullName: `${firstName} ${lastName}`.trim(),
           phone: (member?.phone as string | null | undefined) ?? null,
           consecutiveAbsent:
-            (priorAbsences.get(entry.member_id as string) ?? 0) + 1,
+            (priorAbsences.get(entry.member_id) ?? 0) + 1,
         };
       }),
       {

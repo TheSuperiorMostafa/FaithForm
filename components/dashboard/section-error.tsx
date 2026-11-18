@@ -12,10 +12,12 @@ export function SectionError({
   error,
   reset,
   what = "this page",
+  description = "Nothing you saved was lost. Try again in a moment. If it keeps happening, contact FaithForm support from Help.",
 }: {
   error: Error & { digest?: string };
   reset: () => void;
   what?: string;
+  description?: string;
 }) {
   useEffect(() => {
     console.error(error);
@@ -24,7 +26,7 @@ export function SectionError({
   return (
     <ErrorState
       title={`We couldn't load ${what}`}
-      description="Nothing you saved was lost. Try again in a moment. If it keeps happening, contact FaithForm support from Help."
+      description={description}
       onRetry={reset}
       homeHref="/dashboard"
     />

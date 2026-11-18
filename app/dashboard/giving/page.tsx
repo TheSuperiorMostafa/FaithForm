@@ -54,7 +54,7 @@ export default async function GivingPage({ searchParams }: PageProps) {
         <PageHeader title={GIVING_COPY.overview.title} description={GIVING_COPY.overview.description} />
         <ErrorState
           title="Giving didn't load"
-          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

@@ -13,6 +13,9 @@ export const offlineGiftSchema = z.object({
   donorId: z.union([z.literal(""), z.string().uuid()]).default(""),
   method: z.enum(["cash", "check", "other"]).default("cash"),
   giftType: z.enum(["one_time", "recurring"]).default("one_time"),
+}).refine(gift => !gift.donorId || (!gift.donorName && !gift.donorEmail), {
+  message: "Choose one donor or enter their details.",
+  path: ["donorId"],
 });
 export type OfflineGiftInput = z.input<typeof offlineGiftSchema>;
 export function amountToCents(value: string): number {

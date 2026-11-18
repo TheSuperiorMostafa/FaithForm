@@ -233,7 +233,7 @@ function ConnectStep({
   return (
     <StepCard
       title="Connect your bank"
-      description="Gifts go straight to your church's bank account. Our secure payment partner, Stripe, handles cards and bank details, so FaithForm never sees them. You'll leave this page for a few minutes, then come right back here."
+      description="Gifts go straight to your church's bank account. Our secure payment partner, Stripe, handles cards and bank details. You'll leave this page for a few minutes, then come right back here."
     >
       <BankConnection state={connection} onConnected={onConnected} />
       <p className="max-w-2xl rounded-xl bg-muted/50 px-4 py-3 text-[15px] leading-relaxed text-muted-foreground">
@@ -304,7 +304,7 @@ function FundsStep({
           return;
         }
         const names = funds.filter((f) => toShow.includes(f.fundId)).map((f) => f.name);
-        toast.success(`${names.join(", ")} ${names.length === 1 ? "is" : "are"} now in the FaithForm app.`);
+        toast.success(`${names.join(", ")} ${names.length === 1 ? "is" : "are"} now in your church app.`);
         onDone();
       } catch {
         toast.error("We couldn't show those funds in the app. Please try again.");
@@ -317,7 +317,7 @@ function FundsStep({
       title="Choose where people can give"
       description={
         appEnabled
-          ? "All your funds are on your giving page. Tick the ones to show in the FaithForm app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later."
+          ? "All your funds are on your giving page. Tick the ones to show in your church app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later."
           : "All your funds are on your giving page. Add any others you need."
       }
     >

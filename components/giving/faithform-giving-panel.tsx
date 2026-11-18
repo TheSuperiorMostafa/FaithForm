@@ -126,9 +126,9 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-xl font-bold">Giving in the FaithForm app</CardTitle>
+        <CardTitle className="text-xl font-bold">Giving in your church app</CardTitle>
         <CardDescription className="text-[15px]">
-          Choose which funds people can give to in the FaithForm app, and who sees them.
+          Choose which funds people can give to in your church app, and who sees them.
         </CardDescription>
       </CardHeader>
 
@@ -286,7 +286,7 @@ function FundDialog({
         <DialogHeader>
           <DialogTitle>{fund.name} in the app</DialogTitle>
           <DialogDescription className="text-[15px]">
-            What people see when they open giving in the FaithForm app.
+            What people see when they open giving in your church app.
           </DialogDescription>
         </DialogHeader>
 

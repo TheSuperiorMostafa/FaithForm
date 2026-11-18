@@ -24,7 +24,7 @@ export default async function RecordGivingPage() {
   // The People list is a convenience for picking who gave; giving still works without it.
   if (people.error) console.error("[giving] people for donor picker could not load", people.error.message);
   return <div className="flex w-full flex-col gap-8">
-    <PageHeader title="Record donations" description="Record gifts already received in cash, by check or outside FaithForm." />
+    <PageHeader title="Record donations" description="Record gifts your church received in cash, by check or another offline method." />
     <OfflineGivingForm funds={funds.filter(fund => fund.isActive)} donors={donors.data ?? []} people={people.data ?? []} />
   </div>;
 }

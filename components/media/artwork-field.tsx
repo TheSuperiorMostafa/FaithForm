@@ -134,7 +134,7 @@ function ArtworkEditor({
     <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-medium">
       <input
         type="checkbox"
-        className="size-5 accent-primary"
+        className="size-5 shrink-0 accent-primary"
         checked={applyAll}
         onChange={(event) => setApplyAll(event.target.checked)}
       />

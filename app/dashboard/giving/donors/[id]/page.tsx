@@ -66,7 +66,7 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
         <GivingSubpageHeader page="donor" back={BACK} />
         <ErrorState
           title="This donor didn't load"
-          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

@@ -43,7 +43,7 @@ export function ImageLibraryDialog({
   onPick: (pick: LibraryPick) => Promise<boolean>;
   initialTab?: "library" | "stock";
   title?: string;
-  /** Extra choices under the grid, e.g. "Apply this image to all sizes". */
+  /** Extra choices in the header, e.g. "Apply this image to all sizes". */
   extra?: React.ReactNode;
 }) {
   const [tab, setTab] = useState<"library" | "stock">(initialTab);
@@ -90,12 +90,15 @@ export function ImageLibraryDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!saving) onOpenChange(next); }}>
-      <DialogContent className="max-w-3xl" aria-labelledby="image-library-title" onRequestClose={() => !saving}>
-        <DialogHeader className="pr-16">
-          <DialogTitle id="image-library-title">{title}</DialogTitle>
-          <DialogDescription>
-            Pictures you uploaded before, or stock pictures from FaithForm.
-          </DialogDescription>
+      <DialogContent className="max-w-3xl overflow-hidden" aria-labelledby="image-library-title" onRequestClose={() => !saving}>
+        <DialogHeader className="gap-2 pr-16 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="space-y-1.5">
+            <DialogTitle id="image-library-title">{title}</DialogTitle>
+            <DialogDescription>
+              Pictures you uploaded before, or stock pictures from FaithForm.
+            </DialogDescription>
+          </div>
+          {extra && <fieldset disabled={saving} className="shrink-0">{extra}</fieldset>}
         </DialogHeader>
         <div className="flex min-h-0 flex-auto flex-col gap-4 overflow-y-auto p-4 sm:p-6">
           <div role="tablist" aria-label="Where the picture comes from" className="flex flex-wrap gap-2">
@@ -170,7 +173,6 @@ export function ImageLibraryDialog({
               })}
             </ul>
           )}
-          {extra}
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>

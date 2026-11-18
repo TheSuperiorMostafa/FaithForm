@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createClient } from "@supabase/supabase-js";
 
 import {
   draftHasWork,
@@ -29,6 +30,7 @@ import { describeNameCount, parseHeadcount } from "@/lib/attendance/headcount";
 import { MAX_SUNDAYS, parseWeeksParam, recentSundays } from "@/lib/attendance/sundays";
 import { isMainBoardOccurrence, type ServiceOccurrence } from "@/lib/attendance/v2/occurrences";
 import { TEXTING_NOT_CONNECTED } from "@/lib/attendance/send-follow-up-texts";
+import { getFamilyMinorIds } from "@/lib/queries/attendance";
 import { DEFAULT_FOLLOW_UP_TEMPLATES } from "@/lib/sms/follow-up-messages";
 
 const read = (path: string) => readFileSync(path, "utf8");
@@ -243,6 +245,44 @@ test("the Sunday count page offers earlier Sundays, any date, and monthly report
 // ---------------------------------------------------------------------------
 // Follow-up
 // ---------------------------------------------------------------------------
+
+test("follow-up eligibility loads dependent roles only for this church and these people", async () => {
+  const requests: URL[] = [];
+  const admin = createClient("https://test.invalid", "test-service-key", {
+    global: {
+      fetch: async (input) => {
+        requests.push(new URL(String(input)));
+        return Response.json([{ member_id: "child" }]);
+      },
+    },
+  });
+
+  assert.deepEqual(await getFamilyMinorIds(admin, "church", []), new Set());
+  assert.equal(requests.length, 0);
+  assert.deepEqual(
+    await getFamilyMinorIds(admin, "church", ["child", "guardian", "child"]),
+    new Set(["child"]),
+  );
+  assert.equal(requests.length, 1);
+  const [request] = requests;
+  assert.equal(request.pathname, "/rest/v1/household_members");
+  assert.equal(request.searchParams.get("select"), "member_id");
+  assert.equal(request.searchParams.get("church_id"), "eq.church");
+  assert.equal(request.searchParams.get("relationship"), "eq.dependent");
+  assert.equal(request.searchParams.get("member_id"), "in.(child,guardian)");
+});
+
+test("follow-up eligibility stops when family records cannot be checked", async () => {
+  const admin = createClient("https://test.invalid", "test-service-key", {
+    global: {
+      fetch: async () => Response.json({ message: "Family records unavailable" }, { status: 500 }),
+    },
+  });
+
+  await assert.rejects(getFamilyMinorIds(admin, "church", ["child"]), {
+    message: "Family records unavailable",
+  });
+});
 
 test("the pastor sees the exact text, and may reword it for one send", () => {
   assert.deepEqual(validateFollowUpOverride("  Hi [Name], we missed you!  "), {

@@ -52,7 +52,7 @@ export function PortalLogin({
 
   return (
     <div className="mx-auto max-w-md space-y-6">
-      <GivePageHeader churchName={churchName} logoUrl={logoUrl} showRateNote={false} />
+      <GivePageHeader churchName={churchName} logoUrl={logoUrl} />
       <p className="text-center text-sm text-muted-foreground">Donor portal</p>
       <p className="text-sm text-muted-foreground">
         Sign in or create an account with your email. We&apos;ll send a secure link

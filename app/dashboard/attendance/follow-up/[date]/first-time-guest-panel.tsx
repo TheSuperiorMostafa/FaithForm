@@ -6,12 +6,12 @@ import { Checkbox } from "@base-ui/react/checkbox";
 import { Check, Send } from "lucide-react";
 import { toast } from "sonner";
 
-import {
-  sendWelcomeTextsToGuests,
-} from "../guest-actions";
+import { sendWelcomeTextsToGuests } from "../guest-actions";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list-row";
 import { Textarea } from "@/components/ui/textarea";
 import {
   defaultWelcomeMessage,
@@ -20,6 +20,7 @@ import {
   validateWelcomeMessage,
   type FirstTimeGuest,
 } from "@/lib/attendance/first-time-guests";
+import { hasFollowUpPhone } from "@/lib/attendance/follow-up-order";
 import { cn } from "@/lib/utils";
 
 type FirstTimeGuestPanelProps = {
@@ -49,10 +50,8 @@ export function FirstTimeGuestPanel({
   churchName,
 }: FirstTimeGuestPanelProps) {
   const router = useRouter();
-  const withPhone = useMemo(
-    () => guests.filter((guest) => Boolean(guest.phone?.trim())),
-    [guests],
-  );
+  const withPhone = useMemo(() => guests.filter(hasFollowUpPhone), [guests]);
+  const withoutPhone = useMemo(() => guests.filter((guest) => !hasFollowUpPhone(guest)), [guests]);
 
   const [mode, setMode] = useState<Mode>("idle");
   const [welcomeMessage, setWelcomeMessage] = useState(() =>
@@ -149,30 +148,38 @@ export function FirstTimeGuestPanel({
         </p>
       </div>
 
-      <ul className="flex flex-col gap-2">
-        {guests.map((guest) => (
-          <li
-            key={guest.memberId}
-            className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-2"
-          >
-            <span className="text-base font-medium text-foreground">
-              {guestDisplayName(guest)}
-            </span>
-            <span className="text-sm text-muted-foreground">
-              {guest.phone?.trim() ? guest.phone : "No phone"}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {withPhone.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {withPhone.map((guest) => (
+            <li
+              key={guest.memberId}
+              className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-2"
+            >
+              <span className="text-base font-medium text-foreground">
+                {guestDisplayName(guest)}
+              </span>
+              <span className="text-sm text-muted-foreground">{guest.phone}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
-      {mode === "idle" ? (
+      {withoutPhone.length > 0 ? (
+        <AdvancedSection title={`Guests without a phone number (${withoutPhone.length})`}>
+          <List label="First-time guests without a phone number">
+            {withoutPhone.map((guest) => (
+              <ListRow key={guest.memberId} title={guestDisplayName(guest)} compact />
+            ))}
+          </List>
+        </AdvancedSection>
+      ) : null}
+
+      {mode === "idle" && withPhone.length > 0 ? (
         <div className="flex flex-wrap gap-3">
-          {withPhone.length > 0 ? (
-            <Button type="button" size="lg" onClick={() => setMode("welcome")}>
-              <Send aria-hidden />
-              Send welcome
-            </Button>
-          ) : null}
+          <Button type="button" size="lg" onClick={() => setMode("welcome")}>
+            <Send aria-hidden />
+            Send welcome
+          </Button>
         </div>
       ) : null}
 

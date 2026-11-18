@@ -66,7 +66,7 @@ export default async function GivingSettingsPage() {
         <GivingSubpageHeader page="settings" />
         <ErrorState
           title="Giving settings didn't load"
-          description="Nothing was changed. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+          description="Nothing was changed. Refresh the page to try again, and if it keeps happening, contact support."
         />
       </div>
     );

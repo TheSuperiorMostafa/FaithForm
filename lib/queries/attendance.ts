@@ -51,6 +51,31 @@ export type MissedStreak = {
   consecutiveAbsent: number;
 };
 
+/** Families records children as dependents. Call after authorizing Follow-up access. */
+export async function getFamilyMinorIds(
+  admin: SupabaseClient,
+  churchId: string,
+  memberIds: readonly string[],
+): Promise<Set<string>> {
+  const ids = Array.from(new Set(memberIds));
+  const minors = new Set<string>();
+  const batchSize = 100;
+
+  for (let offset = 0; offset < ids.length; offset += batchSize) {
+    const { data, error } = await admin
+      .from("household_members")
+      .select("member_id")
+      .eq("church_id", churchId)
+      .eq("relationship", "dependent")
+      .in("member_id", ids.slice(offset, offset + batchSize));
+
+    if (error) throw error;
+    for (const row of data ?? []) minors.add(row.member_id);
+  }
+
+  return minors;
+}
+
 export async function getChurchTimezone(
   supabase: SupabaseClient,
   churchId: string,
