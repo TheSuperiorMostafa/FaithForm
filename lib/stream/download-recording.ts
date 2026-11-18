@@ -123,6 +123,24 @@ function takeSource(urls: string[], assetFor: (url: string) => RecordingAsset): 
 }
 
 /**
+ * The MP4 muxer refuses a packet presented before anything in the previous GOP.
+ * A healthy encoder never does that, but one dropping frames under load can
+ * (seen in real FaithForm recordings, which then could not be downloaded at
+ * all). Such a frame is shown at the GOP boundary instead: one late frame,
+ * nothing dropped. Packets from a healthy recording pass through unchanged.
+ */
+export function gopGuard() {
+  let max = -Infinity;
+  let floor = -Infinity;
+  return (timestamp: number, key: boolean) => {
+    if (key) floor = max;
+    const safe = Math.max(timestamp, floor);
+    max = Math.max(max, safe);
+    return safe;
+  };
+}
+
+/**
  * Copies every encoded packet of every take into one standard MP4, in order,
  * without transcoding. Each take keeps its own timing; a later take (an encoder
  * reconnect, which restarts its clock) is placed right after the one before.
@@ -214,6 +232,7 @@ export async function remuxRecordingToMp4(options: {
       let sources: (EncodedVideoPacketSource | EncodedAudioPacketSource)[] | null = null;
       // The muxer needs each track's decoder configuration with its first packet.
       const configured = new Set<number>();
+      const guards = new Map<number, ReturnType<typeof gopGuard>>();
       let offset = 0;
       let written = 0;
 
@@ -259,7 +278,9 @@ export async function remuxRecordingToMp4(options: {
             }
             if (!chosen) break;
             const packet = chosen.next!;
-            const timestamp = packet.timestamp - takeStart + offset;
+            let guard = guards.get(chosen.index);
+            if (!guard) guards.set(chosen.index, guard = gopGuard());
+            const timestamp = guard(packet.timestamp - takeStart + offset, packet.type === "key");
             const moved = packet.clone({ timestamp });
             const source = sources[chosen.index];
             const meta = configured.has(chosen.index)

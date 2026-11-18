@@ -5,7 +5,7 @@ import path from "node:path";
 import test, { type TestContext } from "node:test";
 import { BufferSource, BufferTarget, EncodedPacketSink, Input, MP4 } from "mediabunny";
 
-import { prepareRecordingDownload, remuxRecordingToMp4, type RecordingAsset } from "@/lib/stream/download-recording";
+import { gopGuard, prepareRecordingDownload, remuxRecordingToMp4, type RecordingAsset } from "@/lib/stream/download-recording";
 import { isUserFacingError } from "@/lib/errors/user-error";
 
 const root = path.join(process.cwd(), "tests/fixtures/recording/download-hls");
@@ -197,4 +197,12 @@ test("a playlist without Content-Length is still bounded while reading its body"
   assert.equal(canceled, true);
   assert.ok(chunks <= 6, "the body cannot keep accumulating before the parser sees it");
   assert.equal(network.mock.callCount(), 1);
+});
+
+test("a frame a dropping encoder presented before the previous GOP ended is moved to the boundary, never dropped", () => {
+  const healthy = gopGuard();
+  assert.deepEqual([[0, true], [0.2, false], [0.1, false], [1, true], [1.2, false]].map(([t, k]) => healthy(t as number, k as boolean)), [0, 0.2, 0.1, 1, 1.2]);
+  const broken = gopGuard();
+  // From a real recording: the next keyframe is stamped before the last frame of the previous GOP.
+  assert.deepEqual([[0, true], [3.5, false], [2, true], [2.5, false], [4, false]].map(([t, k]) => broken(t as number, k as boolean)), [0, 3.5, 3.5, 3.5, 4]);
 });
