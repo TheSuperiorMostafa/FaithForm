@@ -14,6 +14,8 @@ type DeleteSermonButtonProps = {
   redirectTo?: string;
   /** It was in the app once: say so in the confirmation. */
   wasPublished?: boolean;
+  /** A lesson made in Lesson Builder (no slides): its own words in the confirmation. */
+  kind?: "sermon" | "lesson";
   className?: string;
 };
 
@@ -26,6 +28,7 @@ export function DeleteSermonButton({
   sermonTitle,
   redirectTo,
   wasPublished = false,
+  kind = "sermon",
   className,
 }: DeleteSermonButtonProps) {
   const router = useRouter();
@@ -34,10 +37,13 @@ export function DeleteSermonButton({
   async function handleDelete() {
     const ok = await confirmAction({
       title: `Delete "${sermonTitle}"?`,
-      description: wasPublished
-        ? "The sermon, its slides, its lesson and every earlier version shared in the app are deleted for good. This can't be undone."
-        : "The sermon, its slides and its lesson are deleted for good. This can't be undone.",
-      confirmLabel: "Delete sermon",
+      description:
+        kind === "lesson"
+          ? "The lesson and its discussion questions are deleted for good. This can't be undone."
+          : wasPublished
+            ? "The sermon, its slides, its lesson and every earlier version shared in the app are deleted for good. This can't be undone."
+            : "The sermon, its slides and its lesson are deleted for good. This can't be undone.",
+      confirmLabel: kind === "lesson" ? "Delete lesson" : "Delete sermon",
       destructive: true,
     });
     if (!ok) return;
@@ -67,7 +73,7 @@ export function DeleteSermonButton({
       ) : (
         <Trash2 aria-hidden className="size-5" />
       )}
-      Delete sermon
+      {kind === "lesson" ? "Delete lesson" : "Delete sermon"}
     </Button>
   );
 }

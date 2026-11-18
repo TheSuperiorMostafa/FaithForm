@@ -33,7 +33,7 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
   const [sermonsResult, series] = await Promise.all([
-    listSermons(churchId, { page, pageSize: PAGE_SIZE }),
+    listSermons(churchId, { page, pageSize: PAGE_SIZE, builder: "sermon" }),
     listSeries(churchId),
   ]);
 

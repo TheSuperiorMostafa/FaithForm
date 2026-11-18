@@ -4,6 +4,7 @@ import {
   CircleHelp,
   ClipboardCheck,
   Globe,
+  GraduationCap,
   HandHeart,
   House,
   Megaphone,
@@ -129,6 +130,16 @@ export const navItems: NavItem[] = [
     shortLabel: "Sermons",
     href: "/dashboard/sermon-builder",
     icon: BookOpen,
+    features: ["sermon_builder"],
+    group: "weekly",
+  },
+  {
+    // Small-group lessons get their own list. A lesson made from a sermon
+    // shows here too, with a link back to the sermon's slides.
+    label: "Lessons",
+    shortLabel: "Lessons",
+    href: "/dashboard/lesson-builder",
+    icon: GraduationCap,
     features: ["sermon_builder"],
     group: "weekly",
   },

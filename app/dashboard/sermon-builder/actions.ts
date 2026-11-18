@@ -89,6 +89,7 @@ export async function deleteSermonAction(
 
     await deleteSermon(sermonId);
     revalidatePath("/dashboard/sermon-builder");
+    revalidatePath("/dashboard/lesson-builder");
     return {};
   } catch (e) {
     return { error: toUserError(e, "We couldn't delete this sermon.") };

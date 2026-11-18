@@ -1,30 +1,26 @@
 "use client";
 
-import { CreateLessonPanel } from "@/components/sermon-builder/create-lesson-panel";
 import { SermonEditor } from "@/components/sermon-builder/sermon-editor";
+import { SermonLessonLink } from "@/components/sermon-builder/sermon-lesson-link";
 import { SermonSlides } from "@/components/sermon-builder/sermon-slides";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SermonDetailTab } from "@/lib/sermon-builder/sermon-display";
 import { LESSON_ANCHOR } from "@/lib/sermons/v1/share-rules";
-import type {
-  DiscussionQuestion,
-  Sermon,
-  SermonOutline,
-} from "@/types/sermon";
+import type { Sermon, SermonOutline } from "@/types/sermon";
 
 /**
  * The sermon's two jobs, one tab each: Slides (preview, Present, Download)
- * and Lesson (outline, questions, PDF). Sermons made
+ * and Lesson, a short card that opens the lesson in Lesson Builder (or makes
+ * one). The tab stays so `?tab=lesson` and LESSON_ANCHOR links keep working.
+ * Sermons made
  * with the older full-manuscript builder get a Manuscript tab in place of
  * Lesson.
  */
 export function SermonDetailTabs({
   sermon,
-  questions,
   initialTab = "slides",
 }: {
   sermon: Sermon;
-  questions: DiscussionQuestion[];
   initialTab?: SermonDetailTab;
 }) {
   const isSimple = (sermon.kind ?? "advanced") === "simple";
@@ -53,12 +49,11 @@ export function SermonDetailTabs({
       {isSimple ? (
         <TabsContent value="lesson" className="mt-6">
           <div id={LESSON_ANCHOR} className="scroll-mt-24">
-            <CreateLessonPanel
+            <SermonLessonLink
               sermonId={sermon.id}
               sermonTitle={sermon.title}
               scriptureRefs={sermon.scripture_refs}
               outline={(sermon.outline as SermonOutline | null) ?? null}
-              questions={questions}
             />
           </div>
         </TabsContent>

@@ -6,12 +6,18 @@ type SermonsPaginationProps = {
   page: number;
   totalPages: number;
   total: number;
+  /** The list's own route; Lessons reuses this with its own. */
+  basePath?: string;
+  /** Singular word for the count, e.g. "lesson". */
+  noun?: string;
 };
 
 export function SermonsPagination({
   page,
   totalPages,
   total,
+  basePath = "/dashboard/sermon-builder",
+  noun = "sermon",
 }: SermonsPaginationProps) {
   if (totalPages <= 1) return null;
 
@@ -19,15 +25,13 @@ export function SermonsPagination({
   const nextPage = page < totalPages ? page + 1 : null;
 
   function pageHref(p: number) {
-    return p === 1
-      ? "/dashboard/sermon-builder"
-      : `/dashboard/sermon-builder?page=${p}`;
+    return p === 1 ? basePath : `${basePath}?page=${p}`;
   }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4">
       <p className="text-[15px] text-muted-foreground">
-        Page {page} of {totalPages} · {total} sermon{total === 1 ? "" : "s"}
+        Page {page} of {totalPages} · {total} {noun}{total === 1 ? "" : "s"}
       </p>
       <div className="flex gap-2">
         {prevPage ? (

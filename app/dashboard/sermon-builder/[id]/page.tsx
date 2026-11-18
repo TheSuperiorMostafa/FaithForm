@@ -17,7 +17,7 @@ import {
   canAccessFeature,
   getFeatureAccess,
 } from "@/lib/features/access";
-import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
+import { getSermon } from "@/lib/queries/sermons";
 import {
   formatSermonDate,
   parseSermonDetailTab,
@@ -30,7 +30,6 @@ import {
   ONLY_ADMINS_CAN_SHARE,
   sermonAudienceLabel,
 } from "@/lib/sermons/v1/share-rules";
-import type { DiscussionQuestion } from "@/types/sermon";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
@@ -57,12 +56,8 @@ export default async function SermonDetailPage({
   const sermon = await getSermon(id);
   if (!sermon || sermon.church_id !== churchId) notFound();
 
-  const isSimple = (sermon.kind ?? "advanced") === "simple";
-
-  const questionsAsset = isSimple ? await getLatestAsset(sermon.id, "discussion_questions") : null;
-  const questions =
-    (questionsAsset?.payload as { questions?: DiscussionQuestion[] } | null)
-      ?.questions ?? [];
+  // A lesson made in Lesson Builder has no slides: it lives there.
+  if (sermon.builder === "lesson") redirect(`/dashboard/lesson-builder/${sermon.id}`);
 
   // Publishing puts a sermon in front of a congregation, so it is an admin's
   // decision (the server action enforces the same rule). Everyone else sees
@@ -144,7 +139,6 @@ export default async function SermonDetailPage({
 
       <SermonDetailTabs
         sermon={sermon}
-        questions={questions}
         initialTab={parseSermonDetailTab(query.tab)}
       />
 

@@ -237,6 +237,9 @@ test("every sermon route has a loading skeleton", () => {
     "app/dashboard/sermon-builder/[id]/discussion",
     "app/dashboard/sermon-builder/series/new",
     "app/dashboard/sermon-builder/series/[id]",
+    "app/dashboard/lesson-builder",
+    "app/dashboard/lesson-builder/new",
+    "app/dashboard/lesson-builder/[id]",
     "app/dashboard/call-log",
     "app/dashboard/call-log/[id]",
   ]) {
