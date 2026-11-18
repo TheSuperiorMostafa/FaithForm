@@ -1,5 +1,3 @@
-import { CustomSource } from "mediabunny";
-
 import { UserFacingError } from "@/lib/errors/user-error";
 
 const MIB = 1024 * 1024;
@@ -12,6 +10,12 @@ function aborted() { return new DOMException("Download cancelled", "AbortError")
  * Mediabunny's HLS source references can outlive its four-input segment cache;
  * giving each UrlSource a large cache therefore isn't a global memory bound.
  */
+/** One init or media segment of a recording: its size, and a range of its bytes. */
+export type RecordingAsset = {
+  size: () => Promise<number>;
+  read: (start: number, end: number) => Promise<Uint8Array>;
+};
+
 export function createRecordingSourceLoader(options: { signal: AbortSignal; cacheBytes?: number; fetchFn?: typeof fetch }) {
   const cacheBytes = options.cacheBytes ?? 64 * MIB;
   const request = new AbortController();
@@ -113,14 +117,39 @@ export function createRecordingSourceLoader(options: { signal: AbortSignal; cach
     finally { pending.delete(url); }
   };
 
+  // Sizes come from a HEAD request, so laying a take out end to end does not
+  // download it twice. A response without Content-Length falls back to the bytes.
+  const sizes = new Map<string, Promise<number>>();
+  const sizeOf = (url: string) => {
+    let known = sizes.get(url);
+    if (!known) {
+      known = (async () => {
+        if (disposed) throw aborted();
+        try {
+          const response = await fetchAsset(url, { method: "HEAD", credentials: "same-origin", cache: "no-store", signal: request.signal });
+          const length = Number(response.headers.get("content-length"));
+          if (response.ok && Number.isSafeInteger(length) && length > 0) {
+            if (length > MAX_ASSET_BYTES) throw new UserFacingError("Part of this recording is too large to download here. Contact FaithForm support.");
+            return length;
+          }
+        } catch (error) {
+          if (disposed) throw aborted();
+          if (error instanceof UserFacingError) throw error;
+        }
+        return (await load(url)).length;
+      })();
+      sizes.set(url, known);
+      known.catch(() => sizes.delete(url));
+    }
+    return known;
+  };
+
   return {
-    sourceForUrl: (url: string) => new CustomSource({
-      getSize: async () => (await load(url)).length,
+    assetFor: (url: string): RecordingAsset => ({
+      size: () => sizeOf(url),
       // A slice is copied intentionally: long-lived media readers must not
       // retain a view of an entire asset after the shared LRU evicts it.
       read: async (start, end) => (await load(url)).slice(start, end),
-      maxCacheSize: 0,
-      handleUnhandledError: () => {},
     }),
     dispose,
   };

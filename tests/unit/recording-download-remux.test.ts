@@ -3,21 +3,26 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import { BufferSource, BufferTarget, CustomSource, EncodedPacketSink, FilePathSource, Input, MP4 } from "mediabunny";
+import { BufferSource, BufferTarget, EncodedPacketSink, Input, MP4 } from "mediabunny";
 
-import { prepareRecordingDownload, remuxRecordingToMp4 } from "@/lib/stream/download-recording";
+import { prepareRecordingDownload, remuxRecordingToMp4, type RecordingAsset } from "@/lib/stream/download-recording";
 import { isUserFacingError } from "@/lib/errors/user-error";
 
 const root = path.join(process.cwd(), "tests/fixtures/recording/download-hls");
 const base = "https://faithform.test/recording/index.m3u8";
 const standard = `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-TARGETDURATION:1\n#EXT-X-MAP:URI="init.mp4"\n#EXTINF:1.000,\n000000.m4s\n#EXTINF:1.000,\n000001.m4s\n#EXT-X-ENDLIST\n`;
 const reconnect = standard.replace("#EXT-X-ENDLIST", `#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI="take2-init.mp4"\n#EXTINF:1.000,\ntake2-000000.m4s\n#EXTINF:1.000,\ntake2-000001.m4s\n#EXT-X-ENDLIST`);
-const sourceForUrl = (url: string) => new FilePathSource(path.join(root, path.basename(new URL(url).pathname).replace(/^take2-/, "")));
+const fileBytes = (url: string) => readFile(path.join(root, path.basename(new URL(url).pathname).replace(/^take2-/, "")));
+const assetFor = (url: string): RecordingAsset => ({
+  size: async () => (await fileBytes(url)).byteLength,
+  read: async (start, end) => new Uint8Array((await fileBytes(url)).subarray(start, end)),
+});
+const stalled = (): RecordingAsset => ({ size: () => new Promise<number>(() => {}), read: async () => new Uint8Array() });
 
 async function exportFile(playlistText: string) {
   const target = new BufferTarget();
   const progress: number[] = [];
-  await remuxRecordingToMp4({ playlistText, playlistUrl: base, sourceForUrl, target, signal: new AbortController().signal, onProgress: p => progress.push(p) });
+  await remuxRecordingToMp4({ playlistText, playlistUrl: base, assetFor, target, signal: new AbortController().signal, onProgress: p => progress.push(p) });
   assert.ok(target.buffer);
   return { bytes: new Uint8Array(target.buffer), progress };
 }
@@ -68,7 +73,7 @@ test("a discontinuity inside one take also preserves all available packets", asy
 test("a changed encoder configuration is refused before producing a partial recording", async () => {
   const playlistText = standard.replace("#EXT-X-ENDLIST", `#EXT-X-DISCONTINUITY\n#EXT-X-MAP:URI="changed-init.mp4"\n#EXTINF:1.000,\nchanged-000000.m4s\n#EXT-X-ENDLIST`);
   const target = new BufferTarget();
-  await assert.rejects(remuxRecordingToMp4({ playlistText, playlistUrl: base, sourceForUrl, target, signal: new AbortController().signal, onProgress: () => {} }), error => isUserFacingError(error) && /changed video or audio formats/.test(error.message));
+  await assert.rejects(remuxRecordingToMp4({ playlistText, playlistUrl: base, assetFor, target, signal: new AbortController().signal, onProgress: () => {} }), error => isUserFacingError(error) && /changed video or audio formats/.test(error.message));
   assert.equal(target.buffer, null);
 });
 
@@ -80,9 +85,9 @@ test("cancellation stops an unreadable source promptly and the next download can
   const controller = new AbortController();
   const pending = remuxRecordingToMp4({
     playlistText: standard, playlistUrl: base, target: new BufferTarget(), signal: controller.signal, onProgress: () => {},
-    sourceForUrl: () => {
+    assetFor: () => {
       setImmediate(() => controller.abort());
-      return new CustomSource({ getSize: () => new Promise<number>(() => {}), read: () => new Uint8Array() });
+      return stalled();
     },
   });
   await assert.rejects(pending, error => error instanceof DOMException && error.name === "AbortError");
@@ -93,7 +98,7 @@ test("a stalled media source has a bounded failure even if its read never reject
   const started = Date.now();
   await assert.rejects(remuxRecordingToMp4({
     playlistText: standard, playlistUrl: base, target: new BufferTarget(), signal: new AbortController().signal, onProgress: () => {}, idleMs: 20,
-    sourceForUrl: () => new CustomSource({ getSize: () => new Promise<number>(() => {}), read: () => new Uint8Array() }),
+    assetFor: stalled,
   }), error => isUserFacingError(error) && /stopped responding/.test(error.message));
   assert.ok(Date.now() - started < 1000);
 });

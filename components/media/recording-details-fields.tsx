@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { RecordingTagsField, ScriptureTagsField, type RecordingTagsValue } from "@/components/media/recording-tags-field";
+import { RecordingTagsField, type RecordingTagsValue } from "@/components/media/recording-tags-field";
+import { ScriptureTagsField } from "@/components/media/scripture-tags-field";
 
 function Field({ id, label, optional, children }: { id: string; label: string; optional?: boolean; children: ReactNode }) {
   return <div className="flex flex-col gap-2">
