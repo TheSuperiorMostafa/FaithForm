@@ -26,7 +26,7 @@ function Chips({ label, value, onChange }: { label: string; value: RecordingTags
   return <ul aria-label={`${label} added`} className="flex min-w-0 flex-wrap gap-2">
     {value.items.map((item, index) => <li key={`${index}:${item}`} className="flex min-w-0 max-w-full items-center gap-1 rounded-full border border-border bg-muted/50 py-0.5 pl-3 pr-0.5">
       <span className="min-w-0 break-words text-[15px] font-medium">{item}</span>
-      <button type="button" className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Remove ${item}`}
+      <button type="button" className="flex size-11 min-h-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Remove ${item}`}
         onClick={() => onChange({ ...value, items: value.items.filter((_, itemIndex) => itemIndex !== index) })}>
         <X className="size-4" aria-hidden />
       </button>
@@ -79,7 +79,7 @@ export function RecordingTagsField({ id, name, label, addLabel, value, onChange,
   const showList = open && !full && options.length > 0;
 
   return <div className="flex min-w-0 flex-col gap-2">
-    <Chips label={label} value={value} onChange={next => { onChange(next); setError(null); }} />
+    {Chips({ label, value, onChange: next => { onChange(next); setError(null); } })}
     <div className="relative min-w-0">
       <Input id={id} name={`${name}_draft`} value={value.draft} placeholder={full ? `${MAX_ITEMS} added` : placeholder} maxLength={maxLength} autoComplete="off"
         role="combobox" aria-expanded={showList} aria-controls={listId} aria-autocomplete="list"
@@ -151,7 +151,7 @@ export function ScriptureTagsField({ id, name, label, value, onChange }: {
   const step = !book ? "Book" : !chapter ? `${book} — chapter` : start ? `${book} ${chapter}:${start} — last verse` : `${book} ${chapter} — verses`;
 
   return <div className="flex min-w-0 flex-col gap-2">
-    <Chips label={label} value={value} onChange={next => { onChange(next); setError(null); }} />
+    {Chips({ label, value, onChange: next => { onChange(next); setError(null); } })}
     <input type="hidden" name={`${name}_json`} value={JSON.stringify(recordingTagItems(value))} />
     {!open ? <Button id={id} type="button" variant="outline" className="self-start" disabled={full} onClick={() => { reset(); setOpen(true); }}>
       <Plus className="size-4" aria-hidden />Add Scripture

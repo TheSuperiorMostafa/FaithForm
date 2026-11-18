@@ -21,10 +21,25 @@ function field(initial: RecordingTagsValue, maxLength = 80) {
     module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true,
   } }).outputText;
   const compiled = { exports: {} as { RecordingTagsField: typeof RecordingTagsField } };
+  // The first useState is the field's error; the rest (list open, highlighted
+  // option) keep their own cells between renders.
+  const cells: { value: unknown }[] = [];
+  let cursor = 0;
+  const react = {
+    useState(initial: unknown) {
+      const index = cursor++;
+      if (index === 0) return [state.error, (error: string | null) => { state.error = error; }];
+      const cell = cells[index] ??= { value: initial };
+      return [cell.value, (value: unknown) => { cell.value = typeof value === "function" ? (value as (old: unknown) => unknown)(cell.value) : value; }];
+    },
+    useId: () => "test-list",
+    useMemo: (run: () => unknown) => run(),
+    useRef: (initial: unknown) => ({ current: initial }),
+  };
   new Function("require", "module", "exports", source)((name: string) => name === "react"
-    ? { useState: () => [state.error, (error: string | null) => { state.error = error; }] }
+    ? react
     : name.startsWith("@/components/") ? new Proxy({}, { get: () => () => null }) : localRequire(name), compiled, compiled.exports);
-  const render = () => compiled.exports.RecordingTagsField({ id: "test-tags", name: "topics", label: "Topics", addLabel: "Add topic", placeholder: "Topic", value: state.value, onChange(value) { state.value = value; }, maxLength });
+  const render = () => { cursor = 0; return compiled.exports.RecordingTagsField({ id: "test-tags", name: "topics", label: "Topics", addLabel: "Add topic", placeholder: "Topic", value: state.value, onChange(value) { state.value = value; }, maxLength }); };
   function enter(composing = false, keyCode = 13) {
     const input = find(render(), element => element.props.id === "test-tags")!;
     (input.props.onKeyDown as (event: unknown) => void)({ key: "Enter", keyCode, nativeEvent: { isComposing: composing }, preventDefault() { state.prevented++; } });

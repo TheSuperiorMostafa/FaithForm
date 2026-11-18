@@ -132,7 +132,7 @@ function reviewHarness(published = false) {
     cursor = 0; const tree = compiled.exports.RecordingReview(props);
     return { date: find(tree, element => element.props.id === "rec-service-date")!,
       primary: find(tree, element => element.props.size === "lg" && typeof element.props.onClick === "function"),
-      changeDate(value: string) { (find(tree, element => element.props.id === "rec-service-date")!.props.onChange as (event: unknown) => void)({ target: { value } }); },
+      changeDate(value: string) { (find(tree, element => element.props.id === "rec-service-date")!.props.onChange as (value: string) => void)(value); },
       click() { return (find(tree, element => element.props.size === "lg" && typeof element.props.onClick === "function")!.props.onClick as () => Promise<void> | void)(); },
     };
   };
@@ -141,7 +141,7 @@ function reviewHarness(published = false) {
 
 test("changing a published recording's date exposes Save changes, sends the chosen date and becomes clean after refresh", async () => {
   const h = reviewHarness(true);
-  assert.equal(h.render().date.props.value, "2026-11-08"); assert.equal(h.render().date.props.type, "date"); assert.equal(h.render().date.props.required, true);
+  assert.equal(h.render().date.props.value, "2026-11-08"); assert.equal(h.render().date.type, "DatePicker"); assert.equal(h.render().date.props.required, true);
   assert.equal(h.render().primary, undefined);
   h.render().changeDate("2024-02-29"); assert.ok(h.render().primary);
   await h.render().click(); await h.finish();

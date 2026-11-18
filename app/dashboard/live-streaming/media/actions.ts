@@ -357,7 +357,7 @@ export async function createArtworkForMe(input: {
     });
     bytes = Buffer.from(generated.imageBytes);
   } catch (error) {
-    console.error("[media] artwork generation failed:", error instanceof Error ? error.message : error);
+    console.error("[media] artwork generation failed:", error);
     return { ok: false, error: "We couldn't make artwork right now. Please try again, or choose a stock picture." };
   }
 
