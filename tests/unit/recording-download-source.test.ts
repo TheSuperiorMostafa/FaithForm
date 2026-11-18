@@ -105,3 +105,26 @@ test("a take's layout uses HEAD sizes without downloading the segment bodies", a
     assert.deepEqual(methods, ["HEAD"], "the size is asked for once and no body is fetched");
   } finally { loader.dispose(); }
 });
+
+test("stored sizes lay a take out without a request per segment, and a mismatched file is refused", async () => {
+  const methods: string[] = [];
+  const loader = createRecordingSourceLoader({ signal: new AbortController().signal,
+    knownSizes: { "seg/a.m4s": 4, "seg/b.m4s": 5 },
+    fetchFn: async (_resource, init) => {
+      methods.push(init?.method ?? "GET");
+      return new Response(new Uint8Array(4), { headers: { "content-length": "4" } });
+    },
+  });
+  try {
+    assert.equal(await loader.assetFor("https://faithform.test/api/stream/recordings/r/t/seg/a.m4s").size(), 4);
+    assert.equal(await loader.assetFor("https://faithform.test/api/stream/recordings/r/t/seg/b.m4s").size(), 5);
+    assert.deepEqual(methods, [], "known sizes must not cost a request");
+    assert.equal(await loader.assetFor("https://faithform.test/api/stream/recordings/r/t/seg/c.m4s").size(), 4);
+    assert.deepEqual(methods, ["HEAD"], "an unknown size still falls back to asking");
+    assert.equal((await loader.assetFor("https://faithform.test/api/stream/recordings/r/t/seg/a.m4s").read(0, 4)).length, 4);
+    await assert.rejects(
+      loader.assetFor("https://faithform.test/api/stream/recordings/r/t/seg/b.m4s").read(0, 4),
+      (error: unknown) => isUserFacingError(error),
+    );
+  } finally { loader.dispose(); }
+});

@@ -16,7 +16,23 @@ export type RecordingAsset = {
   read: (start: number, end: number) => Promise<Uint8Array>;
 };
 
-export function createRecordingSourceLoader(options: { signal: AbortSignal; cacheBytes?: number; fetchFn?: typeof fetch }) {
+/** `seg/<id>.m4s` or `init/<id>.mp4`: the key the download plan gives sizes by. */
+export function recordingAssetKey(url: string): string {
+  try { return new URL(url, "https://faithform.invalid").pathname.split("/").slice(-2).join("/"); }
+  catch { return ""; }
+}
+
+export function createRecordingSourceLoader(options: {
+  signal: AbortSignal;
+  cacheBytes?: number;
+  fetchFn?: typeof fetch;
+  /** Sizes FaithForm stored for each asset, keyed by `recordingAssetKey`. */
+  knownSizes?: Record<string, number>;
+}) {
+  const knownSize = (url: string) => {
+    const size = options.knownSizes?.[recordingAssetKey(url)];
+    return typeof size === "number" && Number.isSafeInteger(size) && size > 0 && size <= MAX_ASSET_BYTES ? size : null;
+  };
   const cacheBytes = options.cacheBytes ?? 64 * MIB;
   const request = new AbortController();
   const cache = new Map<string, Uint8Array>();
@@ -87,6 +103,12 @@ export function createRecordingSourceLoader(options: { signal: AbortSignal; cach
               }
             } finally { reader.releaseLock(); }
             if (disposed) throw aborted();
+            const expected = knownSize(url);
+            if (expected !== null && expected !== length) {
+              // The layout was built from the stored size; a different file would scramble the video.
+              console.error("[recording download] stored size does not match", { expected, length });
+              throw new UserFacingError("Part of this recording doesn't match what FaithForm saved. Contact FaithForm support.");
+            }
             const bytes = new Uint8Array(length);
             let offset = 0;
             for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
@@ -125,6 +147,8 @@ export function createRecordingSourceLoader(options: { signal: AbortSignal; cach
     if (!known) {
       known = (async () => {
         if (disposed) throw aborted();
+        const stored = knownSize(url);
+        if (stored !== null) return stored;
         try {
           const response = await fetchAsset(url, { method: "HEAD", credentials: "same-origin", cache: "no-store", signal: request.signal });
           const length = Number(response.headers.get("content-length"));

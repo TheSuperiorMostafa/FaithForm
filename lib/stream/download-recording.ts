@@ -82,7 +82,7 @@ function codecIdentity(config: VideoDecoderConfig | AudioDecoderConfig | null): 
  * video (our encoder's audio leads by up to two seconds) backwards in time,
  * and the MP4 writer then refuses the whole export.
  */
-function takeSource(urls: string[], assetFor: (url: string) => RecordingAsset): CustomSource {
+function takeSource(urls: string[], assetFor: (url: string) => RecordingAsset, onActivity: () => void): CustomSource {
   let layout: Promise<number[]> | null = null;
   const offsets = () => layout ??= (async () => {
     const sizes: number[] = new Array(urls.length);
@@ -92,6 +92,8 @@ function takeSource(urls: string[], assetFor: (url: string) => RecordingAsset): 
       while (next < urls.length) {
         const index = next++;
         sizes[index] = await assetFor(urls[index]).size();
+        // Laying out a long take can take a while; it is progress, not a stall.
+        onActivity();
       }
     }));
     const starts = [0];
@@ -177,15 +179,17 @@ export async function remuxRecordingToMp4(options: {
     rejectStop(error);
   };
   const onAbort = () => stop(aborted());
+  let lastFraction = 0;
   const progress = (fraction: number) => {
     if (stopped) return;
+    lastFraction = fraction;
     clearTimeout(timer);
     timer = setTimeout(() => stop(new UserFacingError("The recording download stopped responding. Check your connection and try again.")), options.idleMs ?? IDLE_MS);
     options.onProgress(Math.max(0, Math.min(1, fraction)));
   };
   const openTake = (part: PlaylistPart) => {
     const input = new Input({
-      source: takeSource([part.init, ...part.segments.map(segment => segment.url)], options.assetFor),
+      source: takeSource([part.init, ...part.segments.map(segment => segment.url)], options.assetFor, () => progress(lastFraction)),
       formats: [MP4, QTFF],
     });
     active.add(input);
@@ -353,6 +357,7 @@ async function openScratchFile() {
 export async function prepareRecordingDownload(options: {
   playlistUrl: string;
   totalBytes: number;
+  assetBytes?: Record<string, number>;
   signal: AbortSignal;
   onProgress: (fraction: number) => void;
 }): Promise<PreparedRecordingDownload> {
@@ -397,7 +402,7 @@ export async function prepareRecordingDownload(options: {
     clearTimeout(timeout);
     if (options.signal.aborted) throw aborted();
     const target = scratch ? new StreamTarget(scratch.writable, { chunked: true, chunkSize: 4 * MIB }) : new BufferTarget();
-    sources = createRecordingSourceLoader({ signal: options.signal });
+    sources = createRecordingSourceLoader({ signal: options.signal, knownSizes: options.assetBytes });
     await remuxRecordingToMp4({
       playlistText, playlistUrl, target, signal: options.signal, onProgress: options.onProgress,
       assetFor: sources.assetFor,

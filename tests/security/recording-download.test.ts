@@ -129,3 +129,38 @@ test("the actual download route checks Live access before database reads and use
   assert.equal(response.headers.get("referrer-policy"), "no-referrer");
   assert.equal((await response.json()).kind, "file"); assert.equal(f.state.reads, 1);
 });
+
+test("livestream plans carry each segment's stored size, read only from this church's uploaded segments", async () => {
+  const takeId = "33333333-3333-4333-8333-333333333333";
+  const reads: { table: string; filters: Record<string, unknown> }[] = [];
+  const recording = { id: recordingId, church_id: churchId, title: "Sunday Service", status: "ready", source_kind: "segments",
+    storage_path: null, segment_count: 2, total_bytes: 9, mobile_rendition_verified_at: "2026-11-17T00:00:00Z", deleted_at: null };
+  const tables: Record<string, unknown[]> = {
+    stream_recording_segments: [{ id: "seg-a", take_id: takeId, byte_size: 4 }, { id: "seg-b", take_id: takeId, byte_size: null }],
+    stream_recording_takes: [{ id: takeId, init_bytes: 1 }],
+  };
+  const client = {
+    from(table: string) {
+      const filters: Record<string, unknown> = {};
+      reads.push({ table, filters });
+      const query = {
+        select() { return query; }, order() { return query; },
+        eq(key: string, value: unknown) { filters[key] = value; return query; },
+        is(key: string, value: unknown) { filters[key] = value; return query; },
+        in(key: string, value: unknown) { filters[key] = value; return Promise.resolve({ data: tables[table], error: null }); },
+        range() { return Promise.resolve({ data: tables[table], error: null }); },
+        async maybeSingle() { return { data: recording, error: null }; },
+      };
+      return query;
+    },
+  } as unknown as SupabaseClient;
+  const result = await getRecordingDownload(churchId, recordingId, client);
+  assert.equal(result.ok, true);
+  if (result.ok && result.download.kind === "segments") {
+    assert.deepEqual(result.download.assetBytes, { "seg/seg-a.m4s": 4, [`init/${takeId}.mp4`]: 1 },
+      "a missing size is left for the browser to ask for, never guessed");
+  } else assert.fail("expected a segments plan");
+  assert.deepEqual(reads.find(read => read.table === "stream_recording_segments")?.filters,
+    { recording_id: recordingId, church_id: churchId, status: "uploaded" });
+  assert.equal(reads.find(read => read.table === "stream_recording_takes")?.filters.church_id, churchId);
+});

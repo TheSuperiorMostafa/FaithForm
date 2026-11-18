@@ -85,7 +85,7 @@ export function RecordingDownloadButton({ recordingId, title, className }: {
         }
         const { prepareRecordingDownload } = await import("@/lib/stream/download-recording");
         const result = await prepareRecordingDownload({
-          playlistUrl: playlist.href, totalBytes: plan.totalBytes, signal: controller.signal,
+          playlistUrl: playlist.href, totalBytes: plan.totalBytes, assetBytes: plan.assetBytes, signal: controller.signal,
           onProgress: fraction => {
             if (!controller.signal.aborted) setProgress(Math.min(100, Math.max(0, Math.round(fraction * 100))));
           },

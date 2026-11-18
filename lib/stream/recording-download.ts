@@ -5,7 +5,16 @@ import { isRecordingStoragePathForChurch, STREAM_RECORDINGS_BUCKET } from "@/lib
 
 export type RecordingDownloadPlan =
   | { kind: "file"; filename: string; url: string }
-  | { kind: "segments"; filename: string; playlistUrl: string; totalBytes: number };
+  | {
+    kind: "segments"; filename: string; playlistUrl: string; totalBytes: number;
+    /**
+     * Each init and media segment's size, keyed `init/<takeId>.mp4` or
+     * `seg/<segmentId>.m4s`. Without them the browser must ask for every
+     * segment's size one request at a time, which on a long service outlasts
+     * the export's idle timeout before a single byte is copied.
+     */
+    assetBytes?: Record<string, number>;
+  };
 
 type DownloadResult =
   | { ok: true; download: RecordingDownloadPlan }
@@ -45,11 +54,13 @@ export async function getRecordingDownload(
     const token = signRecordingPlaybackToken({ churchId, recordingId, audience: "staff" });
     if (!token) return { ok: false, status: 503, error: "Recording downloads are temporarily unavailable. Please try again shortly." };
     const bytes = Number(row.total_bytes);
+    const assetBytes = await recordingAssetBytes(client, churchId, recordingId);
     return { ok: true, download: {
       kind: "segments", filename: recordingDownloadFilename(row.title, "mp4"),
       // Downloads preserve the original service, including material trimmed from the player.
       playlistUrl: recordingPlaylistPath(recordingId, token).replace(/index\.m3u8$/, "full.m3u8"),
       totalBytes: Number.isSafeInteger(bytes) && bytes > 0 ? bytes : 0,
+      ...(assetBytes ? { assetBytes } : {}),
     } };
   }
   if (row.source_kind !== "file" || typeof row.storage_path !== "string" ||
@@ -64,4 +75,52 @@ export async function getRecordingDownload(
     return { ok: false, status: 503, error: "We couldn't prepare this download. Please try again." };
   }
   return { ok: true, download: { kind: "file", filename, url: signed.signedUrl } };
+}
+
+const positiveSize = (value: unknown) => {
+  const size = Number(value);
+  return Number.isSafeInteger(size) && size > 0 ? size : null;
+};
+
+/**
+ * The stored size of every uploaded segment and its take's init segment.
+ * Best effort: a size that is missing here is asked for by the browser instead.
+ */
+async function recordingAssetBytes(
+  client: SupabaseClient,
+  churchId: string,
+  recordingId: string,
+): Promise<Record<string, number> | null> {
+  try {
+    const sizes: Record<string, number> = {};
+    const takes = new Set<string>();
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await client.from("stream_recording_segments")
+        .select("id, take_id, byte_size")
+        .eq("recording_id", recordingId).eq("church_id", churchId).eq("status", "uploaded")
+        .order("id", { ascending: true })
+        .range(offset, offset + 999);
+      if (error) return null;
+      for (const row of data ?? []) {
+        takes.add(String(row.take_id));
+        const size = positiveSize(row.byte_size);
+        if (size) sizes[`seg/${row.id}.m4s`] = size;
+      }
+      if (!data || data.length < 1000) break;
+    }
+    if (takes.size) {
+      const { data, error } = await client.from("stream_recording_takes")
+        .select("id, init_bytes")
+        .eq("church_id", churchId).in("id", [...takes]);
+      if (!error) {
+        for (const row of data ?? []) {
+          const size = positiveSize(row.init_bytes);
+          if (size) sizes[`init/${row.id}.mp4`] = size;
+        }
+      }
+    }
+    return Object.keys(sizes).length ? sizes : null;
+  } catch {
+    return null;
+  }
 }
