@@ -70,6 +70,11 @@ export async function upsertChurchSettings(
 export type ListSermonsOptions = {
   page?: number;
   pageSize?: number;
+  /**
+   * "sermon": Sermon Builder's list (sermons only). "lesson": Lesson Builder's
+   * list (lessons made there, plus sermons that have a lesson). Omitted: all.
+   */
+  builder?: "sermon" | "lesson";
 };
 
 export type SermonListItem = Pick<
@@ -85,6 +90,8 @@ export type SermonListItem = Pick<
   | "mobile_visibility"
   | "mobile_published_at"
   | "mobile_unpublished_at"
+  | "outline_generated_at"
+  | "builder"
 >;
 
 export type ListSermonsResult = {
@@ -93,9 +100,10 @@ export type ListSermonsResult = {
 };
 
 const SERMON_LIST_COLUMNS =
-  "id, title, sermon_date, topic, scripture_refs, kind, status, updated_at";
+  "id, title, sermon_date, topic, scripture_refs, kind, status, updated_at, outline_generated_at";
 const SERMON_LIST_APP_COLUMNS =
   "mobile_visibility, mobile_published_at, mobile_unpublished_at";
+const SERMON_LIST_BUILDER_COLUMN = "builder";
 
 export async function listSermons(
   churchId: string,
@@ -107,22 +115,35 @@ export async function listSermons(
   const to = from + pageSize - 1;
 
   const supabase = db();
-  const query = (columns: string) =>
-    supabase
+  const builder = options?.builder;
+  const query = (columns: string, hasBuilderColumn: boolean) => {
+    let q = supabase
       .from("sermons")
       .select(columns, { count: "exact" })
-      .eq("church_id", churchId)
-      .order("updated_at", { ascending: false })
-      .range(from, to);
+      .eq("church_id", churchId);
+    if (builder === "sermon" && hasBuilderColumn) q = q.eq("builder", "sermon");
+    if (builder === "lesson") {
+      q = hasBuilderColumn
+        ? q.or("builder.eq.lesson,outline.not.is.null")
+        : q.not("outline", "is", null);
+    }
+    return q.order("updated_at", { ascending: false }).range(from, to);
+  };
 
   let { data, error, count } = await query(
-    `${SERMON_LIST_COLUMNS}, ${SERMON_LIST_APP_COLUMNS}`,
+    `${SERMON_LIST_COLUMNS}, ${SERMON_LIST_APP_COLUMNS}, ${SERMON_LIST_BUILDER_COLUMN}`,
+    true,
   );
 
+  // A database without migration 0168 has no builder column: every row is a
+  // sermon, and a lesson is a sermon with an outline.
+  if (error && /builder/i.test(error.message)) {
+    ({ data, error, count } = await query(`${SERMON_LIST_COLUMNS}, ${SERMON_LIST_APP_COLUMNS}`, false));
+  }
   // A database without migration 0068 has no app columns. The list still
   // works; it just cannot say what is in the app.
   if (error && /mobile_/i.test(error.message)) {
-    ({ data, error, count } = await query(SERMON_LIST_COLUMNS));
+    ({ data, error, count } = await query(SERMON_LIST_COLUMNS, false));
   }
 
   if (error) throw error;
@@ -165,6 +186,8 @@ export async function createSermon(input: {
   theme_id?: string | null;
   translation?: string | null;
   sermon_date?: string | null;
+  /** Which section made it (migration 0168). Defaults to Sermon Builder. */
+  builder?: "sermon" | "lesson";
 }): Promise<Sermon> {
   const supabase = db();
   const row: Record<string, unknown> = {
@@ -184,6 +207,7 @@ export async function createSermon(input: {
     sermon_date: input.sermon_date ?? null,
     status: "draft",
   };
+  if (input.builder === "lesson") row.builder = "lesson";
 
   let { data, error } = await supabase.from("sermons").insert(row).select().single();
 

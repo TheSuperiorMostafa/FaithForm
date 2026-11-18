@@ -66,6 +66,12 @@ export type LifecycleDeps = {
   log?: (event: string, fields: Record<string, unknown>) => void;
   /** Runs auto-publish. Omitted in contexts that must never publish. */
   autoPublish?: RecordingPublisher;
+  /**
+   * Post-processing once a recording is verified playable (sermon media
+   * transcription). Must be idempotent: re-verification calls it again.
+   * Failures are logged and never change the recording's state.
+   */
+  onVerifiedReady?: RecordingPublisher;
 };
 
 function clock(deps: LifecycleDeps): number {
@@ -821,6 +827,21 @@ async function verifyAndSettle(
           churchId,
           recordingId: recording.id,
           via: "automatic",
+          error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+        });
+      }
+    }
+  }
+
+  if (playable && deps.onVerifiedReady) {
+    const settled = await deps.repo.getRecording(churchId, recording.id);
+    if (settled) {
+      try {
+        await deps.onVerifiedReady(settled);
+      } catch (error) {
+        log(deps, "post_processing_failed", {
+          churchId,
+          recordingId: recording.id,
           error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
         });
       }

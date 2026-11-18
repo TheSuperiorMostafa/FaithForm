@@ -11,6 +11,7 @@ import {
   createSupabaseRecordingStorage,
   recordRelayNonce,
 } from "@/lib/stream/recording-repo";
+import { onRecordingVerifiedReady } from "@/lib/sermon-media/auto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -24,6 +25,12 @@ export function productionLifecycleDeps(client?: SupabaseClient): LifecycleDeps 
     storage: createSupabaseRecordingStorage(db),
     autoPublish: async (recording) => {
       await autoPublishRecording(recording, db);
+    },
+    onVerifiedReady: async (recording) => {
+      await onRecordingVerifiedReady(
+        { id: recording.id, churchId: recording.churchId, renditionRevision: recording.renditionRevision },
+        db,
+      );
     },
   };
 }

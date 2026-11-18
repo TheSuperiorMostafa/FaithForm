@@ -59,6 +59,18 @@
     },
     "app/api/sites/domains/reconcile/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/sermon-media/dispatch/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/sermon-media/worker/[jobId]/[action]/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/sermon-media/recordings/[id]/lesson/route.ts": {
+      "maxDuration": 300
+    },
+    "app/api/sermon-media/clips/[clipId]/facebook/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -125,6 +137,10 @@
     {
       "path": "/api/sites/domains/reconcile",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/sermon-media/dispatch",
+      "schedule": "* * * * *"
     }
   ]
 }
