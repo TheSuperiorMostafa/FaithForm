@@ -88,7 +88,8 @@
     "db:faithform-push": "node scripts/apply-faithform-push-migration.mjs",
     "db:communications": "node scripts/apply-communications-migrations.mjs",
     "db:attendance": "node scripts/apply-attendance-migration.mjs",
-    "db:checkin": "node scripts/apply-checkin-migrations.mjs"
+    "db:checkin": "node scripts/apply-checkin-migrations.mjs",
+    "test:sermon-media-database": "node scripts/run-sermon-media-database-tests.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
