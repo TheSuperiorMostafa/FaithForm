@@ -2,7 +2,7 @@ import { Resend } from "resend";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STAFF_NOTIFICATION_EVENTS, emptyStaffPreferences, staffPreferencesSchema, newlyAvailableAttendancePeriods, type StaffNotificationEvent } from "@/lib/notifications/staff-preferences";
-import { getChurchSmsSender } from "@/lib/sms/church-sender";
+import { getFaithFormSmsSender } from "@/lib/sms/church-sender";
 import { sendSms } from "@/lib/sms/send-sms";
 import { renderEmail } from "@/lib/email/layout";
 import { resolveFromAddress } from "@/lib/email/sender";
@@ -82,7 +82,8 @@ export async function dispatchStaffNotifications(client?: SupabaseClient) {
             status = "sent";
           }
         } else if (current.data.phone) {
-          const sender = await getChurchSmsSender(job.church_id, admin);
+          // Staff notices come from FaithForm's number, not the church's texting phone.
+          const sender = getFaithFormSmsSender();
           if (!sender) throw new Error("sms_unavailable");
           const result = await sendSms(sender, current.data.phone, `${body} ${href}`);
           // Provider acceptance, rather than handset delivery; never credits time saved.

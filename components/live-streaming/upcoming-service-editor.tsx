@@ -22,7 +22,7 @@ import { formatServiceTime } from "@/lib/stream/format";
 import type { MediaSeries } from "@/lib/stream/media-library";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 
-export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, settings }: { event: StreamEvent; series: MediaSeries[]; timeZone: string; appEnabled: boolean; settings: RecordingSettings }) {
+export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, settings, tagSuggestions }: { event: StreamEvent; series: MediaSeries[]; timeZone: string; appEnabled: boolean; settings: RecordingSettings; tagSuggestions?: { speakers: string[]; topics: string[] } }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [title, setTitle] = useState(event.title);
@@ -88,14 +88,14 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
             <RecordingVisibilityChoice checked={toWebsite} onChange={setToWebsite} icon={<Globe className="size-5" aria-hidden />} label="Show it on your church website" hint="Anyone can watch this service on your church's watch page." />
             {appEnabled ? <RecordingVisibilityChoice checked={toApp} onChange={setToApp} icon={<Smartphone className="size-5" aria-hidden />} label="Show it in the FaithForm app" hint="Your recording keeps this choice when you publish it." /> : null}
           </fieldset>
-          <ItemArtworkPanel target={{ kind: "service", id: event.id }} artwork={artwork} seriesArtwork={selectedSeries?.artwork ?? EMPTY_ARTWORK} seriesName={selectedSeries?.name ?? null} seriesSlug={selectedSeries?.slug ?? null} />
+          <ItemArtworkPanel target={{ kind: "service", id: event.id }} title={title} artwork={artwork} seriesArtwork={selectedSeries?.artwork ?? EMPTY_ARTWORK} seriesName={selectedSeries?.name ?? null} seriesSlug={selectedSeries?.slug ?? null} />
           <AdvancedSection title="More options" description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}>
             <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">More options</legend>
               {appEnabled && toApp ? <>
                 <div className="flex flex-col gap-2"><Label htmlFor="upcoming-audience">Who can watch it in the app</Label><Select id="upcoming-audience" value={audience === "members" ? "followers" : audience} onChange={e => setAudience(e.target.value as typeof audience)}><option value="public">Everyone</option><option value="followers">People who follow your church</option></Select></div>
                 <RecordingVisibilityChoice checked={notify} onChange={setNotify} label="Let members know it's available" hint="Used when the recording is published." />
               </> : null}
-              <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
+              <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
             </fieldset>
           </AdvancedSection>
           <div className="flex flex-col gap-3 border-t border-border pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image.</p></div>

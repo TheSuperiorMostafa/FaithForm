@@ -194,3 +194,35 @@ export async function removeChurchSmsSender(
 
   if (error) throw new Error("Could not disconnect the texting phone.");
 }
+
+/**
+ * FaithForm's own texting line, for messages from FaithForm to church staff
+ * (Settings → Your notifications). These are not the church speaking to its
+ * members, so they never leave from the church's connected phone.
+ *
+ * Configured with `FAITHFORM_TWILIO_ACCOUNT_SID`, `FAITHFORM_TWILIO_AUTH_TOKEN`
+ * and `FAITHFORM_TWILIO_FROM_NUMBER`, or with `FAITHFORM_SMS_MOBILE_API_KEY`
+ * (and `FAITHFORM_SMS_MOBILE_API_NUMBER`) for an SMSMobileAPI handset. Without
+ * either, staff text notices are not sent; email notices are unaffected.
+ */
+export function getFaithFormSmsSender(): ChurchSmsSender | null {
+  const accountSid = process.env.FAITHFORM_TWILIO_ACCOUNT_SID?.trim();
+  const authToken = process.env.FAITHFORM_TWILIO_AUTH_TOKEN?.trim();
+  const fromNumber = process.env.FAITHFORM_TWILIO_FROM_NUMBER?.trim();
+  if (accountSid && authToken && fromNumber) {
+    return { gateway: "twilio", accountSid, authToken, fromNumber, deviceSid: null, source: "server" };
+  }
+
+  const apiKey = process.env.FAITHFORM_SMS_MOBILE_API_KEY?.trim();
+  if (apiKey) {
+    return {
+      gateway: "smsmobileapi",
+      apiKey,
+      fromNumber: process.env.FAITHFORM_SMS_MOBILE_API_NUMBER?.trim() || null,
+      deviceSid: process.env.FAITHFORM_SMS_MOBILE_API_DEVICE_SID?.trim() || null,
+      source: "server",
+    };
+  }
+
+  return null;
+}

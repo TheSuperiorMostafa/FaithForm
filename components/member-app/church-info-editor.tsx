@@ -38,6 +38,7 @@ import {
 } from "@/lib/faithform/church-links";
 import type { ChurchAppInfo, ChurchAppInfoContext } from "@/lib/queries/church-app-info";
 import { cn } from "@/lib/utils";
+import { TimePicker } from "@/components/ui/date-picker";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -329,21 +330,21 @@ export function ChurchInfoEditor({
                     </option>
                   ))}
                 </Select>
-                <Input
-                  aria-label="Start time"
-                  type="time"
-                  data-field={`serviceTimes.${index}.startTime`}
-                  value={row.startTime}
-                  disabled={disabled}
-                  onChange={(event) =>
-                    set(
-                      "serviceTimes",
-                      form.serviceTimes.map((r, i) =>
-                        i === index ? { ...r, startTime: event.target.value } : r,
-                      ),
-                    )
-                  }
-                />
+                <div data-field={`serviceTimes.${index}.startTime`}>
+                  <TimePicker
+                    aria-label="Start time"
+                    value={row.startTime}
+                    disabled={disabled}
+                    onChange={(value) =>
+                      set(
+                        "serviceTimes",
+                        form.serviceTimes.map((r, i) =>
+                          i === index ? { ...r, startTime: value } : r,
+                        ),
+                      )
+                    }
+                  />
+                </div>
                 <Button
                   type="button"
                   variant="ghost"

@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { TimePicker } from "@/components/ui/date-picker";
 
 type Row = {
   key: string;
@@ -263,22 +264,22 @@ export function ServiceScheduleEditor({
             </div>
 
             <div className={cn("grid gap-3", multiCampus ? "sm:grid-cols-3" : "grid-cols-2")}>
-              <label className="flex flex-col gap-1 text-sm font-semibold text-foreground">
-                Starts
-                <Input
-                  type="time"
+              <div className="flex flex-col gap-1 text-sm font-semibold text-foreground">
+                <span aria-hidden>Starts</span>
+                <TimePicker
+                  aria-label="Starts"
                   value={row.startTime}
-                  onChange={(event) => update(row.key, { startTime: event.target.value })}
+                  onChange={(value) => update(row.key, { startTime: value })}
                 />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-semibold text-foreground">
-                Ends
-                <Input
-                  type="time"
+              </div>
+              <div className="flex flex-col gap-1 text-sm font-semibold text-foreground">
+                <span aria-hidden>Ends</span>
+                <TimePicker
+                  aria-label="Ends"
                   value={row.endTime}
-                  onChange={(event) => update(row.key, { endTime: event.target.value })}
+                  onChange={(value) => update(row.key, { endTime: value })}
                 />
-              </label>
+              </div>
               {multiCampus ? (
                 <label className="col-span-2 flex flex-col gap-1 text-sm font-semibold text-foreground sm:col-span-1">
                   Campus

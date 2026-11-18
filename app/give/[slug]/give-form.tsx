@@ -28,6 +28,7 @@ import { formatCents } from "@/lib/utils/currency";
 import { recurringFirstChargeAt } from "@/lib/giving/recurring-schedule";
 import { toYMD } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const PRESETS = [2500, 5000, 10000, 25000, 50000];
 
@@ -425,7 +426,7 @@ export function GiveForm({
 
           <div className="space-y-2">
             <Label htmlFor="giving-start-date">Start on or after</Label>
-            <Input id="giving-start-date" type="date" min={toYMD(new Date(), timeZone)} value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+            <DatePicker id="giving-start-date" min={toYMD(new Date(), timeZone)} value={startDate} onChange={setStartDate} clearable placeholder="Today" />
           </div>
           <p className="text-sm text-muted-foreground">
             {(() => {

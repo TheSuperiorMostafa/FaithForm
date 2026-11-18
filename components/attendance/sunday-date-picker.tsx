@@ -7,8 +7,8 @@ import { CalendarSearch } from "lucide-react";
 
 import { isSundayDate } from "@/lib/attendance/v2/sunday-worship";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -49,17 +49,16 @@ export function SundayDatePicker({ today }: { today: string }) {
         Pick another date
       </Label>
       <div className="flex flex-col gap-2 sm:flex-row lg:flex-col xl:flex-row">
-        <Input
+        <DatePicker
           id="sunday-date"
-          type="date"
           value={date}
           max={today}
-          onChange={(event) => {
-            setDate(event.target.value);
+          onChange={(value) => {
+            setDate(value);
             setProblem(null);
           }}
           aria-describedby={problem ? "sunday-date-problem" : undefined}
-          className="min-h-12 text-base"
+          className="min-w-0 flex-1"
         />
         <Button type="submit" variant="outline" className="min-h-12 shrink-0" disabled={!date}>
           <CalendarSearch aria-hidden />

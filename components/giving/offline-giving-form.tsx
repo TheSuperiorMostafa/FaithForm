@@ -6,7 +6,9 @@ import { toast } from "sonner";
 import { recordOfflineGifts } from "@/app/dashboard/giving/offline-actions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { SearchPicker, type PickerItem } from "@/components/ui/search-picker";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { amountToCents, donationRowsFromSheet, type OfflineGiftInput } from "@/lib/giving/offline-input";
 import { readDonationSheet } from "@/lib/giving/read-donation-sheet";
@@ -14,9 +16,19 @@ import { formatCents } from "@/lib/utils/currency";
 
 const selectClass = "min-h-11 w-full rounded-md border border-input bg-background px-3 text-base";
 
-export function OfflineGivingForm({funds, donors}: {
+type Person = {id: string; first_name: string; last_name: string; email: string | null; phone: string | null};
+
+/** Dollars only: digits and one decimal point with at most two places. */
+function cleanAmount(raw: string): string {
+  const digits = raw.replace(/[^0-9.]/g, "");
+  const [whole, ...rest] = digits.split(".");
+  return rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+}
+
+export function OfflineGivingForm({funds, donors, people = []}: {
   funds: {id: string; name: string}[];
   donors: {id: string; name: string | null; email: string}[];
+  people?: Person[];
 }) {
   const [pending, startTransition] = useTransition();
   const [reading, setReading] = useState(false);
@@ -26,6 +38,40 @@ export function OfflineGivingForm({funds, donors}: {
   const importBatch = useRef<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const [chosenDonor, setChosenDonor] = useState("");
+  const [date, setDate] = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [amount, setAmount] = useState("");
+  // "person:<id>" for someone in People, "donor:<id>" for an existing giving donor.
+  const [giver, setGiver] = useState<string[]>([]);
+  const donorByEmail = new Map(donors.map(donor => [donor.email.toLowerCase(), donor]));
+  const peopleEmails = new Set(people.map(person => person.email?.toLowerCase()).filter(Boolean));
+  const giverItems: PickerItem[] = [
+    ...people.map(person => ({
+      id: `person:${person.id}`,
+      label: `${person.first_name} ${person.last_name}`.trim(),
+      description: person.email ?? person.phone ?? "In People",
+    })),
+    // Givers who aren't in People (online donors, earlier imports) stay choosable.
+    ...donors.filter(donor => !peopleEmails.has(donor.email.toLowerCase())).map(donor => ({
+      id: `donor:${donor.id}`,
+      label: donor.name || donor.email,
+      description: donor.name ? `${donor.email} · Giving donor` : "Giving donor",
+    })),
+  ];
+  const chosenPerson = giver[0]?.startsWith("person:") ? people.find(person => `person:${person.id}` === giver[0]) ?? null : null;
+
+  function chooseGiver(next: string[]) {
+    manualBatch.current = null;
+    const pick = next[0] ?? "";
+    setGiver(next.slice(0, 1));
+    if (pick.startsWith("donor:")) { setChosenDonor(pick.slice(6)); return; }
+    if (pick.startsWith("person:")) {
+      const person = people.find(row => `person:${row.id}` === pick);
+      const existing = person?.email ? donorByEmail.get(person.email.toLowerCase()) : undefined;
+      setChosenDonor(existing?.id ?? "");
+      return;
+    }
+    setChosenDonor("");
+  }
 
   function save(gifts: OfflineGiftInput[], batchId: string, imported: boolean) {
     startTransition(async () => {
@@ -36,7 +82,7 @@ export function OfflineGivingForm({funds, donors}: {
       if (!result.ok) {setError(result.error ?? "The donations couldn't be recorded. Please try again."); return;}
       toast.success(`${result.count} donation${result.count === 1 ? "" : "s"} recorded.`);
       if (imported) {setPreview([]); importBatch.current = null;}
-      else {formRef.current?.reset(); setChosenDonor(""); manualBatch.current = null;}
+      else {formRef.current?.reset(); setChosenDonor(""); setGiver([]); setAmount(""); manualBatch.current = null;}
     });
   }
 
@@ -53,8 +99,10 @@ export function OfflineGivingForm({funds, donors}: {
         event.preventDefault();
         const values = new FormData(event.currentTarget);
         const gift: OfflineGiftInput = {
-          date: String(values.get("date")), amount: String(values.get("amount")), fundId: String(values.get("fundId")),
-          donorId: chosenDonor, donorName: String(values.get("donorName") ?? ""), donorEmail: String(values.get("donorEmail") ?? ""),
+          date, amount, fundId: String(values.get("fundId")),
+          donorId: chosenDonor,
+          donorName: chosenPerson && !chosenDonor ? `${chosenPerson.first_name} ${chosenPerson.last_name}`.trim() : String(values.get("donorName") ?? ""),
+          donorEmail: chosenPerson && !chosenDonor ? (chosenPerson.email ?? "").toLowerCase() : String(values.get("donorEmail") ?? ""),
           method: String(values.get("method")) as "cash" | "check" | "other", giftType: "one_time",
         };
         manualBatch.current ??= crypto.randomUUID();
@@ -62,17 +110,27 @@ export function OfflineGivingForm({funds, donors}: {
       }}>
         <fieldset disabled={pending} className="space-y-6" onChange={() => {manualBatch.current = null;}}>
           <div className="grid gap-5 sm:grid-cols-2">
-            <label className="space-y-2"><span>Date</span><Input required type="date" name="date" defaultValue={new Date().toLocaleDateString("en-CA")} /></label>
-            <label className="space-y-2"><span>Amount ($)</span><Input required name="amount" inputMode="decimal" pattern="[0-9]+(\.[0-9]{1,2})?" placeholder="50.00" /></label>
+            <div className="space-y-2"><label htmlFor="gift-date">Date</label><DatePicker id="gift-date" name="date" required value={date} onChange={value => {setDate(value); manualBatch.current = null;}} /></div>
+            <div className="space-y-2">
+              <label htmlFor="gift-amount">Amount</label>
+              <div className="relative">
+                <span aria-hidden className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted-foreground">$</span>
+                <Input id="gift-amount" required name="amount" inputMode="decimal" autoComplete="off" pattern="[0-9]+(\.[0-9]{1,2})?" placeholder="0.00" aria-label="Amount in dollars"
+                  value={amount} onChange={event => setAmount(cleanAmount(event.target.value))} className="pl-8 tabular-nums" />
+              </div>
+            </div>
             <label className="space-y-2"><span>Fund</span><select required name="fundId" className={selectClass}><option value="">Choose a fund</option>{funds.map(fund => <option key={fund.id} value={fund.id}>{fund.name}</option>)}</select></label>
-            <label className="space-y-2"><span>Donor</span><select value={chosenDonor} onChange={event => setChosenDonor(event.target.value)} className={selectClass}><option value="">New donor or unassigned gift</option>{donors.map(donor => <option key={donor.id} value={donor.id}>{donor.name || donor.email}</option>)}</select></label>
-            {!chosenDonor && <>
+            <div className="space-y-2">
+              <SearchPicker label="Who gave? (optional)" items={giverItems} value={giver} onChange={chooseGiver} placeholder="Start typing a name from People…" />
+              {chosenPerson && !chosenPerson.email && !chosenDonor ? <p className="text-sm text-muted-foreground">{chosenPerson.first_name} has no email in People, so this gift is saved under their name but won&apos;t appear on a contribution statement until an email is added.</p> : null}
+            </div>
+            {!giver.length && <>
               <label className="space-y-2"><span>Donor name (optional)</span><Input name="donorName" maxLength={200} autoComplete="name" /></label>
               <label className="space-y-2"><span>Donor email (optional)</span><Input name="donorEmail" type="email" autoComplete="email" /></label>
             </>}
             <label className="space-y-2"><span>Payment method</span><select name="method" className={selectClass}><option value="cash">Cash</option><option value="check">Check</option><option value="other">Other</option></select></label>
           </div>
-          <p className="text-sm text-muted-foreground">Choose an existing donor or enter an email to include this gift on their contribution statement. Unassigned gifts still count in church and fund totals.</p>
+          <p className="text-sm text-muted-foreground">Choose someone from People, or type a name and email, to include this gift on their contribution statement. Gifts with no one attached still count in church and fund totals.</p>
           <Button type="submit" disabled={!funds.length}>{pending ? "Recording…" : "Record donation"}</Button>
         </fieldset>
       </form>

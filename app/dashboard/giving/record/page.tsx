@@ -13,13 +13,18 @@ export default async function RecordGivingPage() {
   if (!auth) redirect("/login");
   if (!auth.isAdmin) redirect("/dashboard/giving");
   await ensureDefaultFunds(auth.churchId);
-  const [funds, donors] = await Promise.all([
+  const supabase = createClient();
+  const [funds, donors, people] = await Promise.all([
     getGivingFunds(auth.churchId),
-    createClient().from("giving_donors").select("id, name, email").eq("church_id", auth.churchId).order("name").limit(1000),
+    supabase.from("giving_donors").select("id, name, email").eq("church_id", auth.churchId).order("name").limit(1000),
+    supabase.from("members").select("id, first_name, last_name, email, phone").eq("church_id", auth.churchId).eq("is_active", true)
+      .order("last_name").order("first_name").limit(5000),
   ]);
   if (donors.error) throw new Error("Offline giving donors could not load");
+  // The People list is a convenience for picking who gave; giving still works without it.
+  if (people.error) console.error("[giving] people for donor picker could not load", people.error.message);
   return <div className="flex w-full flex-col gap-8">
     <PageHeader title="Record donations" description="Record gifts already received in cash, by check or outside FaithForm." />
-    <OfflineGivingForm funds={funds.filter(fund => fund.isActive)} donors={donors.data ?? []} />
+    <OfflineGivingForm funds={funds.filter(fund => fund.isActive)} donors={donors.data ?? []} people={people.data ?? []} />
   </div>;
 }

@@ -5,7 +5,7 @@ import { RecordingReview } from "@/components/live-streaming/recordings/recordin
 import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
-import { getMediaItem, getMediaStats, listMediaSeries } from "@/lib/stream/media-library";
+import { getMediaItem, getMediaStats, listMediaSeries, listMediaTagSuggestions } from "@/lib/stream/media-library";
 import {
   getRecordingSettings,
   getStaffPlayback,
@@ -35,7 +35,7 @@ export default async function RecordingReviewPage({
   const recording = await getStaffRecording(auth.churchId, id);
   if (!recording) notFound();
 
-  const [playback, series, thumbnails, settings, mediaItem, stats, access, websiteSermonsUrl] = await Promise.all([
+  const [playback, series, thumbnails, settings, mediaItem, stats, access, websiteSermonsUrl, tagSuggestions] = await Promise.all([
     recording.status === "ready" || recording.status === "processing"
       ? getStaffPlayback(auth.churchId, id)
       : Promise.resolve(null),
@@ -46,6 +46,7 @@ export default async function RecordingReviewPage({
     getMediaStats(auth.churchId, id, recording.sessionId),
     getFeatureAccess(),
     getWebsiteSermonsUrl(auth.churchId),
+    listMediaTagSuggestions(auth.churchId),
   ]);
 
   const stillChanging = isStillChanging(recording.phase.phase);
@@ -63,11 +64,13 @@ export default async function RecordingReviewPage({
         appEnabled={Boolean(access?.flags.member_app)}
         timeZone={auth.churchTimezone ?? "America/New_York"}
         websiteSermonsUrl={websiteSermonsUrl}
+        tagSuggestions={tagSuggestions}
         stats={{ live: stats.liveViews, replay: stats.replayViews }}
         artworkSlot={
           auth.isAdmin && mediaItem ? (
             <ItemArtworkPanel
               recordingId={mediaItem.id}
+              title={mediaItem.title ?? recording.title}
               artwork={mediaItem.artwork}
               seriesArtwork={mediaItem.seriesArtwork}
               seriesName={mediaItem.seriesName}

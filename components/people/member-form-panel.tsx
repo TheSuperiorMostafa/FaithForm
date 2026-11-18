@@ -28,7 +28,12 @@ import {
 } from "@/components/people/people-format";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
-import { MEMBERSHIP_STATUSES, type MembershipStatus } from "@/lib/people/membership-status";
+import {
+  MEMBER_GENDERS,
+  MEMBERSHIP_STATUSES,
+  type MemberGender,
+  type MembershipStatus,
+} from "@/lib/people/membership-status";
 import { Select } from "@/components/ui/select";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SearchPicker } from "@/components/ui/search-picker";
@@ -61,7 +66,7 @@ type MemberFormPanelProps = {
   onAppConnectionMoved?: () => void;
 };
 
-type PanelTab = "details" | "care" | "documents" | "household";
+type PanelTab = "details" | "groups" | "care" | "documents" | "household";
 
 /**
  * Whether this person is on the app, and — for when the automatic match got
@@ -212,7 +217,7 @@ const inputClassName =
  * One person.
  *
  * The title is their name. Under it: Call, Text and Email, when those exist.
- * Then four tabs — Details, Notes, Documents, Family — each with a button that
+ * Then five tabs — Details, Groups, Notes, Documents, Family — each with a button that
  * says exactly what it saves, so nobody wonders whether "Save" on one tab
  * also saved the other.
  */
@@ -242,6 +247,8 @@ export function MemberFormPanel({
   );
   const [membershipStatus, setMembershipStatus] = useState<MembershipStatus>(member?.membership_status ?? "unknown");
   const [email, setEmail] = useState(member?.email ?? "");
+  const [address, setAddress] = useState(member?.address ?? "");
+  const [gender, setGender] = useState<MemberGender | "">(member?.gender ?? "");
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>("details");
 
@@ -261,6 +268,8 @@ export function MemberFormPanel({
         phone: phone || undefined,
         email: email || undefined,
         membershipStatus,
+        address,
+        gender,
       };
 
       const result = isEdit && member
@@ -348,7 +357,7 @@ export function MemberFormPanel({
 
         <div className="flex flex-col gap-2">
           <label htmlFor="member-last-name" className="text-base font-semibold">
-            Last name (optional)
+            Last name
           </label>
           <input
             id="member-last-name"
@@ -363,7 +372,7 @@ export function MemberFormPanel({
 
       <div className="flex flex-col gap-2">
         <label htmlFor="member-phone" className="text-base font-semibold">
-          Phone (optional)
+          Phone
         </label>
         <PhoneInput
           id="member-phone"
@@ -383,7 +392,7 @@ export function MemberFormPanel({
 
       <div className="flex flex-col gap-2">
         <label htmlFor="member-email" className="text-base font-semibold">
-          Email (optional)
+          Email
         </label>
         <input
           id="member-email"
@@ -397,10 +406,35 @@ export function MemberFormPanel({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="member-status" className="text-base font-semibold">Status</label>
-        <Select id="member-status" value={membershipStatus} onChange={event => setMembershipStatus(event.target.value as MembershipStatus)} disabled={readOnly}>
-          {MEMBERSHIP_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
-        </Select>
+        <label htmlFor="member-address" className="text-base font-semibold">
+          Address
+        </label>
+        <input
+          id="member-address"
+          value={address}
+          onChange={(event) => setAddress(event.target.value)}
+          readOnly={readOnly}
+          autoComplete="off"
+          placeholder={readOnly ? undefined : "Street, city, state, ZIP"}
+          maxLength={300}
+          className={inputClassName}
+        />
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <label htmlFor="member-gender" className="text-base font-semibold">Gender</label>
+          <Select id="member-gender" value={gender} onChange={event => setGender(event.target.value as MemberGender | "")} disabled={readOnly}>
+            <option value="">Not set</option>
+            {MEMBER_GENDERS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </Select>
+        </div>
+        <div className="flex flex-col gap-2">
+          <label htmlFor="member-status" className="text-base font-semibold">Status</label>
+          <Select id="member-status" value={membershipStatus} onChange={event => setMembershipStatus(event.target.value as MembershipStatus)} disabled={readOnly}>
+            {MEMBERSHIP_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
+          </Select>
+        </div>
       </div>
 
       {error ? (
@@ -572,6 +606,7 @@ export function MemberFormPanel({
         >
           <TabsList className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="details"><span className="text-[15px]">Details</span></TabsTrigger>
+            <TabsTrigger value="groups"><span className="text-[15px]">Groups</span></TabsTrigger>
             <TabsTrigger value="care"><span className="text-[15px]">Notes</span></TabsTrigger>
             <TabsTrigger value="documents">
               <span className="text-[15px]">
@@ -601,8 +636,10 @@ export function MemberFormPanel({
                 onMoved={onAppConnectionMoved}
               />
             ) : null}
-            <MemberGroups memberId={member.id} />
             {detailsForm}
+          </TabsContent>
+          <TabsContent value="groups" className="mt-6">
+            <MemberGroups memberId={member.id} />
           </TabsContent>
           <TabsContent value="care" className="mt-6">
             <MemberCareSection

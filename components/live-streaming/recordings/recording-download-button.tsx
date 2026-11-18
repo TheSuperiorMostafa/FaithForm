@@ -110,7 +110,10 @@ export function RecordingDownloadButton({ recordingId, title, className }: {
         <Download className="size-4" aria-hidden />Download recording
       </Button>
       <Dialog open={open} onOpenChange={changeOpen}>
-        <DialogContent aria-labelledby={`download-title-${recordingId}`} className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col overflow-hidden p-0">
+        {/* No `flex` here: the dialog primitive shows itself with `open:flex`.
+            An unconditional `flex` overrides a closed <dialog>'s display:none,
+            so every row's closed dialog was painted on the page, unclosable. */}
+        <DialogContent aria-labelledby={`download-title-${recordingId}`} className="max-w-lg overflow-hidden">
           <DialogHeader className="pr-16">
             <DialogTitle id={`download-title-${recordingId}`}>Download recording</DialogTitle>
             <DialogDescription>Save the full recording, including any parts hidden by trimming.</DialogDescription>

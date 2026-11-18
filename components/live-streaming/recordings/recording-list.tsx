@@ -62,6 +62,15 @@ function RecordingRow({
   isAdmin: boolean;
 }) {
   const date = formatRecordingDate(recording.recordedAt, timeZone, recording.serviceDate);
+  // Series · date · speakers · Scripture · topics, as each is set.
+  const speakers = recording.speakers?.length ? recording.speakers : recording.speaker ? [recording.speaker] : [];
+  const subtitle = [
+    recording.seriesName,
+    date,
+    speakers.join(", "),
+    recording.chapters.join(", "),
+    recording.topics.join(", "),
+  ].filter(Boolean).join(" · ");
   const action = recordingNextAction(recording, isAdmin);
   const phase = recording.phase.phase;
   const badge = (
@@ -99,9 +108,8 @@ function RecordingRow({
           <span className="line-clamp-2 text-base font-semibold leading-snug text-foreground group-hover:underline">
             {recording.title}
           </span>
-          <span className="text-[15px] text-muted-foreground">
-            {date}
-            {recording.seriesName ? ` · ${recording.seriesName}` : ""}
+          <span className="line-clamp-2 text-[15px] text-muted-foreground">
+            {subtitle}
           </span>
           {phase === "needs_attention" && recording.phase.detail ? (
             <span className="line-clamp-2 text-sm text-orange-800 dark:text-orange-200">

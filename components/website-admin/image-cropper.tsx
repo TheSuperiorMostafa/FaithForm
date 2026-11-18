@@ -29,8 +29,11 @@ export function ImageCropper({
   shape,
   onCancel,
   onConfirm,
+  extra,
 }: {
   file: File;
+  /** Extra choices shown in the footer, e.g. "Apply this image to all sizes". */
+  extra?: React.ReactNode;
   /** A website aspect. Ignored when `shape` is given. */
   aspectKey?: ImageAspectKey;
   /**
@@ -146,7 +149,8 @@ export function ImageCropper({
           </div>
 
         </div>
-        <DialogFooter>
+        <DialogFooter className={extra ? "sm:items-center" : undefined}>
+          {extra ? <div className="flex min-h-11 items-center sm:mr-auto">{extra}</div> : null}
           <Button type="button" variant="ghost" onClick={onCancel}>
             Cancel
           </Button>

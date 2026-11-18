@@ -9,6 +9,7 @@ import {
   type CustomEventRepeat,
   type EventRepeat,
 } from "@/lib/announcements/recurrence";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const selectClassName = "h-11 w-full rounded-xl border border-input bg-background px-3 text-base";
 
@@ -48,13 +49,12 @@ export function EventRepeatFields({
         {repeat !== "none" && (
           <div className="min-w-0 space-y-2">
             <Label htmlFor={`${id}-until`}>Last date</Label>
-            <Input
+            <DatePicker
               id={`${id}-until`}
-              type="date"
               required
               min={startDate || undefined}
               value={until}
-              onChange={(event) => onUntil(event.target.value)}
+              onChange={onUntil}
             />
           </div>
         )}

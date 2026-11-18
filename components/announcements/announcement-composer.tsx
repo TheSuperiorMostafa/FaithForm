@@ -17,7 +17,9 @@ import {
   Bell,
   Check,
   ExternalLink,
+  ImageIcon,
   ImagePlus,
+  Images,
   Loader2,
   Mail,
   Megaphone,
@@ -79,6 +81,8 @@ import {
 } from "@/lib/utils/announcement-placeholders";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { DatePicker, TimePicker } from "@/components/ui/date-picker";
+import { ImageLibraryDialog, type LibraryPick } from "@/components/media/image-library-dialog";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -688,6 +692,32 @@ export function AnnouncementComposer({
       }
   };
 
+  const [libraryTab, setLibraryTab] = useState<"library" | "stock" | null>(null);
+  const loadPictureLibrary = useCallback(async () => {
+    const res = await fetch("/api/announcements/graphic-library", { cache: "no-store" });
+    if (!res.ok) return { ok: false as const, error: await readJsonError(res, "Your pictures couldn't be loaded.") };
+    return { ok: true as const, data: (await res.json()) as { library: { id: string; url: string }[]; stock: { id: string; name: string; url: string }[] } };
+  }, []);
+  const applyPicturePick = async (pick: LibraryPick): Promise<boolean> => {
+    setPictureError(null);
+    try {
+      const res = await fetch("/api/announcements/graphic-library", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: pick.kind, id: pick.id }),
+      });
+      if (!res.ok) throw new Error(await readJsonError(res, "That picture could not be used."));
+      const data = (await res.json()) as { graphicUrl?: string; graphicPath?: string };
+      if (!data.graphicUrl || !data.graphicPath) throw new Error("That picture could not be used.");
+      dispatchGraphic({ type: "uploaded", url: data.graphicUrl, path: data.graphicPath });
+      setPictureNote(null);
+      return true;
+    } catch (err) {
+      setPictureError(err instanceof Error && err.message ? err.message : "That picture could not be used.");
+      return true;
+    }
+  };
+
   const handleFile = async (file: File) => {
     setUploading(true);
     setPictureError(null);
@@ -1059,12 +1089,6 @@ export function AnnouncementComposer({
 
                   {/* When? */}
                   <Section title="When is it?">
-                    {calendar?.readOnly && (
-                      <p className="text-[15px] text-muted-foreground">
-                        This event comes from your iCloud calendar link. Changes here update the
-                        announcement only. Change the event itself in Apple Calendar.
-                      </p>
-                    )}
                     {!calendar && (
                       <div className="choice-grid" role="radiogroup" aria-label="When is it?">
                         <ChoiceCard
@@ -1099,12 +1123,11 @@ export function AnnouncementComposer({
                             <Label htmlFor="composer-date" className="text-[15px]">
                               Day
                             </Label>
-                            <Input
+                            <DatePicker
                               id="composer-date"
-                              type="date"
                               value={values.date}
-                              onChange={(e) => setDetail("date", e.target.value)}
-                              className="min-w-0 tabular-nums"
+                              onChange={(value) => setDetail("date", value)}
+                              className="min-w-0"
                             />
                           </div>
                           {!values.allDay && (
@@ -1113,25 +1136,25 @@ export function AnnouncementComposer({
                                 <Label htmlFor="composer-start" className="text-[15px]">
                                   Starts
                                 </Label>
-                                <Input
+                                <TimePicker
                                   id="composer-start"
-                                  type="time"
                                   value={values.startTime}
-                                  onChange={(e) => setDetail("startTime", e.target.value)}
-                                  className="min-w-0 px-2 tabular-nums sm:px-4"
+                                  onChange={(value) => setDetail("startTime", value)}
+                                  clearable
+                                  className="min-w-0"
                                 />
                               </div>
                               <div className="flex min-w-0 flex-col gap-2">
                                 <Label htmlFor="composer-end" className="text-[15px]">
                                   Ends <span className="font-normal text-muted-foreground">(optional)</span>
                                 </Label>
-                                <Input
+                                <TimePicker
                                   id="composer-end"
-                                  type="time"
                                   value={values.endTime}
-                                  onChange={(e) => setDetail("endTime", e.target.value)}
+                                  onChange={(value) => setDetail("endTime", value)}
                                   disabled={!values.startTime}
-                                  className="min-w-0 px-2 tabular-nums sm:px-4"
+                                  clearable
+                                  className="min-w-0"
                                 />
                               </div>
                             </>
@@ -1193,6 +1216,7 @@ export function AnnouncementComposer({
                       alt={posterAltText || "Event picture"}
                       onMake={() => void askForPicture("full", !values.caption.trim())}
                       onUpload={() => fileInputRef.current?.click()}
+                      onLibrary={(tab) => setLibraryTab(tab)}
                       onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
                       onRemove={() => dispatchGraphic({ type: "remove" })}
                     />
@@ -1205,6 +1229,14 @@ export function AnnouncementComposer({
                         const file = e.target.files?.[0];
                         if (file) void handleFile(file);
                       }}
+                    />
+                    <ImageLibraryDialog
+                      open={libraryTab !== null}
+                      onOpenChange={(open) => { if (!open) setLibraryTab(null); }}
+                      initialTab={libraryTab ?? "library"}
+                      load={loadPictureLibrary}
+                      onPick={applyPicturePick}
+                      title="Choose a picture for this event"
                     />
                   </Section>
 
@@ -1568,6 +1600,7 @@ function PictureField({
   alt,
   onMake,
   onUpload,
+  onLibrary,
   onRestoreAi,
   onRemove,
 }: {
@@ -1581,6 +1614,7 @@ function PictureField({
   alt: string;
   onMake: () => void;
   onUpload: () => void;
+  onLibrary: (tab: "library" | "stock") => void;
   onRestoreAi: () => void;
   onRemove: () => void;
 }) {
@@ -1607,6 +1641,14 @@ function PictureField({
         <Button type="button" variant="outline" onClick={onUpload} disabled={uploading || loading}>
           {uploading ? <Loader2 className="animate-spin" aria-hidden /> : <ImagePlus aria-hidden />}
           {uploading ? "Uploading…" : graphic ? "Upload a different picture" : "Upload a picture"}
+        </Button>
+        <Button type="button" variant="outline" onClick={() => onLibrary("library")} disabled={uploading || loading}>
+          <Images aria-hidden />
+          Library
+        </Button>
+        <Button type="button" variant="outline" onClick={() => onLibrary("stock")} disabled={uploading || loading}>
+          <ImageIcon aria-hidden />
+          Stock
         </Button>
         {canRestoreAi && (
           <Button type="button" variant="ghost" onClick={onRestoreAi}>
@@ -1666,19 +1708,17 @@ function FacebookScheduleField({
   return (
     <div className="flex flex-col gap-2 pl-8">
       <div className="grid max-w-md grid-cols-[1fr_auto] gap-3">
-        <Input
-          type="date"
+        <DatePicker
           aria-label="Facebook post day"
           value={date}
-          onChange={(e) => emit(e.target.value, time)}
-          className="min-w-0 tabular-nums"
+          onChange={(value) => emit(value, time)}
+          className="min-w-0"
         />
-        <Input
-          type="time"
+        <TimePicker
           aria-label="Facebook post time"
           value={time}
-          onChange={(e) => emit(date, e.target.value)}
-          className="w-[9.5rem] min-w-0 tabular-nums"
+          onChange={(value) => emit(date, value)}
+          className="w-[9.5rem] min-w-0"
         />
       </div>
       {hint && <p className="text-sm text-muted-foreground">{hint}</p>}

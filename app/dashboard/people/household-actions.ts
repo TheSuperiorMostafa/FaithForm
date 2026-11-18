@@ -164,3 +164,110 @@ export async function deleteHousehold(input: {
   revalidateFamilies();
   return { ok: true };
 }
+
+/** Every family in the church, for the People multiselect's "Add to the same family". */
+export async function listFamiliesForPicker(): Promise<
+  HouseholdActionResult<{ id: string; name: string }[]>
+> {
+  const context = await requireHouseholdAdmin();
+  if (!isContext(context)) return context;
+
+  const { data, error } = await context.admin
+    .from("households")
+    .select("id, name")
+    .eq("church_id", context.auth.churchId)
+    .order("name", { ascending: true })
+    .limit(2000);
+
+  if (error) return fail(toUserError(error, "We couldn't load your families."));
+  return { ok: true, data: (data ?? []) as { id: string; name: string }[] };
+}
+
+const BULK_RELATIONSHIPS = ["guardian", "dependent", "other"] as const;
+type BulkRelationship = (typeof BULK_RELATIONSHIPS)[number];
+
+/**
+ * People list multiselect: put everyone chosen into one family — an existing
+ * one, or a new one made here. Someone already in another family is skipped
+ * and reported, since a person belongs to one family at a time.
+ */
+export async function addPeopleToFamily(input: {
+  memberIds: string[];
+  householdId?: string;
+  newFamilyName?: string;
+  relationship: BulkRelationship;
+}): Promise<
+  HouseholdActionResult<{ householdId: string; added: number; alreadyInFamily: number }>
+> {
+  const context = await requireHouseholdAdmin();
+  if (!isContext(context)) return context;
+
+  const memberIds = [...new Set((input.memberIds ?? []).filter((id) => typeof id === "string" && id))].slice(0, 500);
+  if (memberIds.length === 0) return fail("Choose at least one person.");
+  if (!BULK_RELATIONSHIPS.includes(input.relationship)) {
+    return fail("Pick how these people belong to the family.");
+  }
+
+  const churchId = context.auth.churchId;
+  const { data: members, error: membersError } = await context.admin
+    .from("members")
+    .select("id")
+    .eq("church_id", churchId)
+    .in("id", memberIds);
+  if (membersError) return fail(toUserError(membersError, "We couldn't find those people."));
+  const validIds = (members ?? []).map((row) => row.id as string);
+  if (validIds.length === 0) return fail("We couldn't find those people. Refresh the page and try again.");
+
+  let householdId = input.householdId?.trim() ?? "";
+  if (householdId) {
+    const { data: household } = await context.admin
+      .from("households")
+      .select("id")
+      .eq("id", householdId)
+      .eq("church_id", churchId)
+      .maybeSingle();
+    if (!household) return fail("We couldn't find that family. Refresh the page and try again.");
+  } else {
+    const name = input.newFamilyName?.trim() ?? "";
+    if (!name) return fail("Give the new family a name.");
+    if (name.length > 120) return fail("That name is too long. Use 120 characters or fewer.");
+    const { data: created, error: createError } = await context.admin
+      .from("households")
+      .insert({ church_id: churchId, name, created_by: context.auth.userId })
+      .select("id")
+      .single();
+    if (createError || !created) return fail(toUserError(createError, "We couldn't create that family."));
+    householdId = created.id as string;
+  }
+
+  const { data: existing } = await context.admin
+    .from("household_members")
+    .select("member_id, household_id")
+    .eq("church_id", churchId)
+    .in("member_id", validIds);
+  const alreadyIn = new Set((existing ?? []).map((row) => row.member_id as string));
+  const toAdd = validIds.filter((id) => !alreadyIn.has(id));
+  const alreadyInFamily = (existing ?? []).filter((row) => row.household_id !== householdId).length;
+
+  if (toAdd.length > 0) {
+    const { error } = await context.admin.from("household_members").insert(
+      toAdd.map((memberId) => ({
+        church_id: churchId,
+        household_id: householdId,
+        member_id: memberId,
+        relationship: input.relationship,
+        created_by: context.auth.userId,
+      })),
+    );
+    if (error) {
+      return fail(
+        error.code === "23505"
+          ? "Someone you chose already belongs to a family. Remove them from it first."
+          : toUserError(error, "We couldn't add these people to the family."),
+      );
+    }
+  }
+
+  revalidateFamilies(householdId);
+  return { ok: true, data: { householdId, added: toAdd.length, alreadyInFamily } };
+}

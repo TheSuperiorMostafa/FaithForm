@@ -7,15 +7,16 @@ import { MemberGroupList } from "@/components/people/member-groups";
 
 Object.assign(globalThis, { React });
 
-test("the real person panel names the existing care tab Notes and reserves a loading state for group memberships", () => {
+test("the real person panel names the existing care tab Notes and gives groups their own tab", () => {
   const html = renderToStaticMarkup(createElement(MemberFormPanel, {
     member: { id: "12345678-1234-1234-1234-123456789abc", first_name: "Avery", last_name: "Lee", phone: null, email: "avery@example.invalid", photo_url: null, is_active: true, attendance_count: 0 },
     isAdmin: true, showAppStatus: true, appConnection: null, onClose() {}, onSaved() {},
   }));
   assert.match(html, />Notes<\/span>/);
   assert.doesNotMatch(html, />Care<\/span>/);
-  assert.match(html, /aria-label="Groups"/);
-  assert.match(html, /aria-label="Loading groups"/);
+  // Groups moved off Details into their own tab (Updates 1.6.12).
+  assert.match(html, />Groups<\/span>/);
+  assert.doesNotMatch(html, /aria-label="Loading groups"/);
   assert.doesNotMatch(html, /Not in any groups yet/);
   assert.match(html, /avery@example.invalid/);
   assert.match(html, /href="\/dashboard\/app#find-and-join"/);

@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Plus, Search, UserPlus, Users } from "lucide-react";
+import { Check, CheckSquare, Plus, Search, UserPlus, Users } from "lucide-react";
 
 import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
 import { MemberFormPanel } from "@/components/people/member-form-panel";
+import { PeopleBulkBar } from "@/components/people/people-bulk-bar";
 import {
   countPeople,
   filterPeople,
@@ -74,6 +75,9 @@ export function PeopleManager({
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
   /** Bumped by "Add another" so the add form starts clean every time. */
   const [createKey, setCreateKey] = useState(0);
+  /** Multiselect: tapping a row selects it instead of opening it. */
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const returnFocus = useRef<HTMLElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
 
@@ -225,8 +229,26 @@ export function PeopleManager({
 
   const openId = panelOpen && panelMode === "edit" ? selectedMember?.id : null;
 
+  function toggleSelected(memberId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(memberId)) next.delete(memberId);
+      else next.add(memberId);
+      return next;
+    });
+  }
+
+  function stopSelecting() {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  }
+
+  const selectedPeople = members.filter((member) => selectedIds.has(member.id));
+  const allVisibleSelected =
+    filteredMembers.length > 0 && filteredMembers.every((member) => selectedIds.has(member.id));
+
   return (
-    <div className="flex w-full flex-col gap-8 pb-28 sm:pb-0">
+    <div className={cn("flex w-full flex-col gap-8 pb-28", selecting && selectedIds.size > 0 ? "pb-48 sm:pb-32" : "sm:pb-0")}>
       <PageHeader
         title="People"
         description={PEOPLE_DESCRIPTION}
@@ -304,6 +326,17 @@ export function PeopleManager({
               {MEMBERSHIP_STATUSES.map(status => <option key={status.value} value={status.value}>{status.label}</option>)}
             </Select>
           </label>
+          {canEdit && members.length > 0 ? (
+            <Button
+              type="button"
+              variant={selecting ? "default" : "outline"}
+              aria-pressed={selecting}
+              onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+            >
+              <CheckSquare aria-hidden />
+              {selecting ? "Done selecting" : "Select people"}
+            </Button>
+          ) : null}
           <label className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
             <span className="shrink-0">Sort by</span>
             <Select
@@ -316,6 +349,28 @@ export function PeopleManager({
             </Select>
           </label>
         </div>
+
+        {selecting ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent/40 bg-accent/[0.06] px-4 py-3">
+            <p className="text-[15px] text-foreground">
+              Tap people to select them, then change their status or gender, or add them to the same family.
+            </p>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() =>
+                setSelectedIds((prev) => {
+                  const next = new Set(prev);
+                  if (allVisibleSelected) filteredMembers.forEach((member) => next.delete(member.id));
+                  else filteredMembers.forEach((member) => next.add(member.id));
+                  return next;
+                })
+              }
+            >
+              {allVisibleSelected ? "Unselect all shown" : `Select all shown (${filteredMembers.length})`}
+            </Button>
+          </div>
+        ) : null}
 
         {filter === "duplicates" ? (
           <p className="text-[15px] text-muted-foreground">
@@ -376,10 +431,24 @@ export function PeopleManager({
               return (
                 <ListRow
                   key={member.id}
-                  onClick={() => openMemberPanel(member)}
-                  selected={openId === member.id}
+                  onClick={() => (selecting ? toggleSelected(member.id) : openMemberPanel(member))}
+                  selected={selecting ? selectedIds.has(member.id) : openId === member.id}
+                  aria-label={selecting ? `${selectedIds.has(member.id) ? "Unselect" : "Select"} ${fullName(member)}` : undefined}
                   className={cn(!member.is_active && "opacity-75")}
                   leading={
+                    selecting ? (
+                      <span
+                        className={cn(
+                          "flex size-12 items-center justify-center rounded-full border-2",
+                          selectedIds.has(member.id)
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border bg-card text-transparent",
+                        )}
+                        aria-hidden
+                      >
+                        <Check className="size-6" />
+                      </span>
+                    ) : (
                     <span
                       className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-primary/[0.08] font-heading text-base font-bold text-primary dark:bg-accent/15 dark:text-accent"
                       aria-hidden
@@ -389,6 +458,7 @@ export function PeopleManager({
                         initials={getInitials(member.first_name, member.last_name)}
                       />
                     </span>
+                    )
                   }
                   title={fullName(member)}
                   subtitle={
@@ -406,7 +476,20 @@ export function PeopleManager({
         )}
       </section>
 
-      {canEdit ? (
+      {selecting ? (
+        <PeopleBulkBar
+          selected={selectedPeople}
+          isAdmin={isAdmin}
+          onClear={() => setSelectedIds(new Set())}
+          onUpdated={(ids, patch) =>
+            setMembers((prev) =>
+              prev.map((member) => (ids.includes(member.id) ? { ...member, ...patch } : member)),
+            )
+          }
+        />
+      ) : null}
+
+      {canEdit && !(selecting && selectedIds.size > 0) ? (
         <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
           <Button
             type="button"

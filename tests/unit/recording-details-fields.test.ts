@@ -37,7 +37,8 @@ test("the shared more-options editor retains every recording detail", () => {
   for (const field of ["speakers_json", "description", "chapters_json", "topics_json"]) assert.ok(html.includes(`name="${field}"`));
   for (const value of ["Pastor John", "Doe, Jane", "Grace and hope", "John 3, Romans 8", "Grace", "Prayer"]) assert.ok(html.includes(value));
   assert.match(html, /aria-label="Remove Doe, Jane"/);
-  assert.match(html, /press Enter to add/);
+  assert.match(html, /Type a name and add it/);
+  assert.match(html, /Add Scripture/);
 });
 
 test("upcoming and recording publication controls visibly retain the saved checked choice", () => {

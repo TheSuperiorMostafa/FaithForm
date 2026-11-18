@@ -28,6 +28,7 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
+import { TimePicker } from "@/components/ui/date-picker";
 
 /**
  * The church facts the website renders, editable without leaving this tab.
@@ -335,14 +336,13 @@ export function DetailsForm({
                     ))}
                   </Select>
                   <Label htmlFor={`service-${row.clientId}-time`} className="sr-only">Start time for {row.label || `service ${i + 1}`}</Label>
-                  <Input
+                  <TimePicker
                     id={`service-${row.clientId}-time`}
-                    type="time"
                     value={row.startTime}
                     disabled={!canEdit}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       const next = [...times];
-                      next[i] = { ...row, startTime: e.target.value };
+                      next[i] = { ...row, startTime: value };
                       set("serviceTimes", next);
                     }}
                   />

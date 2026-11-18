@@ -13,6 +13,7 @@ import { describeRecordingUploadError, MIN_RECORDING_OPTIMIZE_BYTES, validateRec
 import { uploadRecordingWithProgress, type RecordingTransferProgress } from "@/lib/stream/upload-recording-browser";
 import { RecordingUploadProgress, type RecordingUploadPhase } from "@/components/live-streaming/recordings/recording-upload-progress";
 import { isRecordingServiceDate, recordingDateValue } from "@/lib/stream/recording-date";
+import { DatePicker } from "@/components/ui/date-picker";
 
 export function UploadRecording({ timeZone = "America/New_York" }: { timeZone?: string } = {}) {
   const router = useRouter();
@@ -126,7 +127,7 @@ export function UploadRecording({ timeZone = "America/New_York" }: { timeZone?: 
         <form onSubmit={(event) => { event.preventDefault(); upload(); }} className="flex min-h-0 flex-auto flex-col" aria-busy={pending}>
           <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
             <div className="space-y-2"><Label htmlFor="recording-upload-title">Recording title</Label><Input id="recording-upload-title" required maxLength={120} value={title} disabled={pending || Boolean(uploadedId)} onChange={(event) => setTitle(event.target.value)} /></div>
-            <div className="space-y-2"><Label htmlFor="recording-upload-date">Service date</Label><Input id="recording-upload-date" type="date" required min="0001-01-01" max="9999-12-31" value={serviceDate} disabled={pending || Boolean(uploadedId)} onChange={(event) => setServiceDate(event.target.value)} aria-describedby="recording-upload-date-hint" /><p id="recording-upload-date-hint" className="text-sm text-muted-foreground">The day the service happened. This date appears on your website and in the app.</p></div>
+            <div className="space-y-2"><Label htmlFor="recording-upload-date">Service date</Label><DatePicker id="recording-upload-date" required value={serviceDate} disabled={pending || Boolean(uploadedId)} onChange={setServiceDate} aria-describedby="recording-upload-date-hint" /><p id="recording-upload-date-hint" className="text-sm text-muted-foreground">The day the service happened. This date appears on your website and in the app.</p></div>
             <div className="space-y-2"><Label htmlFor="recording-upload-file">Video</Label><Input id="recording-upload-file" type="file" accept="video/mp4,.mp4" required disabled={pending || Boolean(uploadedId)} onChange={(event) => { setFile(event.target.files?.[0] ?? null); setError(null); setPhase(null); }} /></div>
             {phase && file ? (
               <RecordingUploadProgress phase={phase} filename={file.name} loaded={transfer.loaded} total={transfer.total}

@@ -124,6 +124,12 @@ else {
       "0146_people_membership_status_read_grant.sql",
       "e7f7a0e52126fcdce6644026a62f7b110391d1446cf9363430e0a4b934dbbb01",
     ],
+    // 0168's address and gender need the same named-column read access as
+    // 0146. Two columns, read-only, to signed-in callers; nothing sensitive.
+    [
+      "0169_people_address_gender_read_grant.sql",
+      "624e0b680c9332ef5ee4f80c23376d671387eac4cb1fab9dab5e7dba40df1744",
+    ],
     [
       "0110_feature_scoped_sensitive_reads.sql",
       "68f5877a17de0eab91025e57cf719c2cec645909213cf65f302d4328d8049863",

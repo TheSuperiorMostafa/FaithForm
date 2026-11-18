@@ -53,6 +53,7 @@ export default async function RecordingSeriesDetailPage({
 
       <SeriesArtworkPanel
         seriesId={series.id}
+        seriesName={series.name}
         artwork={series.artwork}
         itemCount={inSeries.length}
         overriddenCount={overridden}

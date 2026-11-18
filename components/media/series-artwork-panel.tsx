@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { applySeriesArtworkToItems } from "@/app/dashboard/live-streaming/media/actions";
 import { ArtworkField } from "@/components/media/artwork-field";
+import { CreateArtworkButton } from "@/components/media/create-artwork-button";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,8 +25,11 @@ export function SeriesArtworkPanel({
   artwork,
   itemCount,
   overriddenCount,
+  seriesName = "",
 }: {
   seriesId: string;
+  /** "Create one for me" makes its picture from the series name. */
+  seriesName?: string;
   artwork: ArtworkSet;
   itemCount: number;
   /** Items in this series carrying their own artwork, which wins over these. */
@@ -84,6 +88,14 @@ export function SeriesArtworkPanel({
               : `Inherited by every message in this series that doesn't have its own.`}
           </p>
         </div>
+
+        <CreateArtworkButton
+          target={{ kind: "series", id: seriesId }}
+          title={seriesName}
+          hasArtwork={hasAnyArtwork(artwork)}
+          onCreated={() => router.refresh()}
+          disabled={pending}
+        />
 
         <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-5">
           {ARTWORK_CROPS.map((crop) => (

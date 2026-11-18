@@ -126,7 +126,9 @@ test("adding a person offers the next steps", () => {
   assert.match(panel, /Add to a family/);
   assert.match(panel, /Add to a group/);
   assert.match(panel, /Add another/);
-  assert.match(panel, /Phone \(optional\)/);
+  // Last name, phone and email are labelled plainly, without "(optional)".
+  assert.match(panel, /htmlFor="member-phone" className="text-base font-semibold">\s*Phone\s*</);
+  assert.doesNotMatch(panel, /(Last name|Phone|Email) \(optional\)/);
   // Buttons name what they save.
   assert.match(panel, /"Save details"/);
   assert.match(read("components/people/member-care-panel.tsx"), /"Save notes"/);

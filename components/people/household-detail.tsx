@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   KeyRound,
   Pencil,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Trash2,
@@ -39,6 +40,13 @@ import {
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
@@ -106,6 +114,7 @@ export function HouseholdDetail({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(household.name);
   const [newMember, setNewMember] = useState<string[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
   const [newPickup, setNewPickup] = useState<string[]>([]);
   const [deleteBlocked, setDeleteBlocked] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -362,19 +371,33 @@ export function HouseholdDetail({
           <span>
             This family has children but no parent or guardian, so nobody has
             its pickup code. Every child would have to be released without a
-            code. Add a parent or guardian below.
+            code. Use Add person to add a parent or guardian.
           </span>
         </p>
       ) : null}
 
       <Card>
-        <CardHeader className="pb-4">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-4">
           <CardTitle className="text-xl">People in this family</CardTitle>
+          {isAdmin ? (
+            <Button
+              type="button"
+              size="sm"
+              disabled={pending}
+              onClick={() => {
+                setNewMember([]);
+                setAddOpen(true);
+              }}
+            >
+              <Plus aria-hidden />
+              Add person
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           {household.members.length === 0 ? (
             <p className="text-[15px] text-muted-foreground">
-              No one in this family yet. Add the first person below.
+              No one in this family yet. Use Add person to add the first one.
             </p>
           ) : (
             <ul className="divide-y divide-border">
@@ -449,72 +472,84 @@ export function HouseholdDetail({
           )}
 
           {isAdmin ? (
-            <form
-              className="flex flex-col gap-5 rounded-2xl border border-border bg-muted/30 p-5"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const form = event.currentTarget;
-                const formData = new FormData(form);
-                formData.set("householdId", household.id);
-                const chosen = memberById.get(newMember[0] ?? "");
-                if (!chosen) {
-                  toast.error("Choose a person to add.");
-                  return;
-                }
-                const who = `${chosen.first_name} ${chosen.last_name}`.trim();
-                run(addHouseholdMember(formData), `${who} added to ${familyName}.`, () => {
-                  form.reset();
-                  setNewMember([]);
-                });
-              }}
-            >
-              <h3 className="font-heading text-lg font-semibold">Add someone to this family</h3>
-              <SearchPicker
-                label="Who?"
-                name="memberId"
-                required
-                items={addableItems}
-                value={newMember}
-                onChange={setNewMember}
-                placeholder="Start typing their name…"
-              />
-              <div className="grid gap-5 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="add-relationship" className="text-base">
-                    Parent or guardian, or child?
-                  </Label>
-                  <Select id="add-relationship" name="relationship" required defaultValue="">
-                    <option value="" disabled>
-                      Choose…
-                    </option>
-                    {HOUSEHOLD_RELATIONSHIPS.map((value) => (
-                      <option key={value} value={value}>
-                        {RELATIONSHIP_LABELS[value]}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="add-label" className="text-base">
-                    How the family says it (optional)
-                  </Label>
-                  <Input id="add-label" name="relationshipLabel" placeholder="Mom, Grandson" />
-                </div>
-              </div>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {HOUSEHOLD_RELATIONSHIPS.map((value) => (
-                  <li key={value}>
-                    <strong className="font-semibold text-foreground">
-                      {RELATIONSHIP_LABELS[value]}:
-                    </strong>{" "}
-                    {FAMILY_ROLE_HINTS[value]}
-                  </li>
-                ))}
-              </ul>
-              <Button size="sm" type="submit" className="self-start" disabled={pending}>
-                Add to family
-              </Button>
-            </form>
+            <Dialog open={addOpen} onOpenChange={(next) => { if (!pending) setAddOpen(next); }}>
+              <DialogContent aria-labelledby="add-family-member-title" onRequestClose={() => !pending}>
+                <DialogHeader>
+                  <DialogTitle id="add-family-member-title">Add someone to {familyName}</DialogTitle>
+                </DialogHeader>
+                <form
+                  className="flex min-h-0 flex-auto flex-col"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    const form = event.currentTarget;
+                    const formData = new FormData(form);
+                    formData.set("householdId", household.id);
+                    const chosen = memberById.get(newMember[0] ?? "");
+                    if (!chosen) {
+                      toast.error("Choose a person to add.");
+                      return;
+                    }
+                    const who = `${chosen.first_name} ${chosen.last_name}`.trim();
+                    run(addHouseholdMember(formData), `${who} added to ${familyName}.`, () => {
+                      form.reset();
+                      setNewMember([]);
+                      setAddOpen(false);
+                    });
+                  }}
+                >
+                  <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto p-6">
+                    <SearchPicker
+                      label="Who?"
+                      name="memberId"
+                      required
+                      items={addableItems}
+                      value={newMember}
+                      onChange={setNewMember}
+                      placeholder="Start typing their name…"
+                    />
+                    <div className="space-y-2">
+                      <Label htmlFor="add-relationship" className="text-base">
+                        Parent or guardian, or child?
+                      </Label>
+                      <Select id="add-relationship" name="relationship" required defaultValue="">
+                        <option value="" disabled>
+                          Choose…
+                        </option>
+                        {HOUSEHOLD_RELATIONSHIPS.map((value) => (
+                          <option key={value} value={value}>
+                            {RELATIONSHIP_LABELS[value]}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="add-label" className="text-base">
+                        How the family says it (optional)
+                      </Label>
+                      <Input id="add-label" name="relationshipLabel" placeholder="Mom, Grandson" />
+                    </div>
+                    <ul className="space-y-1 text-sm text-muted-foreground">
+                      {HOUSEHOLD_RELATIONSHIPS.map((value) => (
+                        <li key={value}>
+                          <strong className="font-semibold text-foreground">
+                            {RELATIONSHIP_LABELS[value]}:
+                          </strong>{" "}
+                          {FAMILY_ROLE_HINTS[value]}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" disabled={pending} onClick={() => setAddOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={pending}>
+                      {pending ? "Adding…" : "Add to family"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           ) : null}
         </CardContent>
       </Card>

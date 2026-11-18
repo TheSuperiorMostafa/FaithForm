@@ -32,6 +32,7 @@ import {
 } from "@/types/church-profile";
 import { DENOMINATIONS } from "@/types/voice-assistant";
 import type { DayHours, DayKey, OfficeHours } from "@/types/voice-assistant";
+import { TimePicker } from "@/components/ui/date-picker";
 
 const DAY_ORDER: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const DAY_LABELS: Record<DayKey, string> = {
@@ -529,25 +530,25 @@ export function ChurchProfileForm({
                       </option>
                     ))}
                   </Select>
-                  <Input
+                  <TimePicker
                     aria-label={`Service ${index + 1} start time`}
-                    type="time"
                     value={row.startTime}
                     disabled={readOnly}
-                    onChange={(e) => {
+                    onChange={(value) => {
                       const serviceTimes = [...form.serviceTimes];
-                      serviceTimes[index] = { ...row, startTime: e.target.value };
+                      serviceTimes[index] = { ...row, startTime: value };
                       patch({ serviceTimes });
                     }}
                   />
-                  <Input
+                  <TimePicker
                     aria-label={`Service ${index + 1} end time`}
-                    type="time"
                     value={row.endTime}
                     disabled={readOnly}
-                    onChange={(e) => {
+                    clearable
+                    placeholder="End time"
+                    onChange={(value) => {
                       const serviceTimes = [...form.serviceTimes];
-                      serviceTimes[index] = { ...row, endTime: e.target.value };
+                      serviceTimes[index] = { ...row, endTime: value };
                       patch({ serviceTimes });
                     }}
                   />
@@ -632,31 +633,29 @@ export function ChurchProfileForm({
                     />
                     {row.enabled ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <input
+                        <TimePicker
                           aria-label={`${DAY_LABELS[day]} opening time`}
-                          type="time"
                           value={row.open}
                           disabled={readOnly}
-                          className="min-h-10 rounded-[10px] border-[1.5px] border-border bg-background px-3 text-sm"
-                          onChange={(e) =>
+                          className="w-36"
+                          onChange={(value) =>
                             patch({
                               officeHours: updateDay(form.officeHours, day, {
-                                open: e.target.value,
+                                open: value,
                               }),
                             })
                           }
                         />
                         <span className="text-muted-foreground">to</span>
-                        <input
+                        <TimePicker
                           aria-label={`${DAY_LABELS[day]} closing time`}
-                          type="time"
                           value={row.close}
                           disabled={readOnly}
-                          className="min-h-10 rounded-[10px] border-[1.5px] border-border bg-background px-3 text-sm"
-                          onChange={(e) =>
+                          className="w-36"
+                          onChange={(value) =>
                             patch({
                               officeHours: updateDay(form.officeHours, day, {
-                                close: e.target.value,
+                                close: value,
                               }),
                             })
                           }
@@ -841,13 +840,12 @@ export function ChurchProfileForm({
             <Label htmlFor="announcement-facebook-post-time">
               Announcement Facebook post time
             </Label>
-            <Input
+            <TimePicker
               id="announcement-facebook-post-time"
-              type="time"
               value={form.announcementFacebookPostTime}
               disabled={readOnly}
-              onChange={(e) =>
-                patch({ announcementFacebookPostTime: e.target.value })
+              onChange={(value) =>
+                patch({ announcementFacebookPostTime: value })
               }
             />
             <p className="text-xs text-muted-foreground">

@@ -35,6 +35,7 @@ import type { EventAttendanceSettings } from "@/lib/attendance/v2/event-attendan
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { fromDatetimeLocalValue } from "@/lib/utils/announcement-placeholders";
 import { announcementWhen } from "@/lib/announcements/composer";
+import { DatePicker, DateTimePicker } from "@/components/ui/date-picker";
 
 type CreateEventDialogProps = {
   open: boolean;
@@ -209,26 +210,36 @@ export function CreateEventDialog({
             {/* `min-w-0` on each cell: a `datetime-local` control reports a wide
                 intrinsic size, and without it the two columns push past the
                 dialog and sit on top of each other. */}
-            <div className={`grid gap-4 ${allDay ? "" : "sm:grid-cols-2"}`}>
+            <div className="grid gap-4">
               <div className="min-w-0 space-y-2">
                 <Label htmlFor="event-start">{allDay ? "Day" : "Starts"}</Label>
-                <Input
-                  id="event-start"
-                  type={allDay ? "date" : "datetime-local"}
-                  value={allDay ? startAt.slice(0, 10) : startAt}
-                  onChange={(e) => setStartAt(allDay ? `${e.target.value}T${startAt.split("T")[1] || "09:00"}` : e.target.value)}
-                  required
-                  className="min-w-0 tabular-nums"
-                />
+                {allDay ? (
+                  <DatePicker
+                    id="event-start"
+                    value={startAt.slice(0, 10)}
+                    onChange={(value) => setStartAt(`${value}T${startAt.split("T")[1] || "09:00"}`)}
+                    required
+                    className="min-w-0"
+                  />
+                ) : (
+                  <DateTimePicker
+                    id="event-start"
+                    value={startAt}
+                    onChange={setStartAt}
+                    required
+                    aria-label="Starts"
+                    className="min-w-0"
+                  />
+                )}
               </div>
               {!allDay && <div className="min-w-0 space-y-2">
                 <Label htmlFor="event-end">Ends</Label>
-                <Input
+                <DateTimePicker
                   id="event-end"
-                  type="datetime-local"
                   value={endAt}
-                  onChange={(e) => setEndAt(e.target.value)}
-                  className="min-w-0 tabular-nums"
+                  onChange={setEndAt}
+                  aria-label="Ends"
+                  className="min-w-0"
                 />
               </div>}
             </div>

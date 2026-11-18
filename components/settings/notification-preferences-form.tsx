@@ -83,7 +83,7 @@ export function NotificationPreferencesForm({ initial, email, allowedFeatures }:
         <p className="text-[15px] text-muted-foreground">{event.description}</p>
         <div className="mt-3 flex flex-wrap gap-6">{(["email", "phone"] as const).map(channel => <label key={channel} className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px]"><input type="checkbox" className="size-5 accent-primary" checked={value.events[event.id][channel]} onChange={e => setValue({ ...value, events: { ...value.events, [event.id]: { ...value.events[event.id], [channel]: e.target.checked } } })} />{channel === "email" ? "Email" : "Phone (text message)"}</label>)}</div>
       </fieldset>)}
-      <p className="text-sm text-muted-foreground">Text messages use your church&apos;s connected texting phone. Guardian app alerts remain available to guardians.</p>
+      <p className="text-sm text-muted-foreground">Text messages come from FaithForm&apos;s phone number. Guardian app alerts remain available to guardians.</p>
       <Button type="submit" disabled={pending || editingPhone} className="self-start">{pending ? "Saving…" : "Save notification choices"}</Button>
     </form></CardContent></Card>;
 }

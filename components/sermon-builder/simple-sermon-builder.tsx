@@ -673,7 +673,6 @@ export function SimpleSermonBuilder({
                 setTitle(e.target.value);
                 touch();
               }}
-              placeholder="e.g. Sunday Morning — John 3"
             />
           </div>
 

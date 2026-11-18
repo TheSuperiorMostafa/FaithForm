@@ -22,7 +22,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActivePresentationVersion } from "@/lib/sermons/v1/presentation";
@@ -35,6 +34,7 @@ import {
   slidesShareReadiness,
 } from "@/lib/sermons/v1/share-rules";
 import type { Sermon } from "@/types/sermon";
+import { DatePicker } from "@/components/ui/date-picker";
 
 // Everyone who has added a church is one of its members, so a sermon always
 // goes to the people who follow the church. Older "members only" sermons are
@@ -198,12 +198,11 @@ export function PublishToAppButton({
             <AdvancedSection title="More options">
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`preached-${sermon.id}`}>Preached on</Label>
-                <Input
+                <DatePicker
                   id={`preached-${sermon.id}`}
-                  type="date"
                   value={preachedOn}
-                  onChange={(e) => setPreachedOn(e.target.value)}
-                  className="w-fit tabular-nums"
+                  onChange={setPreachedOn}
+                  className="w-fit min-w-56"
                 />
                 <p className="text-sm text-muted-foreground">
                   Usually the sermon date. Change it only if you preached it on

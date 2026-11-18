@@ -636,3 +636,48 @@ export async function recordMediaView(
     console.error("[media-view] insert unavailable");
   }
 }
+
+export type MediaTagSuggestions = { speakers: string[]; topics: string[] };
+
+/**
+ * Every speaker and topic this church has used, most used first, so the
+ * recording form can offer them as a list instead of retyping a name.
+ */
+export async function listMediaTagSuggestions(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<MediaTagSuggestions> {
+  const db = client(supabase);
+  const { data, error } = await db
+    .from("stream_recordings")
+    .select("speaker_tags, topic_tags")
+    .eq("church_id", churchId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(500);
+  if (error || !data) return { speakers: [], topics: [] };
+
+  const rank = (lists: (string[] | null)[]) => {
+    const counts = new Map<string, { label: string; count: number }>();
+    for (const list of lists) {
+      for (const raw of list ?? []) {
+        const label = String(raw).trim();
+        if (!label) continue;
+        const key = label.toLowerCase();
+        const entry = counts.get(key);
+        if (entry) entry.count += 1;
+        else counts.set(key, { label, count: 1 });
+      }
+    }
+    return [...counts.values()]
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+      .map((entry) => entry.label)
+      .slice(0, 200);
+  };
+
+  const rows = data as { speaker_tags: string[] | null; topic_tags: string[] | null }[];
+  return {
+    speakers: rank(rows.map((row) => row.speaker_tags)),
+    topics: rank(rows.map((row) => row.topic_tags)),
+  };
+}

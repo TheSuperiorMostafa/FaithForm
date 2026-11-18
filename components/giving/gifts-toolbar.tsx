@@ -13,6 +13,7 @@ import { GIFT_STATUS_FILTERS } from "@/lib/giving/labels";
 import { detectRangePreset, RANGE_PRESETS, rangeForPreset, type RangePreset } from "@/lib/giving/periods";
 import { cn } from "@/lib/utils";
 import type { GivingFundRow } from "@/types/giving";
+import { DatePicker } from "@/components/ui/date-picker";
 
 const SEARCH_DELAY_MS = 400;
 
@@ -146,22 +147,22 @@ export function GiftsToolbar({ funds }: { funds: GivingFundRow[] }) {
         <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 sm:flex-row">
           <div className="flex-1 space-y-2">
             <Label htmlFor={`${searchId}-from`}>From</Label>
-            <Input
+            <DatePicker
               id={`${searchId}-from`}
-              type="date"
               value={dateFrom}
               max={dateTo || undefined}
-              onChange={(e) => updateParams({ dateFrom: e.target.value || null })}
+              clearable
+              onChange={(value) => updateParams({ dateFrom: value || null })}
             />
           </div>
           <div className="flex-1 space-y-2">
             <Label htmlFor={`${searchId}-to`}>To</Label>
-            <Input
+            <DatePicker
               id={`${searchId}-to`}
-              type="date"
               value={dateTo}
               min={dateFrom || undefined}
-              onChange={(e) => updateParams({ dateTo: e.target.value || null })}
+              clearable
+              onChange={(value) => updateParams({ dateTo: value || null })}
             />
           </div>
         </div>

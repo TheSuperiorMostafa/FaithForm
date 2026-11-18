@@ -59,6 +59,7 @@ import {
   RELATIONSHIP_LABELS,
   type HouseholdRelationship,
 } from "@/types/checkin";
+import { DatePicker } from "@/components/ui/date-picker";
 
 /**
  * The half of a person's record that is not a name and a phone number.
@@ -406,12 +407,11 @@ export function MemberDocumentsSection({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="file-label" className="text-base">Name it</Label>
+              <Label htmlFor="file-label" className="text-base">Name</Label>
               <Input
                 id="file-label"
                 name="label"
                 required
-                placeholder="Background check 2026"
               />
             </div>
             <div className="space-y-2">
@@ -423,7 +423,7 @@ export function MemberDocumentsSection({
             </div>
             <div className="space-y-2">
               <Label htmlFor="file-expires" className="text-base">Renews on (optional)</Label>
-              <Input id="file-expires" name="expiresOn" type="date" />
+              <DatePicker id="file-expires" name="expiresOn" clearable placeholder="No renewal date" />
             </div>
             <div className="flex items-end">
               <Button type="submit" className="w-full" disabled={pending}>

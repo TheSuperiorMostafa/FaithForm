@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { ImageUp, Loader2, Trash2 } from "lucide-react";
+import { ImageIcon, ImageUp, Images, Loader2, Trash2 } from "lucide-react";
 import type { Area } from "react-easy-crop";
 
 import {
   clearMediaArtwork,
+  listArtworkLibrary,
+  setArtworkFromLibrary,
   uploadMediaArtwork,
   type ArtworkTarget,
 } from "@/app/dashboard/live-streaming/media/actions";
+import { ImageLibraryDialog, type LibraryPick } from "@/components/media/image-library-dialog";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
@@ -56,6 +59,8 @@ function ArtworkEditor({
   const [confirming, setConfirming] = useState(false);
   const [saved, setSaved] = useState<{ before: string | null; url: string | null } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [applyAll, setApplyAll] = useState(false);
+  const [libraryTab, setLibraryTab] = useState<"library" | "stock" | null>(null);
   const operation = useRef<"preparing" | "cropping" | "uploading" | "confirming" | "clearing" | null>(null);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -81,6 +86,7 @@ function ArtworkEditor({
     data.set("cropY", String(area.y));
     data.set("cropWidth", String(area.width));
     data.set("cropHeight", String(area.height));
+    if (applyAll) data.set("applyAll", "1");
 
     startTransition(async () => {
       try {
@@ -88,7 +94,7 @@ function ArtworkEditor({
         if (!mounted.current) return;
         if (!result.ok) { setError(result.error); return; }
         setSaved({ before: value, url: result.url });
-        setNotice("Image saved.");
+        setNotice(applyAll ? "Image saved to every size." : "Image saved.");
         onChanged();
       } catch {
         if (mounted.current) setError("We couldn't confirm the image was saved. Refresh to check it, then choose the image again if needed.");
@@ -97,6 +103,71 @@ function ArtworkEditor({
       }
     });
   }
+
+  async function applyLibraryPick(pick: LibraryPick): Promise<boolean> {
+    if (disabled || operation.current) return false;
+    operation.current = "uploading";
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await setArtworkFromLibrary({
+        target,
+        crop,
+        pick: { kind: pick.kind, id: pick.id },
+        applyAll,
+      });
+      if (!mounted.current) return true;
+      if (!result.ok) { setError(result.error); return true; }
+      setSaved({ before: value, url: result.url });
+      setNotice(applyAll ? "Image saved to every size." : "Image saved.");
+      onChanged();
+      return true;
+    } catch {
+      if (mounted.current) setError("We couldn't confirm the image was saved. Refresh to check it, then choose the image again if needed.");
+      return true;
+    } finally {
+      operation.current = null;
+    }
+  }
+
+  const applyAllChoice = (
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] font-medium">
+      <input
+        type="checkbox"
+        className="size-5 accent-primary"
+        checked={applyAll}
+        onChange={(event) => setApplyAll(event.target.checked)}
+      />
+      Apply this image to all sizes
+    </label>
+  );
+
+  const sourceButtons = (
+    <div className="grid grid-cols-2 gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || busy}
+        onClick={() => setLibraryTab("library")}
+        className="min-w-0 px-2"
+      >
+        <Images className="size-4" aria-hidden />
+        Library
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={disabled || busy}
+        onClick={() => setLibraryTab("stock")}
+        className="min-w-0 px-2"
+      >
+        <ImageIcon className="size-4" aria-hidden />
+        Stock
+      </Button>
+    </div>
+  );
 
   async function accept(file: File) {
     if (disabled || operation.current) return;
@@ -197,8 +268,9 @@ function ArtworkEditor({
               onClick={() => inputRef.current?.click()}
               className="w-full min-w-0 whitespace-normal px-3 text-center"
             >
-              {isInherited ? "Use its own image" : "Replace image"}
+              {isInherited ? "Upload its own image" : "Upload a new image"}
             </Button>
+            {sourceButtons}
             {ownImage ? (
               <Button
                 type="button"
@@ -227,10 +299,11 @@ function ArtworkEditor({
             <ImageUp className="size-5 text-muted-foreground" aria-hidden />
           )}
           <span className="text-sm font-medium text-primary dark:text-accent">
-            {busy ? (preparing ? "Preparing…" : "Uploading…") : "Add artwork"}
+            {busy ? (preparing ? "Preparing…" : "Uploading…") : "Upload artwork"}
           </span>
         </button>
       )}
+      {!showing ? sourceButtons : null}
 
       <p className="text-sm leading-snug text-muted-foreground">{spec.hint}</p>
 
@@ -252,6 +325,7 @@ function ArtworkEditor({
         <ImageCropper
           file={cropping}
           shape={{ label: spec.label, hint: spec.hint, ratio: spec.ratio }}
+          extra={applyAllChoice}
           onCancel={() => { operation.current = null; setCropping(null); }}
           onConfirm={(area) => {
             const file = cropping;
@@ -259,6 +333,16 @@ function ArtworkEditor({
           }}
         />
       ) : null}
+
+      <ImageLibraryDialog
+        open={libraryTab !== null}
+        onOpenChange={(open) => { if (!open) setLibraryTab(null); }}
+        initialTab={libraryTab ?? "library"}
+        load={listArtworkLibrary}
+        onPick={applyLibraryPick}
+        title={`Choose a ${spec.label.toLowerCase()} image`}
+        extra={applyAllChoice}
+      />
 
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
       {busy && showing ? <p role="status" className="text-sm text-muted-foreground">{confirming ? "Waiting for your choice…" : preparing ? "Preparing image…" : "Saving image…"}</p> : null}

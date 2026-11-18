@@ -31,11 +31,16 @@ export function MemberGroups({ memberId }: { memberId: string }) {
     return () => { active = false; };
   }, [memberId, retry]);
   const result = state?.memberId === memberId ? state.result : null;
-  if (result?.ok && !result.available) return null;
+  if (result?.ok && !result.available) {
+    return <p className="text-[15px] text-muted-foreground">Groups aren&apos;t turned on for your church yet.</p>;
+  }
   return <section aria-label="Groups" className="space-y-3 rounded-2xl border border-border p-4">
     <h3 className="text-base font-semibold">Groups</h3>
     {!result ? <SkeletonContainer label="groups"><SkeletonText lines={2} /></SkeletonContainer>
-      : result.ok ? <MemberGroupList groups={result.groups} />
+      : result.ok ? <>
+        <MemberGroupList groups={result.groups} />
+        <Link href="/dashboard/groups" className="inline-flex min-h-11 items-center text-[15px] font-semibold text-primary underline-offset-4 hover:underline dark:text-accent">Add to a group</Link>
+      </>
         : <div role="alert" className="space-y-3">
           <p className="text-[15px] text-muted-foreground">{result.error}</p>
           <Button type="button" variant="outline" onClick={() => { setState(null); setRetry(value => value + 1); }}>Try again</Button>

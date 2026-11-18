@@ -21,6 +21,7 @@ import { Select } from "@/components/ui/select";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import { formatUsPhoneDisplay } from "@/lib/sms/phone";
 import { cn } from "@/lib/utils";
+import { TimePicker } from "@/components/ui/date-picker";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -451,12 +452,11 @@ export function ChurchDetailsForm({
                 label="Starts at"
                 error={errorFor(`serviceTimes.${index}.startTime`)}
               >
-                <Input
+                <TimePicker
                   id={`service_${index}_time`}
-                  type="time"
                   value={row.startTime}
                   required
-                  onChange={(event) => updateService(index, { startTime: event.target.value })}
+                  onChange={(value) => updateService(index, { startTime: value })}
                 />
               </Field>
               <Button

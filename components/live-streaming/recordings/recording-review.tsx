@@ -53,6 +53,7 @@ import {
 } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
 import { formatRecordingDate, isRecordingServiceDate, recordingDateValue } from "@/lib/stream/recording-date";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type Props = {
   recording: StaffRecording;
@@ -67,6 +68,8 @@ type Props = {
   stats: { live: number; replay: number } | null;
   artworkSlot?: React.ReactNode;
   websiteSermonsUrl?: string | null;
+  /** Speakers and topics used on this church's other recordings. */
+  tagSuggestions?: { speakers: string[]; topics: string[] };
 };
 
 const NEW_SERIES = "__new__";
@@ -102,6 +105,7 @@ export function RecordingReview({
   stats,
   artworkSlot,
   websiteSermonsUrl,
+  tagSuggestions,
 }: Props) {
   const router = useRouter();
   const [transitionPending, startTransition] = useTransition();
@@ -610,7 +614,7 @@ export function RecordingReview({
                 newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} />
               <div className="flex flex-col gap-2">
                 <Label htmlFor="rec-service-date" className="text-[15px]">Service date</Label>
-                <Input id="rec-service-date" type="date" min="0001-01-01" max="9999-12-31" required value={serviceDate} onChange={event => setServiceDate(event.target.value)} aria-describedby="rec-service-date-hint" />
+                <DatePicker id="rec-service-date" required value={serviceDate} onChange={setServiceDate} aria-describedby="rec-service-date-hint" />
                 <p id="rec-service-date-hint" className="text-sm text-muted-foreground">The day the service happened. Save changes to update this date on your website and in the app.</p>
               </div>
               <Check
@@ -672,7 +676,8 @@ export function RecordingReview({
                   </>
                 ) : null}
                 <RecordingExtraFields speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription}
-                  chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
+                  chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics}
+                  speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
               </fieldset>
             </AdvancedSection>
 

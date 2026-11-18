@@ -10,7 +10,12 @@ import { validateMemberInput } from "@/lib/people/validate-member";
 import { toUserError } from "@/lib/errors/user-error";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMembershipStatus, type MembershipStatus } from "@/lib/people/membership-status";
+import {
+  isMemberGender,
+  isMembershipStatus,
+  type MemberGender,
+  type MembershipStatus,
+} from "@/lib/people/membership-status";
 
 export type MemberActionResult =
   | { ok: true; member: ChurchMember }
@@ -30,11 +35,43 @@ function mapMemberRow(row: {
   photo_url: string | null;
   is_active: boolean;
   membership_status?: MembershipStatus;
+  address?: string | null;
+  gender?: string | null;
 }): ChurchMember {
   return {
     ...row,
+    address: row.address ?? null,
+    gender: isMemberGender(row.gender) ? row.gender : null,
     attendance_count: 0,
   };
+}
+
+const MEMBER_RETURN_COLUMNS =
+  "id, first_name, last_name, phone, email, photo_url, is_active, membership_status";
+const MEMBER_RETURN_COLUMNS_WITH_PROFILE = `${MEMBER_RETURN_COLUMNS}, address, gender`;
+
+/** Address and gender arrived with migration 0168; an older database still saves the rest. */
+function isMissingProfileColumn(error: { message?: string } | null): boolean {
+  return Boolean(error?.message && /\b(address|gender)\b/.test(error.message));
+}
+
+type ProfileInput = { address?: string | null; gender?: MemberGender | "" | null };
+
+function profileFields(input: ProfileInput): Record<string, string | null> {
+  const fields: Record<string, string | null> = {};
+  if (input.address !== undefined) {
+    const address = (input.address ?? "").trim().replace(/\s+/g, " ").slice(0, 300);
+    fields.address = address || null;
+  }
+  if (input.gender !== undefined) {
+    fields.gender = input.gender ? input.gender : null;
+  }
+  return fields;
+}
+
+function invalidProfile(input: ProfileInput): string | null {
+  if (input.gender && !isMemberGender(input.gender)) return "Choose Male or Female.";
+  return null;
 }
 
 type MemberContext =
@@ -78,11 +115,13 @@ async function requireMemberAction(
 /** Shared body. Callers do their own gating before reaching this. */
 async function insertMember(
   context: Extract<MemberContext, { ok: true }>,
-  input: { firstName: string; lastName: string; phone?: string; email?: string; membershipStatus?: MembershipStatus },
+  input: { firstName: string; lastName: string; phone?: string; email?: string; membershipStatus?: MembershipStatus } & ProfileInput,
 ): Promise<MemberActionResult> {
   if (input.membershipStatus !== undefined && !isMembershipStatus(input.membershipStatus)) {
     return { ok: false, error: "Choose a valid church status." };
   }
+  const profileError = invalidProfile(input);
+  if (profileError) return { ok: false, error: profileError };
   const validated = validateMemberInput(input);
   if (!validated.ok) {
     return { ok: false, error: validated.error };
@@ -90,26 +129,35 @@ async function insertMember(
 
   const { firstName, lastName, phone, email } = validated.data;
 
-  const { data, error } = await context.supabase
+  const base = {
+    church_id: context.churchId,
+    first_name: firstName,
+    last_name: lastName,
+    phone,
+    email,
+    ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
+    is_active: true,
+  };
+  const profile = profileFields(input);
+  let { data, error } = await context.supabase
     .from("members")
-    .insert({
-      church_id: context.churchId,
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      email,
-      ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
-      is_active: true,
-    })
-    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
+    .insert({ ...base, ...profile })
+    .select(MEMBER_RETURN_COLUMNS_WITH_PROFILE)
     .single();
+  if (isMissingProfileColumn(error)) {
+    ({ data, error } = await context.supabase
+      .from("members")
+      .insert(base)
+      .select(MEMBER_RETURN_COLUMNS)
+      .single());
+  }
 
   if (error || !data) {
     return { ok: false, error: toUserError(error, "We couldn't add this person.") };
   }
 
   revalidatePeoplePaths();
-  return { ok: true, member: mapMemberRow(data) };
+  return { ok: true, member: mapMemberRow(data as unknown as Parameters<typeof mapMemberRow>[0]) };
 }
 
 export async function createMember(input: {
@@ -118,7 +166,7 @@ export async function createMember(input: {
   phone?: string;
   email?: string;
   membershipStatus?: MembershipStatus;
-}): Promise<MemberActionResult> {
+} & ProfileInput): Promise<MemberActionResult> {
   const context = await requireMemberAction("people", false);
   if (!context.ok) {
     return context;
@@ -156,7 +204,7 @@ export async function updateMember(input: {
   phone?: string;
   email?: string;
   membershipStatus?: MembershipStatus;
-}): Promise<MemberActionResult> {
+} & ProfileInput): Promise<MemberActionResult> {
   const context = await requireMemberAction("people", false);
   if (!context.ok) {
     return context;
@@ -165,6 +213,8 @@ export async function updateMember(input: {
   if (input.membershipStatus !== undefined && !isMembershipStatus(input.membershipStatus)) {
     return { ok: false, error: "Choose a valid church status." };
   }
+  const profileError = invalidProfile(input);
+  if (profileError) return { ok: false, error: profileError };
   const validated = validateMemberInput(input);
   if (!validated.ok) {
     return { ok: false, error: validated.error };
@@ -172,26 +222,32 @@ export async function updateMember(input: {
 
   const { firstName, lastName, phone, email } = validated.data;
 
-  const { data, error } = await context.supabase
-    .from("members")
-    .update({
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      email,
-      ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
-    })
-    .eq("id", input.memberId)
-    .eq("church_id", context.churchId)
-    .select("id, first_name, last_name, phone, email, photo_url, is_active, membership_status")
-    .single();
+  const base = {
+    first_name: firstName,
+    last_name: lastName,
+    phone,
+    email,
+    ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
+  };
+  const update = (fields: Record<string, unknown>, columns: string) =>
+    context.supabase
+      .from("members")
+      .update(fields)
+      .eq("id", input.memberId)
+      .eq("church_id", context.churchId)
+      .select(columns)
+      .single();
+  let { data, error } = await update({ ...base, ...profileFields(input) }, MEMBER_RETURN_COLUMNS_WITH_PROFILE);
+  if (isMissingProfileColumn(error)) {
+    ({ data, error } = await update(base, MEMBER_RETURN_COLUMNS));
+  }
 
   if (error || !data) {
     return { ok: false, error: toUserError(error, "We couldn't save this person's details.") };
   }
 
   revalidatePeoplePaths();
-  return { ok: true, member: mapMemberRow(data) };
+  return { ok: true, member: mapMemberRow(data as unknown as Parameters<typeof mapMemberRow>[0]) };
 }
 
 export async function deactivateMember(memberId: string): Promise<MemberActionResult> {
@@ -213,7 +269,7 @@ export async function deactivateMember(memberId: string): Promise<MemberActionRe
   }
 
   revalidatePeoplePaths();
-  return { ok: true, member: mapMemberRow(data) };
+  return { ok: true, member: mapMemberRow(data as unknown as Parameters<typeof mapMemberRow>[0]) };
 }
 
 export async function reactivateMember(memberId: string): Promise<MemberActionResult> {
@@ -235,5 +291,55 @@ export async function reactivateMember(memberId: string): Promise<MemberActionRe
   }
 
   revalidatePeoplePaths();
-  return { ok: true, member: mapMemberRow(data) };
+  return { ok: true, member: mapMemberRow(data as unknown as Parameters<typeof mapMemberRow>[0]) };
+}
+
+export type BulkMemberUpdateResult =
+  | { ok: true; updated: number; profileFieldsUnavailable?: boolean }
+  | { ok: false; error: string };
+
+/**
+ * People list multiselect: one status and/or gender for everyone chosen.
+ * Constrained to this church, like every other People write.
+ */
+export async function bulkUpdateMembers(input: {
+  memberIds: string[];
+  membershipStatus?: MembershipStatus;
+  gender?: MemberGender | "";
+}): Promise<BulkMemberUpdateResult> {
+  const context = await requireMemberAction("people", false);
+  if (!context.ok) {
+    return context;
+  }
+
+  const memberIds = [...new Set(input.memberIds.filter((id) => typeof id === "string" && id))].slice(0, 1000);
+  if (memberIds.length === 0) return { ok: false, error: "Choose at least one person." };
+  if (input.membershipStatus !== undefined && !isMembershipStatus(input.membershipStatus)) {
+    return { ok: false, error: "Choose a valid church status." };
+  }
+  const profileError = invalidProfile(input);
+  if (profileError) return { ok: false, error: profileError };
+
+  const fields: Record<string, string | null> = {
+    ...(input.membershipStatus ? { membership_status: input.membershipStatus } : {}),
+    ...profileFields({ gender: input.gender }),
+  };
+  if (Object.keys(fields).length === 0) return { ok: false, error: "Choose what to change." };
+
+  const { data, error } = await context.supabase
+    .from("members")
+    .update(fields)
+    .in("id", memberIds)
+    .eq("church_id", context.churchId)
+    .select("id");
+
+  if (error) {
+    if (isMissingProfileColumn(error)) {
+      return { ok: false, error: "Gender isn't available yet. Try again after the next update." };
+    }
+    return { ok: false, error: toUserError(error, "We couldn't update these people.") };
+  }
+
+  revalidatePeoplePaths();
+  return { ok: true, updated: (data ?? []).length };
 }

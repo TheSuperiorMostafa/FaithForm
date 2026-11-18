@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { RecordingTagsField, type RecordingTagsValue } from "@/components/media/recording-tags-field";
+import { RecordingTagsField, ScriptureTagsField, type RecordingTagsValue } from "@/components/media/recording-tags-field";
 
 function Field({ id, label, optional, children }: { id: string; label: string; optional?: boolean; children: ReactNode }) {
   return <div className="flex flex-col gap-2">
@@ -36,16 +36,18 @@ export function RecordingPrimaryFields({ title, onTitleChange, seriesId, onSerie
   </>;
 }
 
-export function RecordingExtraFields({ speakers, onSpeakersChange, description, onDescriptionChange, chapters, onChaptersChange, topics, onTopicsChange, idPrefix = "rec" }: {
+export function RecordingExtraFields({ speakers, onSpeakersChange, description, onDescriptionChange, chapters, onChaptersChange, topics, onTopicsChange, idPrefix = "rec", speakerOptions = [], topicOptions = [] }: {
+  /** Speakers and topics this church has used before, offered as a list. */
+  speakerOptions?: string[]; topicOptions?: string[];
   speakers: RecordingTagsValue; onSpeakersChange: (value: RecordingTagsValue) => void;
   description: string; onDescriptionChange: (value: string) => void;
   chapters: RecordingTagsValue; onChaptersChange: (value: RecordingTagsValue) => void;
   topics: RecordingTagsValue; onTopicsChange: (value: RecordingTagsValue) => void; idPrefix?: string;
 }) {
   return <>
-    <Field id={`${idPrefix}-speaker`} label="Speakers" optional><RecordingTagsField id={`${idPrefix}-speaker`} name="speakers" label="Speakers" addLabel="Add speaker" value={speakers} onChange={onSpeakersChange} placeholder="Speaker name" maxLength={120} /></Field>
+    <Field id={`${idPrefix}-speaker`} label="Speakers" optional><RecordingTagsField id={`${idPrefix}-speaker`} name="speakers" label="Speakers" addLabel="Add speaker" value={speakers} onChange={onSpeakersChange} placeholder="Choose or type a speaker" maxLength={120} suggestions={speakerOptions} /></Field>
     <Field id={`${idPrefix}-description`} label="Description" optional><Textarea id={`${idPrefix}-description`} name="description" value={description} onChange={event => onDescriptionChange(event.target.value)} placeholder="What was this service about?" className="min-h-28 resize-y" rows={3} maxLength={2000} /></Field>
-    <Field id={`${idPrefix}-chapters`} label="Scripture" optional><RecordingTagsField id={`${idPrefix}-chapters`} name="chapters" label="Scripture" addLabel="Add Scripture" value={chapters} onChange={onChaptersChange} placeholder="Scripture reference" /></Field>
-    <Field id={`${idPrefix}-topics`} label="Topics" optional><RecordingTagsField id={`${idPrefix}-topics`} name="topics" label="Topics" addLabel="Add topic" value={topics} onChange={onTopicsChange} placeholder="Topic" /></Field>
+    <Field id={`${idPrefix}-chapters`} label="Scripture" optional><ScriptureTagsField id={`${idPrefix}-chapters`} name="chapters" label="Scripture" value={chapters} onChange={onChaptersChange} /></Field>
+    <Field id={`${idPrefix}-topics`} label="Topics" optional><RecordingTagsField id={`${idPrefix}-topics`} name="topics" label="Topics" addLabel="Add topic" value={topics} onChange={onTopicsChange} placeholder="Choose or type a topic" suggestions={topicOptions} /></Field>
   </>;
 }

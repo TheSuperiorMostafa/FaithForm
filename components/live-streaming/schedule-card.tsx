@@ -25,6 +25,7 @@ import { formatServiceTime } from "@/lib/stream/format";
 import { churchServiceStartIso } from "@/lib/stream/schedule-time";
 import { serviceStatusLabel } from "@/lib/stream/user-errors";
 import { cn } from "@/lib/utils";
+import { DateTimePicker } from "@/components/ui/date-picker";
 
 type ScheduleCardProps = {
   isAdmin: boolean;
@@ -160,7 +161,7 @@ export function ScheduleCard({
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-starts">Date and start time</Label>
-              <Input id="event-starts" name="starts_at" type="datetime-local" required />
+              <DateTimePicker id="event-starts" name="starts_at" required aria-label="Service start" />
               <p className="text-sm text-muted-foreground">
                 Enter the start time in your church&apos;s time zone.
               </p>

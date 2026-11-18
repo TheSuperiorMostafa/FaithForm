@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { SiteMediaRow } from "@/lib/sites/queries";
+import { DatePicker } from "@/components/ui/date-picker";
 
 type Draft = {
   id?: string;
@@ -227,12 +228,12 @@ export function MediaTable({
               />
             </Field>
             <Field label="Date preached">
-              <Input
-                type="date"
+              <DatePicker
                 value={draft.publishedAt}
-                onChange={(e) =>
-                  setDraft({ ...draft, publishedAt: e.target.value })
+                onChange={(value) =>
+                  setDraft({ ...draft, publishedAt: value })
                 }
+                aria-label="Date preached"
               />
             </Field>
             <Field label="Video link" help="YouTube, Vimeo, or a direct file.">

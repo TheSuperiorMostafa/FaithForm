@@ -148,7 +148,7 @@ test("the actual New calendar event dialog switches to a date, hides timed field
   (find("event-title").props.onChange as (event: unknown) => void)({ target: { value: "Picnic" } });
   (find("event-all-day").props.onCheckedChange as (checked: boolean) => void)(true);
   tree = render();
-  assert.equal(find("event-start").props.type, "date");
+  assert.equal(find("event-start").type, "DatePicker");
   assert.equal(find("event-start").props.value, "2026-11-15");
   assert.equal(tree.some(el => el.props.id === "event-end"), false);
   let payload: Record<string, unknown> | undefined;
@@ -163,7 +163,7 @@ test("the actual New calendar event dialog switches to a date, hides timed field
   assert.equal((payload?.attendance as { enabled: boolean }).enabled, false);
   (find("event-all-day").props.onCheckedChange as (checked: boolean) => void)(false);
   tree = render();
-  assert.equal(find("event-start").props.type, "datetime-local");
+  assert.equal(find("event-start").type, "DateTimePicker");
   assert.ok(find("event-end"));
 });
 

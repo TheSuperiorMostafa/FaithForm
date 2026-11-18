@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 
 import type { ArtworkTarget } from "@/app/dashboard/live-streaming/media/actions";
 import { ArtworkField } from "@/components/media/artwork-field";
+import { CreateArtworkButton } from "@/components/media/create-artwork-button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ARTWORK_CROPS, type ArtworkSet } from "@/lib/media/artwork";
+import { ARTWORK_CROPS, hasAnyArtwork, type ArtworkSet } from "@/lib/media/artwork";
 
 /**
  * Artwork for one recording.
@@ -24,7 +25,10 @@ export function ItemArtworkPanel({
   seriesArtwork,
   seriesName,
   seriesSlug,
+  title = "",
 }: {
+  /** The message title, which "Create one for me" makes its picture from. */
+  title?: string;
   artwork: ArtworkSet;
   seriesArtwork: ArtworkSet;
   seriesName: string | null;
@@ -54,6 +58,13 @@ export function ItemArtworkPanel({
             )}
           </p>
         </div>
+
+        <CreateArtworkButton
+          target={target ?? { kind: "item", id: recordingId! }}
+          title={title}
+          hasArtwork={hasAnyArtwork(artwork)}
+          onCreated={() => router.refresh()}
+        />
 
         <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-5">
           {ARTWORK_CROPS.map((crop) => (

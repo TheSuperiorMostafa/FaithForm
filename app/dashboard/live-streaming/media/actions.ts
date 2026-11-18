@@ -7,10 +7,21 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import {
   ARTWORK_BUCKET,
+  ARTWORK_CROPS,
+  ARTWORK_SPECS,
   artworkStoragePath,
   getArtworkSpec,
   type ArtworkCrop,
+  type ArtworkSpec,
 } from "@/lib/media/artwork";
+import { generateEventBackgroundImage, isAiImageConfigured } from "@/lib/ai/image";
+import {
+  listChurchImageLibrary,
+  listStockImages,
+  readPickedImage,
+  type LibraryImage,
+  type StockImage,
+} from "@/lib/media/image-library";
 import { toUserError } from "@/lib/errors/user-error";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import {
@@ -129,7 +140,44 @@ export async function uploadMediaArtwork(
       ? { x: cx, y: cy, width: cw, height: ch }
       : null;
 
-  const normalized = await normalizeSiteImage(Buffer.from(await file.arrayBuffer()), {
+  const source = Buffer.from(await file.arrayBuffer());
+  const stored = await storeArtworkCrop(admin, guard.churchId, { kind: targetKind, id: targetId }, spec, source, crop);
+  if (!stored.ok) return stored;
+
+  // "Apply this image to all sizes": the other shapes are cut from the same
+  // photo, centred, so one upload fills the tile, the wide still and the banner.
+  if (formData.get("applyAll") === "1") {
+    for (const other of ARTWORK_CROPS) {
+      if (other === spec.key) continue;
+      const result = await storeArtworkCrop(
+        admin, guard.churchId, { kind: targetKind, id: targetId }, ARTWORK_SPECS[other], source, null,
+      );
+      if (!result.ok) return { ok: false, error: `The ${spec.label.toLowerCase()} image was saved, but the other sizes weren't. ${result.error}` };
+    }
+  }
+
+  revalidateArtworkTarget({ kind: targetKind, id: targetId });
+  return { ok: true, url: stored.url };
+}
+
+function revalidateArtworkTarget(target: ArtworkTarget) {
+  revalidate(target.kind === "item" ? target.id : undefined);
+  if (target.kind === "service") revalidateUpcomingArtwork(target.id);
+}
+
+/**
+ * Cuts one shape from a source image, stores it and points the target at it.
+ * `crop` is the cropper's rectangle in source pixels; null centres the cut.
+ */
+async function storeArtworkCrop(
+  admin: ReturnType<typeof createAdminClient>,
+  churchId: string,
+  target: ArtworkTarget,
+  spec: ArtworkSpec,
+  source: Buffer,
+  crop: { x: number; y: number; width: number; height: number } | null,
+): Promise<ArtworkUploadResult> {
+  const normalized = await normalizeSiteImage(source, {
     crop,
     // Always forced, unlike the website's free-form logo case. A shelf lays
     // tiles out on a fixed ratio, so an image that is a few pixels off the
@@ -145,7 +193,7 @@ export async function uploadMediaArtwork(
   }
 
   const name = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}.${normalized.ext}`;
-  const path = artworkStoragePath(guard.churchId, spec.key, name);
+  const path = artworkStoragePath(churchId, spec.key, name);
 
   const { error: uploadError } = await admin.storage
     .from(ARTWORK_BUCKET)
@@ -163,21 +211,157 @@ export async function uploadMediaArtwork(
   const url = data.publicUrl;
 
   const written =
-    targetKind === "service"
-      ? await setScheduledArtwork(guard.churchId, targetId, spec.key, url, admin)
-      : targetKind === "series"
-      ? await setMediaSeriesArtwork(guard.churchId, targetId, spec.column, url)
-      : await updateMediaItem(guard.churchId, targetId, {
+    target.kind === "service"
+      ? await setScheduledArtwork(churchId, target.id, spec.key, url, admin)
+      : target.kind === "series"
+      ? await setMediaSeriesArtwork(churchId, target.id, spec.column, url)
+      : await updateMediaItem(churchId, target.id, {
           artwork: { column: spec.column, url },
         });
 
   if (!written.ok) {
     return { ok: false, error: "The image uploaded but could not be saved." };
   }
-
-  revalidate(targetKind === "item" ? targetId : undefined);
-  if (targetKind === "service") revalidateUpcomingArtwork(targetId);
   return { ok: true, url };
+}
+
+async function requireArtworkTarget(
+  churchId: string,
+  target: ArtworkTarget,
+  admin: ReturnType<typeof createAdminClient>,
+): Promise<string | null> {
+  if (
+    !target ||
+    (target.kind !== "item" && target.kind !== "series" && target.kind !== "service") ||
+    typeof target.id !== "string" ||
+    !target.id
+  ) {
+    return "Nothing to attach that image to.";
+  }
+  if (target.kind === "service") {
+    try {
+      await requireScheduledArtworkTarget(churchId, target.id, admin);
+    } catch (error) {
+      return toUserError(error, "We couldn't check that upcoming service.");
+    }
+  }
+  return null;
+}
+
+export type ArtworkLibraryResult =
+  | { ok: true; data: { library: LibraryImage[]; stock: StockImage[] } }
+  | { ok: false; error: string };
+
+/** The church's earlier pictures and FaithForm's stock pictures, for the artwork picker. */
+export async function listArtworkLibrary(): Promise<ArtworkLibraryResult> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+  try {
+    const [library, stock] = await Promise.all([
+      listChurchImageLibrary(createAdminClient(), guard.churchId),
+      listStockImages(),
+    ]);
+    return { ok: true, data: { library, stock } };
+  } catch (error) {
+    return { ok: false, error: toUserError(error, "Your pictures couldn't be loaded.") };
+  }
+}
+
+/**
+ * Uses a library or stock picture as artwork: one shape, or every shape when
+ * `applyAll` is set. Each shape is cut centred from the picture.
+ */
+export async function setArtworkFromLibrary(input: {
+  target: ArtworkTarget;
+  crop: ArtworkCrop;
+  pick: { kind: "library" | "stock"; id: string };
+  applyAll?: boolean;
+}): Promise<ArtworkUploadResult> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  const spec = getArtworkSpec(input.crop);
+  if (!spec) return { ok: false, error: "Choose one of the artwork shapes shown." };
+  if (input.pick?.kind !== "library" && input.pick?.kind !== "stock") {
+    return { ok: false, error: "Choose a picture." };
+  }
+
+  const admin = createAdminClient();
+  const targetError = await requireArtworkTarget(guard.churchId, input.target, admin);
+  if (targetError) return { ok: false, error: targetError };
+
+  const picked = await readPickedImage(admin, guard.churchId, { kind: input.pick.kind, id: String(input.pick.id ?? "") });
+  if (!picked.ok) return picked;
+
+  return storeShapes(admin, guard.churchId, input.target, spec, picked.bytes, Boolean(input.applyAll));
+}
+
+async function storeShapes(
+  admin: ReturnType<typeof createAdminClient>,
+  churchId: string,
+  target: ArtworkTarget,
+  first: ArtworkSpec,
+  source: Buffer,
+  applyAll: boolean,
+): Promise<ArtworkUploadResult> {
+  const stored = await storeArtworkCrop(admin, churchId, target, first, source, null);
+  if (!stored.ok) return stored;
+  if (applyAll) {
+    for (const other of ARTWORK_CROPS) {
+      if (other === first.key) continue;
+      const result = await storeArtworkCrop(admin, churchId, target, ARTWORK_SPECS[other], source, null);
+      if (!result.ok) return result;
+    }
+  }
+  revalidateArtworkTarget(target);
+  return stored;
+}
+
+/**
+ * "Create one for me": a fresh background picture made from the title, used
+ * for every artwork shape. No words are drawn into it, so each crop stays
+ * clean however it is cut.
+ */
+export async function createArtworkForMe(input: {
+  target: ArtworkTarget;
+  title: string;
+}): Promise<ArtworkUploadResult> {
+  const guard = await requireAdmin();
+  if (!guard.ok) return guard;
+
+  const admin = createAdminClient();
+  const targetError = await requireArtworkTarget(guard.churchId, input.target, admin);
+  if (targetError) return { ok: false, error: targetError };
+
+  if (!isAiImageConfigured()) {
+    return { ok: false, error: "Making artwork isn't available right now. Upload a picture or choose a stock one instead." };
+  }
+
+  const title = String(input.title ?? "").trim().slice(0, 120) || "Sunday message";
+  const { data: church } = await admin
+    .from("churches")
+    .select("name, giving_primary_color")
+    .eq("id", guard.churchId)
+    .maybeSingle();
+
+  let bytes: Buffer;
+  try {
+    const generated = await generateEventBackgroundImage({
+      title,
+      headline: title,
+      backgroundTag: "worship",
+      imageSubject: null,
+      churchName: (church?.name as string | undefined) ?? "",
+      primaryColor: (church?.giving_primary_color as string | undefined) || "#002D5F",
+      mode: "background",
+    });
+    bytes = Buffer.from(generated.imageBytes);
+  } catch (error) {
+    console.error("[media] artwork generation failed:", error instanceof Error ? error.message : error);
+    return { ok: false, error: "We couldn't make artwork right now. Please try again, or choose a stock picture." };
+  }
+
+  return storeShapes(admin, guard.churchId, input.target, ARTWORK_SPECS.wide, bytes, true);
 }
 
 /** Removes one crop. The inheritance chain decides what shows instead. */
