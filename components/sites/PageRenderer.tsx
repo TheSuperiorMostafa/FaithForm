@@ -1,6 +1,6 @@
 import type { ResolvedPage } from "@/lib/sites/contract";
 import { WebsitePageExplore, WebsitePageIntro, type WebsitePageFrame } from "./website-page-frame";
-import { Fragment } from "react";
+import { Fragment, type ReactNode } from "react";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 
 /**
@@ -11,7 +11,7 @@ import { SECTION_REGISTRY } from "@/lib/sites/registry";
  * whose palette it is. Same mechanism as [data-give-branded] on the giving
  * pages, one level larger.
  */
-export function PageRenderer({ page, website }: { page: ResolvedPage; website?: WebsitePageFrame }) {
+export function PageRenderer({ page, website, liveBanner }: { page: ResolvedPage; website?: WebsitePageFrame; liveBanner?: ReactNode }) {
   const hasHeroHeading=page.sections.some(section=>{
     if(section.type!=="hero") return false;
     const headline=section.content.headline as {lead?:string;accent?:string;trail?:string}|undefined;
@@ -29,6 +29,7 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
       style={page.tokens as React.CSSProperties}
     >
       <div data-site={page.slug}>
+        {liveBanner}
         {!hasHeroHeading && (!website || website.path === "/") ? <h1 className="sr-only">{page.title || website?.churchName}</h1> : null}
         {page.customCss ? (
           // Sanitised in lib/sites/resolve.ts. It can only ever load here, on

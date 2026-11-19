@@ -1861,3 +1861,148 @@
   .site-nav-links { display: none; }
   .site-nav-menu { display: block; flex: none; }
 }
+
+/* --------------------------------------------------------------------------
+ * LIVE BANNER + WATCH PAGE
+ *
+ * The banner sits above the nav in the page flow. Its height is fixed so the
+ * light format, whose nav is `position: fixed` over the hero, can pin the
+ * banner too and offset the nav and page by exactly that much.
+ * ----------------------------------------------------------------------- */
+
+[data-site] {
+  --site-live-banner-h: 52px;
+}
+
+.site-live-banner {
+  position: relative;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  height: var(--site-live-banner-h);
+  padding: 0 var(--site-section-x);
+  background: var(--site-accent);
+  color: var(--site-on-accent, var(--site-accent-ink));
+  font-size: 15px;
+  line-height: 1.2;
+  text-decoration: none;
+  overflow: hidden;
+}
+
+.site-live-banner:hover .site-live-banner-cta,
+.site-live-banner:focus-visible .site-live-banner-cta {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.site-live-banner:focus-visible {
+  outline: 3px solid var(--site-on-accent, var(--site-accent-ink));
+  outline-offset: -5px;
+}
+
+.site-live-banner-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6);
+  animation: site-live-pulse 1.6s ease-out infinite;
+}
+
+.site-live-banner-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+.site-live-banner-cta {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--site-radius-btn);
+  background: color-mix(in srgb, var(--site-on-accent, var(--site-accent-ink)) 14%, transparent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@keyframes site-live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.6); }
+  70% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+}
+
+@media (max-width: 560px) {
+  .site-live-banner { justify-content: space-between; font-size: 14px; }
+  .site-live-banner-title,
+  .site-live-banner-full { display: none; }
+}
+
+@media (min-width: 561px) {
+  .site-live-banner-short { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-live-banner-dot { animation: none; }
+}
+
+/* Light: the nav floats over the hero, so the banner floats with it. */
+[data-theme="light"] .site-live-banner {
+  position: fixed;
+  inset: 0 0 auto;
+}
+
+[data-theme="light"] [data-site]:has(.site-live-banner) {
+  padding-top: var(--site-live-banner-h);
+}
+
+[data-theme="light"] [data-site]:has(.site-live-banner) .site-nav {
+  top: var(--site-live-banner-h);
+}
+
+/* Watch page. */
+[data-theme="light"][data-layout="live"] .site-nav,
+[data-theme="light"] [data-layout="live"] .site-nav {
+  position: relative;
+  background: var(--site-ink);
+}
+
+.site-live-home {
+  flex: none;
+  min-height: 44px;
+  padding: 10px 18px;
+  font-size: 14.5px;
+  color: var(--site-on-ink, #fff);
+  border-color: color-mix(in srgb, var(--site-on-ink, #fff) 40%, transparent);
+}
+
+.site-live {
+  min-height: 70vh;
+  padding-top: clamp(24px, 4vw, 48px);
+}
+
+/* The shared player is styled with app tokens; give it the church's instead. */
+.site-live-player {
+  --background: transparent;
+  --foreground: var(--site-fg);
+  --muted-foreground: var(--site-fg-faint);
+  --border: var(--site-card-border);
+  --font-heading: var(--site-font-display);
+  color: var(--site-fg);
+}
+
+.site-live-player > div {
+  min-height: 0;
+}
+
+/* The nav already shows the logo. */
+.site-live-player header img {
+  display: none;
+}

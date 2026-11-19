@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
+import { SiteLiveBanner } from "@/components/sites/live-banner";
+import { SiteLiveView } from "@/components/sites/site-live-view";
 import { DEV_PREVIEW_PROFILE } from "@/lib/sites/dev-preview-profile";
 import { buildSections } from "@/lib/sites/generate";
 import { composeWebsiteSections, normalizeSitePath, websitePageDefForPath, websitePageDefForType, websiteSupportingPaths } from "@/lib/sites/layout-mode";
@@ -13,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 type PageProps = {
   params: Promise<{ theme: string }>;
-  searchParams: Promise<{ path?: string; mode?: string }>;
+  searchParams: Promise<{ path?: string; mode?: string; live?: string }>;
 };
 
 /**
@@ -83,7 +85,17 @@ export default async function DevSitePreviewPage({ params, searchParams }: PageP
     } }));
   }
 
-  return <PageRenderer page={page} website={website ? {
+  // `?path=/live` draws the site's watch page shell (the sample church has no stream).
+  if (path === "/live") {
+    return <SiteLiveView slug={DEV_PREVIEW_PROFILE.slug} themeKey={page.themeKey} tokens={page.tokens} churchName={DEV_PREVIEW_PROFILE.name} logoUrl={DEV_PREVIEW_PROFILE.logoUrl} homeHref={`/dev-site-preview/${encodeURIComponent(key)}`} />;
+  }
+
+  // `?live=1` draws the "now live" banner as a live church would see it.
+  const liveBanner = query.live === "1"
+    ? <SiteLiveBanner slug={DEV_PREVIEW_PROFILE.slug} churchName={DEV_PREVIEW_PROFILE.name} href="#live" initial={{ live: true, eventTitle: "Sunday Worship" }} />
+    : undefined;
+
+  return <PageRenderer page={page} liveBanner={liveBanner} website={website ? {
     path, basePath: `/dev-site-preview/${encodeURIComponent(key)}?mode=website`, churchName: DEV_PREVIEW_PROFILE.name, coverImageUrl: DEV_PREVIEW_PROFILE.coverImageUrl,
     location: [DEV_PREVIEW_PROFILE.address, formatCityLine(DEV_PREVIEW_PROFILE.city, DEV_PREVIEW_PROFILE.state, DEV_PREVIEW_PROFILE.zip)].filter(Boolean).join(", "),
     serviceTimes: DEV_PREVIEW_PROFILE.serviceTimes.flatMap((time) => {

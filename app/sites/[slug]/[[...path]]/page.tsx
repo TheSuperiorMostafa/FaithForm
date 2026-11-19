@@ -21,7 +21,11 @@ import { formatCityLine, formatServiceTime } from "@/lib/sites/format";
 import { getSiteBundle, getSiteNavigationPages } from "@/lib/sites/queries";
 import { canPreviewDraftSite } from "@/lib/sites/preview-access";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
-import { resolvePage } from "@/lib/sites/resolve";
+import { resolvePage, resolveTokens } from "@/lib/sites/resolve";
+import { SiteLiveBanner } from "@/components/sites/live-banner";
+import { SiteLiveView } from "@/components/sites/site-live-view";
+import { siteHomeHref, siteLiveHref } from "@/lib/sites/live-banner";
+import { getSiteLiveStatus } from "@/lib/sites/live-status";
 
 type PageProps = {
   params: Promise<{ slug: string; path?: string[] }>;
@@ -88,10 +92,13 @@ async function canReadPage(loaded: NonNullable<Awaited<ReturnType<typeof loadPag
   });
 }
 
+/** The site's own watch page. Served in both layout modes, gated like the home page. */
+const LIVE_PATH = "/live";
+
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { slug, path: pathSegments } = await params;
   const path = normalizeSitePath(pathSegments);
-  const loaded = await loadPage(slug, path);
+  const loaded = await loadPage(slug, path === LIVE_PATH ? "/" : path);
   if (!loaded) return { title: "Not found" };
 
   const { bundle } = loaded;
@@ -105,7 +112,9 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
   }
 
   const title =
-    path === "/"
+    path === LIVE_PATH
+      ? `Watch live · ${bundle.profile.name}`
+      : path === "/"
       ? bundle.page.title?.trim() || bundle.profile.name
       : [bundle.page.title?.trim(), bundle.profile.name].filter(Boolean).join(" · ") ||
         bundle.profile.name;
@@ -138,7 +147,8 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
 export default async function ChurchSitePage({ params, searchParams }: PageProps) {
   const [{ slug, path: pathSegments }, query] = await Promise.all([params, searchParams]);
   const path = normalizeSitePath(pathSegments);
-  const loaded = await loadPage(slug, path);
+  const isLivePath = path === LIVE_PATH;
+  const loaded = await loadPage(slug, isLivePath ? "/" : path);
   if (!loaded) notFound();
 
   const { bundle, sections } = loaded;
@@ -154,6 +164,23 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
 
   const isPreview = query.preview === "1";
   if (!(await canReadPage(loaded, isPreview))) notFound();
+
+  if (isLivePath) {
+    // Live streaming switched off in the control center means no watch page.
+    if (!(await isChurchFeatureEnabled(bundle.churchId, "live_stream"))) notFound();
+    const liveHost = (await headers()).get("host") ?? new URL(DEFAULT_PRODUCTION_SITE_URL).host;
+    const liveBasePath = isPlatformSiteHost(liveHost) ? `/sites/${encodeURIComponent(slug)}` : "";
+    return (
+      <SiteLiveView
+        slug={slug}
+        themeKey={bundle.theme.key}
+        tokens={resolveTokens(bundle.theme, bundle.settings, bundle.overrides.find((row) => row.scope === "church") ?? null)}
+        churchName={bundle.profile.name}
+        logoUrl={bundle.profile.logoUrl}
+        homeHref={siteHomeHref(liveBasePath, isPreview)}
+      />
+    );
+  }
 
   const page = resolvePage({
     page: bundle.page,
@@ -207,7 +234,17 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     },
   }));
 
-  return <PageRenderer page={page} website={loaded.layoutMode === "website" ? {
+  const liveStatus = await getSiteLiveStatus(bundle.churchId);
+  const liveBanner = (
+    <SiteLiveBanner
+      slug={slug}
+      churchName={bundle.profile.name}
+      href={siteLiveHref(basePath, isPreview)}
+      initial={liveStatus}
+    />
+  );
+
+  return <PageRenderer page={page} liveBanner={liveBanner} website={loaded.layoutMode === "website" ? {
     path,
     basePath,
     churchName: bundle.profile.name,

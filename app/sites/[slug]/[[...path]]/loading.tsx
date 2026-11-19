@@ -9,6 +9,7 @@ export default function ChurchSiteLoading() {
   const pathname = usePathname();
   const path = pathname.match(/^\/sites\/[^/]+(.*)$/)?.[1] || pathname;
   const definition = websitePageDefForPath(path);
+  if (path === "/live") return <ChurchSiteLiveLoading />;
   const cards = path === "/staff" || path === "/programs" || path === "/sermons" || path === "/events";
   return (
     <div className="site-page" data-layout={definition ? "website" : "landing"}>
@@ -32,6 +33,27 @@ export default function ChurchSiteLoading() {
             {cards ? <div className="site-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))" }}>
               {[0, 1, 2].map(i => <div key={i} className="site-card"><Skeleton className="mb-4 aspect-video w-full" /><Skeleton className="mb-4 h-7 w-3/5" /><SkeletonText lines={3} /></div>)}
             </div> : <div className="site-split"><SkeletonText lines={4} /><div className="site-panel"><Skeleton className="mb-5 h-10 w-2/3" /><SkeletonText lines={3} /><Skeleton className="mt-6 h-12 w-full" /></div></div>}
+          </div>
+        </SkeletonContainer>
+      </div>
+    </div>
+  );
+}
+
+/** Matches SiteLiveView: compact nav, then the player's header and 16:9 frame. */
+function ChurchSiteLiveLoading() {
+  return (
+    <div className="site-page" data-layout="live">
+      <div data-site="loading">
+        <SkeletonContainer label="Live stream">
+          <div className="site-nav site-nav-static"><div className="site-nav-inner">
+            <Skeleton className="h-11 w-44" /><Skeleton className="h-11 w-40" />
+          </div></div>
+          <div className="site-section site-surface-canvas site-live">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
+              <div className="flex flex-col gap-2"><Skeleton className="h-8 w-56" /><Skeleton className="h-4 w-40" /></div>
+              <Skeleton className="aspect-video w-full rounded-2xl" />
+            </div>
           </div>
         </SkeletonContainer>
       </div>
