@@ -26,6 +26,7 @@ import {
 } from "@/components/announcements/announcements-skeleton";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { isImageChatConfigured } from "@/lib/ai/image/chat";
 import { describeWhen, type PostedItem } from "@/lib/announcements/composer";
 import {
   getWeeklyEmailAvailability,
@@ -131,6 +132,7 @@ export default async function AnnouncementsPage() {
     churchCity: churchProfile?.city ?? null,
     churchState: churchProfile?.state ?? null,
     churchZip: churchProfile?.zip ?? null,
+    aiImageChatAvailable: isImageChatConfigured(),
   };
 
   // Started once and shared by the sections below, each under its own

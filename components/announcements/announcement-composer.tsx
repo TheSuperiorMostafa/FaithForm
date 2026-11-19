@@ -23,6 +23,7 @@ import {
   Loader2,
   Mail,
   Megaphone,
+  MessageSquareText,
   Share2,
   Smartphone,
   Sparkles,
@@ -83,6 +84,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { DatePicker, TimePicker } from "@/components/ui/date-picker";
 import { ImageLibraryDialog, type LibraryPick } from "@/components/media/image-library-dialog";
+import { AiImageChatPanel } from "@/components/announcements/ai-image-chat-panel";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -105,6 +107,8 @@ export type ComposerSettings = {
   churchCity: string | null;
   churchState: string | null;
   churchZip: string | null;
+  /** Gemini is set up, so "Create image with AI" is offered. */
+  aiImageChatAvailable?: boolean;
 };
 
 export type ComposerMode =
@@ -718,7 +722,8 @@ export function AnnouncementComposer({
     }
   };
 
-  const handleFile = async (file: File) => {
+  /** Saves a picture as the event's own. Resolves to an error message, or null. */
+  const uploadGraphic = async (file: File): Promise<string | null> => {
     setUploading(true);
     setPictureError(null);
     try {
@@ -732,15 +737,23 @@ export function AnnouncementComposer({
       }
       dispatchGraphic({ type: "uploaded", url: data.graphicUrl, path: data.graphicPath });
       setPictureNote(null);
+      return null;
     } catch (err) {
-      setPictureError(
-        err instanceof Error && !(err instanceof TypeError || err instanceof SyntaxError) && err.message ? err.message : "That picture could not be uploaded.",
-      );
+      const message =
+        err instanceof Error && !(err instanceof TypeError || err instanceof SyntaxError) && err.message ? err.message : "That picture could not be uploaded.";
+      setPictureError(message);
+      return message;
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const handleFile = async (file: File) => {
+    await uploadGraphic(file);
+  };
+
+  const [aiChatOpen, setAiChatOpen] = useState(false);
 
   const loadPostDefaults = async () => {
     if (postDefaults) return;
@@ -1217,6 +1230,7 @@ export function AnnouncementComposer({
                       onMake={() => void askForPicture("full", !values.caption.trim())}
                       onUpload={() => fileInputRef.current?.click()}
                       onLibrary={(tab) => setLibraryTab(tab)}
+                      onAiChat={settings.aiImageChatAvailable ? () => setAiChatOpen(true) : undefined}
                       onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
                       onRemove={() => dispatchGraphic({ type: "remove" })}
                     />
@@ -1238,6 +1252,18 @@ export function AnnouncementComposer({
                       onPick={applyPicturePick}
                       title="Choose a picture for this event"
                     />
+                    {settings.aiImageChatAvailable && (
+                      <AiImageChatPanel
+                        open={aiChatOpen}
+                        onOpenChange={setAiChatOpen}
+                        event={{
+                          title: values.title.trim() || undefined,
+                          when: dated && previewWhen ? previewWhen : undefined,
+                          location: dated ? values.location.trim() || undefined : undefined,
+                        }}
+                        onUse={uploadGraphic}
+                      />
+                    )}
                   </Section>
 
                   {/* Where? */}
@@ -1601,6 +1627,7 @@ function PictureField({
   onMake,
   onUpload,
   onLibrary,
+  onAiChat,
   onRestoreAi,
   onRemove,
 }: {
@@ -1615,6 +1642,8 @@ function PictureField({
   onMake: () => void;
   onUpload: () => void;
   onLibrary: (tab: "library" | "stock") => void;
+  /** Opens the "Create image with AI" chat. Absent when it isn't set up. */
+  onAiChat?: () => void;
   onRestoreAi: () => void;
   onRemove: () => void;
 }) {
@@ -1638,6 +1667,12 @@ function PictureField({
           {loading ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
           {loading ? "Making…" : graphic ? "Make a new picture" : "Make a picture for me"}
         </Button>
+        {onAiChat && (
+          <Button type="button" variant="outline" onClick={onAiChat} disabled={uploading || loading}>
+            <MessageSquareText aria-hidden />
+            Create image with AI
+          </Button>
+        )}
         <Button type="button" variant="outline" onClick={onUpload} disabled={uploading || loading}>
           {uploading ? <Loader2 className="animate-spin" aria-hidden /> : <ImagePlus aria-hidden />}
           {uploading ? "Uploading…" : graphic ? "Upload a different picture" : "Upload a picture"}

@@ -128,3 +128,65 @@ export async function generateGeminiBackgroundImage(
 
   throw lastError ?? new Error("Could not generate Gemini event background");
 }
+
+export type GeminiChatImageResult = {
+  imageBytes: Buffer;
+  mimeType: string;
+  /** The model's short note about what it made, if it wrote one. */
+  text: string | null;
+  modelUsed: string;
+};
+
+/**
+ * One turn of the "Create image with AI" chat: create an image, or edit the
+ * one passed inline in `contents` (multi-turn image editing). The contents
+ * and system instruction are built by lib/ai/image/chat-prompt.ts.
+ */
+export async function generateGeminiChatImage(input: {
+  contents: unknown;
+  systemInstruction: string;
+}): Promise<GeminiChatImageResult> {
+  const apiKey = process.env.GEMINI_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is not configured");
+  }
+
+  const model = resolveModel();
+  const ai = new GoogleGenAI({ apiKey });
+  const response = await ai.models.generateContent({
+    model,
+    contents: input.contents as Parameters<
+      typeof ai.models.generateContent
+    >[0]["contents"],
+    config: {
+      systemInstruction: input.systemInstruction,
+      responseModalities: ["IMAGE", "TEXT"],
+      httpOptions: { timeout: resolveTimeoutMs() },
+    },
+  });
+
+  const parts = response.candidates?.[0]?.content?.parts ?? [];
+  let image: { bytes: Buffer; mimeType: string } | null = null;
+  const notes: string[] = [];
+  for (const part of parts) {
+    if (!image && part.inlineData?.data) {
+      image = {
+        bytes: Buffer.from(part.inlineData.data, "base64"),
+        mimeType: part.inlineData.mimeType || "image/png",
+      };
+    } else if (part.text?.trim() && !part.thought) {
+      notes.push(part.text.trim());
+    }
+  }
+
+  if (!image) {
+    throw new Error(describeEmptyResponse(response));
+  }
+
+  return {
+    imageBytes: image.bytes,
+    mimeType: image.mimeType,
+    text: notes.join(" ").slice(0, 500) || null,
+    modelUsed: `gemini:${model}`,
+  };
+}
