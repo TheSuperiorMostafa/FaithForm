@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { MediaJobRow } from "@/lib/sermon-media/jobs";
+import { describeJob } from "@/lib/sermon-media/progress";
 import type { RangeSuggestion } from "@/lib/sermon-media/sermon-range";
 import type { AudioEvent, Transcript, TranscriptGap, TranscriptSegment } from "@/lib/sermon-media/transcript";
 
@@ -19,7 +20,7 @@ export type SermonMediaState = {
     evidence: RangeSuggestion["evidence"];
     forVersion: number | null;
   };
-  confirmed: { startSec: number; endSec: number; by: string | null; at: string; transcriptVersion: number | null } | null;
+  confirmed: { startSec: number; endSec: number; by: string | null; at: string; transcriptVersion: number | null; automatic: boolean } | null;
   inputVersion: number;
 };
 
@@ -65,6 +66,7 @@ export async function getSermonMediaState(
             by: data.confirmed_by,
             at: data.confirmed_at,
             transcriptVersion: num(data.confirmed_transcript_version),
+            automatic: Boolean(data.confirmed_automatically),
           },
     inputVersion: Number(data.input_version ?? 0),
   };
@@ -136,9 +138,10 @@ export async function saveRangeSuggestion(
 }
 
 /** A public, staff-safe view of a job: no lease, attempt or dispatch internals. */
-export function publicJob(job: MediaJobRow | null) {
+export function publicJob(job: MediaJobRow | null, mediaSec = 0) {
   if (!job) return null;
   return {
+    progressView: describeJob(job, mediaSec),
     id: job.id,
     status: job.status,
     stage: job.stage,

@@ -127,14 +127,14 @@ class CallbackClient:
 
 
 class Heartbeat:
-    """Background heartbeat (default every 30 s; contract requires <= 60 s).
+    """Background heartbeat (default every 10 s so dashboard progress moves smoothly; contract requires <= 60 s).
 
     The main thread updates stage/progress with `update()` and calls `check()` between
     steps; `check()` re-raises Stale/Cancelled/Unauthorized seen by the heartbeat.
     Transient heartbeat failures are tolerated (the next beat retries).
     """
 
-    def __init__(self, client: CallbackClient, interval: float = 30.0):
+    def __init__(self, client: CallbackClient, interval: float = 10.0):
         self.client = client
         self.interval = min(interval, 45.0)
         self.stage = "starting"

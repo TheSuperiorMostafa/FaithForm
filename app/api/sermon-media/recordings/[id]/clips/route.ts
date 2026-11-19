@@ -3,7 +3,9 @@ import { z } from "zod";
 import { requireRecordingAccess } from "@/lib/sermon-media/access";
 import { assertClipBounds, refreshSuggestedClips } from "@/lib/sermon-media/clips";
 import { fail, limit, ok, readJson, routeError } from "@/lib/sermon-media/http";
+import { kickDispatch } from "@/lib/sermon-media/jobs";
 import { getSermonMediaState, getTranscript } from "@/lib/sermon-media/store";
+import { runPipelineForRecording } from "@/lib/sermon-media/studio";
 import { segmentsInRange } from "@/lib/sermon-media/transcript";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -27,6 +29,8 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 const bodySchema = z.union([
   z.object({ action: z.literal("suggest") }),
+  /** Find, caption, crop and render the best clips now (the Clips "Make clips" button). */
+  z.object({ action: z.literal("make") }),
   z.object({ action: z.literal("create"), startSec: z.number().finite().min(0), endSec: z.number().finite().min(0) }),
 ]);
 
@@ -48,6 +52,15 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       getTranscript(db, auth.churchId, id),
     ]);
     if (!transcript) return fail(409, "The transcript isn't ready yet.");
+    if (parsed.data.action === "make") {
+      const result = await runPipelineForRecording(db, auth.churchId, id, { manual: true });
+      if (result.status === "needs_range") {
+        return fail(409, "We weren't sure where the sermon starts and ends. Choose it on the transcript, then make clips.", { code: "range_required" });
+      }
+      if (result.status !== "done") return fail(409, "Transcripts & Clips isn't ready for this recording yet.");
+      if (result.clips > 0) await kickDispatch(["render_clip"]);
+      return ok({ made: result.clips, autoConfirmed: result.autoConfirmed });
+    }
     if (!state.confirmed) return fail(409, "Confirm where the sermon starts and ends first.");
 
     if (parsed.data.action === "suggest") {

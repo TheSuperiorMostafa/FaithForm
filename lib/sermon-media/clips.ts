@@ -37,6 +37,13 @@ export type ClipRow = {
   edit_version: number;
   needs_review: boolean;
   review_reason: string | null;
+  approval_status: "pending" | "approved" | "skipped" | "posted";
+  approved_render_id: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  approved_page_id: string | null;
+  scheduled_for: string | null;
+  auto: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -208,6 +215,11 @@ export async function updateClip(
     facebook_caption: patch.facebookCaption ?? clip.facebook_caption,
     status: patch.status ?? (clip.status === "suggested" ? "draft" : clip.status),
     edit_version: affectsRender ? clip.edit_version + 1 : clip.edit_version,
+    // An edit that changes the video withdraws its approval: the new version
+    // has to be watched and approved again before it can post.
+    ...(affectsRender && clip.approval_status === "approved"
+      ? { approval_status: "pending", approved_render_id: null, approved_by: null, approved_at: null, approved_page_id: null, scheduled_for: null }
+      : {}),
     // Re-trimming against the current sermon is the review the flag asked for.
     ...(trimChanged && clip.needs_review ? { needs_review: false, review_reason: null, input_version: state.inputVersion } : {}),
     updated_at: new Date().toISOString(),
@@ -239,7 +251,8 @@ export async function requestRender(
   clip: ClipRow,
   state: SermonMediaState,
   transcript: Transcript | null,
-  userId: string,
+  /** Null when FaithForm's automatic pipeline requests it. */
+  userId: string | null,
 ): Promise<RenderRow> {
   assertClipBounds(state, Number(clip.start_sec), Number(clip.end_sec));
   if (clip.input_version < state.inputVersion || clip.needs_review) {

@@ -4,6 +4,7 @@ import { sweepAutoTranscriptions } from "@/lib/sermon-media/auto";
 import { cleanUpDeletedRecordings } from "@/lib/sermon-media/cleanup";
 import { dispatchDueJobs, logSermonMedia } from "@/lib/sermon-media/jobs";
 import { reconcileOpenReelPosts } from "@/lib/sermon-media/reel-runtime";
+import { postDueClips, runAutoPipelines } from "@/lib/sermon-media/studio";
 import { compareSecret } from "@/lib/security/compare-secret";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -43,7 +44,9 @@ export async function GET(request: Request) {
 
   await step("sweep", () => sweepAutoTranscriptions(db));
   await step("cleanup", () => cleanUpDeletedRecordings(db));
+  await step("pipeline", () => runAutoPipelines(db));
   await step("dispatch", () => dispatchDueJobs({ db }));
+  await step("scheduled_posts", () => postDueClips(db));
   await step("reels", () => reconcileOpenReelPosts(db));
 
   // Queue depth and age, for alerting on a backed-up Sunday.

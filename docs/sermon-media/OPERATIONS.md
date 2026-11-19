@@ -27,17 +27,33 @@ from what the pastor said, and Facebook Reels clips. Contract with the worker:
    `MODAL_PROXY_TOKEN_ID`, `MODAL_PROXY_TOKEN_SECRET`, `SERMON_MEDIA_CALLBACK_ORIGIN`
    (the public https origin), optional caps. Leave `SERMON_MEDIA_ENABLED=0` until ready.
 5. **Turn on** `SERMON_MEDIA_ENABLED=1`. Nothing happens for any church yet.
-6. **Per church** (pilot first):
-   ```sql
-   insert into public.sermon_media_settings (church_id, enabled, auto_transcribe, language, max_concurrent_jobs)
-   values ('<church uuid>', true, true, 'auto', 2)
-   on conflict (church_id) do update set enabled = excluded.enabled, auto_transcribe = excluded.auto_transcribe;
-   ```
-   Turning a church off (`enabled = false`) hides the feature and stops new jobs; running
-   jobs finish or are cancelled by staff.
+6. **Per church** (pilot first): in the platform admin, turn on the church's
+   **Transcripts & Clips** feature switch (it ships off). Non-admin staff also need the
+   feature granted. That is all: the church gets the defaults below, and its admins can
+   change them in **Clips → Posting schedule**. The `sermon_media_settings` row is only
+   created when someone changes a setting.
 
-Rollback: set the church row to `enabled = false`, or `SERMON_MEDIA_ENABLED=0` for all.
+   | Default | Value |
+   | --- | --- |
+   | Transcribe each new service automatically | on |
+   | Confirm the sermon range automatically when confidence ≥ 0.8 | on |
+   | Prepare clips automatically after each service | on, 3 per service |
+   | Post approved clips | weekdays 12:00, one a day, church time zone |
+
+   Turning the switch off hides both sections, stops new jobs and holds scheduled posts.
+
+Rollback: turn the church's switch off, or `SERMON_MEDIA_ENABLED=0` for all.
 The tables can stay; nothing else reads them.
+
+## After each service (the studio)
+
+transcript ready → sermon range confirmed automatically when the evidence is strong
+(staff can move it; their confirmation replaces FaithForm's) → the best clips found,
+captioned, cropped 9:16 and rendered → **Clips → Ready to review**: an admin watches each
+final video and approves with one tap → approved clips post at the next free slot on the
+church's schedule. An edit after approval withdraws it. At post time everything is
+re-checked (current video, same Facebook Page, feature still on); a clip that no longer
+qualifies goes back to review with the reason instead of posting.
 
 ## How work flows
 

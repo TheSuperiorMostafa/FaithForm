@@ -5,6 +5,8 @@ import { NextResponse } from "next/server";
 import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { featureAccessDenied } from "@/lib/features/guard";
+import type { PostSchedule } from "@/lib/sermon-media/schedule";
+import { settingsFromRow } from "@/lib/sermon-media/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -18,30 +20,34 @@ export type SermonMediaSettings = {
   autoTranscribe: boolean;
   language: string;
   maxConcurrentJobs: number;
+  autoConfirmRange: boolean;
+  autoClips: boolean;
+  clipsPerService: number;
+  postSchedule: PostSchedule;
 };
 
 export function sermonMediaGloballyEnabled(): boolean {
   return process.env.SERMON_MEDIA_ENABLED === "1";
 }
 
+const SETTINGS_COLUMNS =
+  "auto_transcribe, language, max_concurrent_jobs, auto_confirm_range, auto_clips, clips_per_service, post_schedule";
+
+export { settingsFromRow };
+
 export async function getSermonMediaSettings(churchId: string): Promise<SermonMediaSettings> {
-  const disabled: SermonMediaSettings = { enabled: false, autoTranscribe: false, language: "auto", maxConcurrentJobs: 2 };
+  const disabled: SermonMediaSettings = { enabled: false, ...settingsFromRow(null), autoTranscribe: false, autoClips: false };
   if (!sermonMediaGloballyEnabled()) return disabled;
   // The church's "Transcripts & Clips" feature switch (off until a platform
   // admin turns it on) decides whether the church has it at all. The settings
-  // row is optional and only tunes it: automatic transcription, language, caps.
+  // row is optional and only tunes it: automation, language, caps, schedule.
   if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) return disabled;
   const { data } = await createAdminClient()
     .from("sermon_media_settings")
-    .select("enabled, auto_transcribe, language, max_concurrent_jobs")
+    .select(SETTINGS_COLUMNS)
     .eq("church_id", churchId)
     .maybeSingle();
-  return {
-    enabled: true,
-    autoTranscribe: Boolean(data?.enabled && data.auto_transcribe),
-    language: String(data?.language ?? "auto"),
-    maxConcurrentJobs: Number(data?.max_concurrent_jobs ?? 2),
-  };
+  return { enabled: true, ...settingsFromRow((data as Record<string, unknown> | null) ?? null) };
 }
 
 export type RecordingAccess = {
@@ -113,4 +119,22 @@ export async function requireRecordingAccess(
       },
     },
   };
+}
+
+export type StudioAccess = { auth: ChurchAuth; settings: SermonMediaSettings };
+
+/** Access to the Transcripts and Clips sections (not tied to one recording). */
+export async function requireStudioAccess(
+  need: "view" | "edit" | "admin",
+): Promise<{ ok: true; access: StudioAccess } | Denied> {
+  const auth = await getChurchAuth();
+  if (!auth) return deny(401, "Please sign in again.");
+  const liveDenied = await featureAccessDenied("live_stream");
+  if (liveDenied) return { ok: false, response: liveDenied };
+  const mediaDenied = await featureAccessDenied("sermon_media");
+  if (mediaDenied) return { ok: false, response: mediaDenied };
+  if (need === "admin" && !auth.isAdmin) return deny(403, "Only a church administrator can change this.");
+  const settings = await getSermonMediaSettings(auth.churchId);
+  if (!settings.enabled) return deny(403, "Transcripts & Clips isn't turned on for your church yet.");
+  return { ok: true, access: { auth, settings } };
 }

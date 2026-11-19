@@ -296,3 +296,40 @@ test("a render posts to a Page once unless the earlier post definitively failed"
     await client.end();
   }
 });
+
+test("a clip can't be approved without naming the video, the approver and the Page", options, async () => {
+  const client = await connect();
+  try {
+    await client.query("begin");
+    const { churchId, recordingId } = await church(client);
+    const clip = await client.query(
+      `insert into public.sermon_clips (church_id, recording_id, input_version, origin, start_sec, end_sec)
+       values ($1, $2, 1, 'suggested', 10, 40) returning id, approval_status`,
+      [churchId, recordingId],
+    );
+    assert.equal(clip.rows[0].approval_status, "pending");
+    await client.query("savepoint s");
+    await assert.rejects(
+      client.query(`update public.sermon_clips set approval_status = 'approved' where id = $1`, [clip.rows[0].id]),
+      /sermon_clips_approval_complete/,
+    );
+    await client.query("rollback to savepoint s");
+    const render = await client.query(
+      `insert into public.sermon_clip_renders (church_id, clip_id, edit_version, spec_hash, spec, status)
+       values ($1, $2, 1, $3, '{}'::jsonb, 'ready') returning id`,
+      [churchId, clip.rows[0].id, "b".repeat(64)],
+    );
+    await client.query(
+      `update public.sermon_clips set approval_status = 'approved', approved_render_id = $2, approved_by = $3, approved_page_id = '123', scheduled_for = now()
+       where id = $1`,
+      [clip.rows[0].id, render.rows[0].id, randomUUID()],
+    );
+    const settings = await client.query(`select clips_per_service, auto_clips, post_schedule->>'time' as t from public.sermon_media_settings where church_id = $1`, [churchId]);
+    assert.equal(settings.rows[0].clips_per_service, 3);
+    assert.equal(settings.rows[0].auto_clips, true);
+    assert.equal(settings.rows[0].t, "12:00");
+  } finally {
+    await client.query("rollback");
+    await client.end();
+  }
+});

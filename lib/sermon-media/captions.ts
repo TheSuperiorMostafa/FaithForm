@@ -82,3 +82,11 @@ export function rebaseCues(cues: CaptionCue[], oldStartSec: number, newStartSec:
 export function captionsToText(cues: CaptionCue[]): string {
   return cues.map((cue) => cue.text).join(" ");
 }
+
+/** A first draft of the Facebook caption: the clip's opening line and the church. */
+export function draftCaption(excerpt: string, churchName: string | null): string {
+  const clean = excerpt.replace(/\s+/g, " ").trim();
+  const first = clean.match(/^.{20,200}?[.!?](?=\s|$)/)?.[0] ?? clean.slice(0, 180);
+  const hook = first.length < clean.length && !/[.!?]$/.test(first) ? `${first}…` : first;
+  return churchName ? `${hook}\n\n— ${churchName}` : hook;
+}

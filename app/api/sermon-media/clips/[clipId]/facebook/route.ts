@@ -99,6 +99,19 @@ export async function POST(request: Request, context: { params: Promise<{ clipId
     if ("pageChanged" in result) {
       return fail(409, "A different Facebook Page is connected now. Reconnect the right Page and post again.");
     }
+    // Posting now is an approval too: keep the Clips queue in step.
+    await db
+      .from("sermon_clips")
+      .update({
+        approval_status: "posted",
+        approved_render_id: render.id,
+        approved_by: auth.userId,
+        approved_at: now,
+        approved_page_id: facebook.pageId,
+        scheduled_for: null,
+        updated_at: now,
+      })
+      .eq("id", clip.id);
     logSermonMedia("reel_post_requested", { clipId: clip.id, renderId: render.id, postId: result.post.id, created: result.created, outcome: result.result.outcome });
     const { data: post } = await db
       .from("facebook_reel_posts")

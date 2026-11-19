@@ -30,7 +30,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
   ]);
   return ok({
     state,
-    job: publicJob(job),
+    job: publicJob(job, allowed.access.recording.durationSec ?? 0),
     canPublish: auth.isAdmin,
     lessons: (lessons.data ?? []).map((row) => {
       const sermon = row.sermons as unknown as { title: string; status: string };

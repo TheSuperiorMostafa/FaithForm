@@ -35,15 +35,25 @@ export async function sweepAutoTranscriptions(
   options: { limit?: number; now?: Date } = {},
 ): Promise<{ queued: number; checked: number }> {
   if (!autoTranscriptionEnabled()) return { queued: 0, checked: 0 };
-  const { data: settings } = await db
-    .from("sermon_media_settings")
-    .select("church_id, language")
-    .eq("enabled", true)
-    .eq("auto_transcribe", true);
-  const churches = new Map((settings ?? []).map((row) => [row.church_id as string, String(row.language ?? "auto")]));
-  // Only churches whose Transcripts & Clips feature is switched on.
-  for (const churchId of [...churches.keys()]) {
-    if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) churches.delete(churchId);
+  // Churches with Transcripts & Clips switched on (it ships off, so each has a
+  // saved switch). The settings row is optional: it can turn automation off or
+  // set a language.
+  const { data: switches } = await db
+    .from("church_features")
+    .select("church_id")
+    .eq("feature_key", "sermon_media")
+    .eq("enabled", true);
+  const ids = (switches ?? []).map((row) => row.church_id as string);
+  const { data: settings } = ids.length
+    ? await db.from("sermon_media_settings").select("church_id, language, auto_transcribe").in("church_id", ids)
+    : { data: [] as Array<{ church_id: string; language: string | null; auto_transcribe: boolean | null }> };
+  const tuned = new Map((settings ?? []).map((row) => [row.church_id as string, row]));
+  const churches = new Map<string, string>();
+  for (const churchId of ids) {
+    const row = tuned.get(churchId);
+    if (row && row.auto_transcribe === false) continue;
+    if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) continue;
+    churches.set(churchId, String(row?.language ?? "auto"));
   }
   if (churches.size === 0) return { queued: 0, checked: 0 };
 
@@ -97,7 +107,7 @@ export async function onRecordingVerifiedReady(
     .select("enabled, auto_transcribe, language")
     .eq("church_id", recording.churchId)
     .maybeSingle();
-  if (!settings?.enabled || !settings.auto_transcribe) return;
+  if (settings && settings.auto_transcribe === false) return;
   if (!(await isChurchFeatureEnabled(recording.churchId, "sermon_media"))) return;
   const { data: jobs } = await db
     .from("media_jobs")
@@ -112,7 +122,7 @@ export async function onRecordingVerifiedReady(
       churchId: recording.churchId,
       recordingId: recording.id,
       revision: recording.renditionRevision,
-      language: String(settings.language ?? "auto"),
+      language: String(settings?.language ?? "auto"),
       source: "auto",
     },
     db,

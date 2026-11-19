@@ -32,7 +32,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const db = createAdminClient();
     const previous = await getLatestJob(db, auth.churchId, id, "transcribe");
     if (previous && ["queued", "dispatched", "running"].includes(previous.status)) {
-      return ok({ job: publicJob(previous) });
+      return ok({ job: publicJob(previous, allowed.access.recording.durationSec ?? 0) });
     }
     if (previous?.status === "succeeded" && !parsed.data?.redo) {
       return fail(409, "This recording already has a transcript.");
@@ -52,7 +52,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     );
     await kickDispatch(["transcribe"]);
     const latest = job ? await getLatestJob(db, auth.churchId, id, "transcribe") : null;
-    return ok({ job: publicJob(latest ?? job) }, 202);
+    return ok({ job: publicJob(latest ?? job, allowed.access.recording.durationSec ?? 0) }, 202);
   } catch (error) {
     return routeError(error, "We couldn't start the transcript. Please try again.", "transcribe");
   }

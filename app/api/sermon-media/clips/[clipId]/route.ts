@@ -52,7 +52,7 @@ export async function GET(_request: Request, context: { params: Promise<{ clipId
           matchesCurrentEdit: current.spec_hash === specHash(spec),
           validation: current.validation,
           failureReason: current.failure_reason ?? (job?.status === "failed" ? job.last_error : null),
-          job: publicJob(job),
+          job: publicJob(job, Number(clip.end_sec) - Number(clip.start_sec)),
           previewUrl: await signedRenderUrl(db, current),
           downloadUrl: await signedRenderUrl(db, current, true),
           approvedAt: current.approved_at,

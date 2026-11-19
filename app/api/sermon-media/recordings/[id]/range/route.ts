@@ -48,6 +48,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (version === null) {
       return fail(409, "Someone else just changed the sermon range or transcript. Reload to see it, then confirm again.");
     }
+    // A person confirmed it; it is no longer FaithForm's automatic choice.
+    await db.from("recording_sermon_media").update({ confirmed_automatically: false }).eq("recording_id", id);
     logSermonMedia("range_confirmed", { recordingId: id, inputVersion: version });
     return ok({ state: await getSermonMediaState(db, auth.churchId, id) });
   } catch (error) {

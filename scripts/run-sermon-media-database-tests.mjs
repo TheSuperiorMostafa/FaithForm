@@ -28,6 +28,7 @@ try {
     "tests/database/fixtures/bootstrap.sql",
     "tests/database/fixtures/sermon-media-prereqs.sql",
     "supabase/migrations/0170_sermon_media.sql",
+    "supabase/migrations/0172_media_studio.sql",
   ]) {
     psql(["-d", db, "-f", file]);
   }
