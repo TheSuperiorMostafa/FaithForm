@@ -5,16 +5,25 @@ import {
   base64DecodedBytes,
   buildImageChatContents,
   buildImageChatInstruction,
+  IMAGE_CHAT_EVENT_INSTRUCTION,
   IMAGE_CHAT_SYSTEM_INSTRUCTION,
   MAX_IMAGE_CHAT_HISTORY_TURNS,
   MAX_IMAGE_CHAT_INSTRUCTION_CHARS,
   MAX_IMAGE_CHAT_PREVIOUS_IMAGE_BYTES,
   parseImageChatRequest,
+  type ImageChatBrand,
   type ImageChatRequest,
 } from "@/lib/ai/image/chat-prompt";
 import { NO_PEOPLE_RULE } from "@/lib/ai/image/prompt";
 
 const IMAGE = { mimeType: "image/jpeg", data: Buffer.from("fake-jpeg").toString("base64") };
+const LOGO = { mimeType: "image/png", data: Buffer.from("fake-logo").toString("base64") };
+const BRAND: ImageChatBrand = {
+  churchName: "Grace Fellowship",
+  primaryColor: "#002D5F",
+  accentColor: "#C5A059",
+  logo: LOGO,
+};
 
 function parsed(body: unknown): ImageChatRequest {
   const result = parseImageChatRequest(body);
@@ -76,9 +85,10 @@ test("base64DecodedBytes matches the real decoded length", () => {
 
 test("a first turn asks for a new image; a later turn edits the attached one", () => {
   const create = buildImageChatInstruction(parsed({ instruction: "a harvest table" }));
-  assert.match(create, /^Create a new image/);
+  assert.match(create, /^Create a new 16:9 landscape graphic/);
   const edit = buildImageChatInstruction(parsed({ instruction: "make it darker", previousImage: IMAGE }));
-  assert.match(edit, /^Edit the attached image/);
+  assert.match(edit, /^Edit the CURRENT DESIGN/);
+  assert.match(edit, /make it darker/);
 });
 
 test("adds a reminder when the instruction asks for people", () => {
@@ -113,7 +123,7 @@ test("contents alternate roles, start with the user, and end with image then tex
   }
   const last = contents[contents.length - 1]!;
   assert.equal(last.role, "user");
-  assert.ok("inlineData" in last.parts[0]!);
+  assert.ok(last.parts.some((part) => "inlineData" in part));
   assert.ok("text" in last.parts[last.parts.length - 1]!);
 });
 
@@ -123,4 +133,64 @@ test("a history ending on a user turn is folded into the final turn", () => {
   );
   assert.equal(contents.length, 1);
   assert.equal(contents[0]?.parts.length, 2);
+});
+
+test("system instruction puts listening, the frame and the real logo first-class", () => {
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /LISTEN FIRST/);
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /1200×630/);
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /never invent a logo/i);
+});
+
+test("event mode needs a title and always starts a fresh design", () => {
+  assert.equal(parseImageChatRequest({ mode: "event", event: { when: "Nov 23" } }).ok, false);
+  const request = parsed({
+    mode: "event",
+    instruction: "ignored",
+    history: [{ role: "user", text: "old" }],
+    previousImage: IMAGE,
+    event: { title: "Fall Potluck", when: "Sun, Nov 23 · 5 PM", details: "Bring a dish to share." },
+  });
+  assert.equal(request.mode, "event");
+  assert.equal(request.instruction, IMAGE_CHAT_EVENT_INSTRUCTION);
+  assert.deepEqual(request.history, []);
+  assert.equal(request.previousImage, null);
+  assert.equal(request.event?.details, "Bring a dish to share.");
+});
+
+test("event brief prints the title, church name and details, and uses the description for the scene", () => {
+  const brief = buildImageChatInstruction(
+    parsed({
+      mode: "event",
+      event: { title: "Fall Potluck", when: "Sun, Nov 23 · 5 PM", location: "Fellowship Hall", details: "Chili cook-off" },
+    }),
+    BRAND,
+  );
+  assert.match(brief, /16:9/);
+  assert.match(brief, /"Fall Potluck"/);
+  assert.match(brief, /"Grace Fellowship"/);
+  assert.match(brief, /"Sun, Nov 23 · 5 PM" · "Fellowship Hall"/);
+  assert.match(brief, /do not print it\): Chili cook-off/);
+  assert.match(brief, /#002D5F/);
+  assert.match(brief, /attached logo/);
+});
+
+test("the church logo is attached and labelled before the design being edited", () => {
+  const contents = buildImageChatContents(parsed({ instruction: "bigger title", previousImage: IMAGE }), BRAND);
+  const parts = contents[contents.length - 1]!.parts;
+  const images = parts.filter((part) => "inlineData" in part) as { inlineData: { data: string } }[];
+  assert.deepEqual(
+    images.map((part) => part.inlineData.data),
+    [LOGO.data, IMAGE.data],
+  );
+  assert.match((parts[0] as { text: string }).text, /CHURCH LOGO/);
+  assert.match((parts[2] as { text: string }).text, /CURRENT DESIGN/);
+});
+
+test("without a logo, nothing logo-related is sent", () => {
+  const contents = buildImageChatContents(parsed({ instruction: "a candle" }), { ...BRAND, logo: null });
+  const text = contents
+    .flatMap((c) => c.parts)
+    .map((part) => ("text" in part ? part.text : ""))
+    .join("\n");
+  assert.doesNotMatch(text, /LOGO/);
 });

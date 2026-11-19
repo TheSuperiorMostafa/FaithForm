@@ -107,7 +107,7 @@ export type ComposerSettings = {
   churchCity: string | null;
   churchState: string | null;
   churchZip: string | null;
-  /** Gemini is set up, so "Create image with AI" is offered. */
+  /** Gemini is set up, so "Create image for me" opens the AI studio. */
   aiImageChatAvailable?: boolean;
 };
 
@@ -723,7 +723,8 @@ export function AnnouncementComposer({
   };
 
   /** Saves a picture as the event's own. Resolves to an error message, or null. */
-  const uploadGraphic = async (file: File): Promise<string | null> => {
+  const uploadGraphic = async (file: File, source: "upload" | "ai" = "upload"): Promise<string | null> => {
+    const uploadsAtRequest = graphic.uploads;
     setUploading(true);
     setPictureError(null);
     try {
@@ -735,7 +736,11 @@ export function AnnouncementComposer({
       if (!data.graphicUrl || !data.graphicPath) {
         throw new Error("That picture could not be uploaded.");
       }
-      dispatchGraphic({ type: "uploaded", url: data.graphicUrl, path: data.graphicPath });
+      dispatchGraphic(
+        source === "ai"
+          ? { type: "ai-ready", url: data.graphicUrl, path: data.graphicPath, uploadsAtRequest }
+          : { type: "uploaded", url: data.graphicUrl, path: data.graphicPath },
+      );
       setPictureNote(null);
       return null;
     } catch (err) {
@@ -754,6 +759,28 @@ export function AnnouncementComposer({
   };
 
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  /** Bumped to have the studio design a fresh picture from the event. */
+  const [aiChatStart, setAiChatStart] = useState(0);
+
+  /**
+   * "Create image for me": with Gemini set up, open the studio and design the
+   * picture straight away, then let the church ask for changes. The Facebook
+   * caption is still written when it's empty, as the one-step picture did.
+   */
+  const createImageForMe = () => {
+    if (!settings.aiImageChatAvailable) {
+      void askForPicture("full", !values.caption.trim());
+      return;
+    }
+    if (!values.title.trim()) {
+      setPictureError("Add a title first, so the picture has something to say.");
+      return;
+    }
+    setPictureError(null);
+    setAiChatStart((n) => n + 1);
+    setAiChatOpen(true);
+    if (!values.caption.trim() && whenOk) void askForPicture("caption", true);
+  };
 
   const loadPostDefaults = async () => {
     if (postDefaults) return;
@@ -1227,10 +1254,10 @@ export function AnnouncementComposer({
                       error={pictureError}
                       note={pictureNote}
                       alt={posterAltText || "Event picture"}
-                      onMake={() => void askForPicture("full", !values.caption.trim())}
+                      onMake={createImageForMe}
                       onUpload={() => fileInputRef.current?.click()}
                       onLibrary={(tab) => setLibraryTab(tab)}
-                      onAiChat={settings.aiImageChatAvailable ? () => setAiChatOpen(true) : undefined}
+                      onAiChat={settings.aiImageChatAvailable && aiChatStart > 0 ? () => setAiChatOpen(true) : undefined}
                       onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
                       onRemove={() => dispatchGraphic({ type: "remove" })}
                     />
@@ -1260,8 +1287,10 @@ export function AnnouncementComposer({
                           title: values.title.trim() || undefined,
                           when: dated && previewWhen ? previewWhen : undefined,
                           location: dated ? values.location.trim() || undefined : undefined,
+                          details: values.details.trim() || undefined,
                         }}
-                        onUse={uploadGraphic}
+                        startRequest={aiChatStart}
+                        onUse={(file) => uploadGraphic(file, "ai")}
                       />
                     )}
                   </Section>
@@ -1642,7 +1671,7 @@ function PictureField({
   onMake: () => void;
   onUpload: () => void;
   onLibrary: (tab: "library" | "stock") => void;
-  /** Opens the "Create image with AI" chat. Absent when it isn't set up. */
+  /** Reopens the studio's conversation. Absent until one has been started. */
   onAiChat?: () => void;
   onRestoreAi: () => void;
   onRemove: () => void;
@@ -1650,7 +1679,7 @@ function PictureField({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-[15px] text-muted-foreground">
-        Optional. We make it from your title, day, time and place, so fill those in first.
+        Optional. We design it from your title, day, time and place, with your logo, so fill those in first.
       </p>
       {loading && !graphic && (
         <div className="flex aspect-[1200/630] w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-muted text-[15px] text-muted-foreground">
@@ -1663,14 +1692,14 @@ function PictureField({
         <img src={graphic.url} alt={alt} className="w-full max-w-md rounded-2xl border border-border" />
       )}
       <div className="flex flex-wrap gap-3">
-        <Button type="button" variant="outline" onClick={onMake} disabled={loading || uploading}>
+        <Button type="button" variant={graphic ? "outline" : "default"} onClick={onMake} disabled={loading || uploading}>
           {loading ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-          {loading ? "Making…" : graphic ? "Make a new picture" : "Make a picture for me"}
+          {loading ? "Making…" : graphic ? "Make a new picture" : "Create image for me"}
         </Button>
         {onAiChat && (
           <Button type="button" variant="outline" onClick={onAiChat} disabled={uploading || loading}>
             <MessageSquareText aria-hidden />
-            Create image with AI
+            Keep editing with AI
           </Button>
         )}
         <Button type="button" variant="outline" onClick={onUpload} disabled={uploading || loading}>

@@ -82,12 +82,13 @@ export async function loadChurchBranding(
   };
 }
 
-async function fetchLogoForModel(
+export async function fetchLogoForModel(
   logoUrl: string | null,
 ): Promise<{ bytes: ArrayBuffer; mimeType: string } | null> {
   if (!logoUrl) return null;
   try {
-    const res = await fetch(logoUrl);
+    // A slow logo host must not hold up the picture; it is made without one.
+    const res = await fetch(logoUrl, { signal: AbortSignal.timeout(5_000) });
     if (!res.ok) return null;
     const bytes = await res.arrayBuffer();
     const mimeType =

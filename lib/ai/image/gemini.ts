@@ -138,13 +138,15 @@ export type GeminiChatImageResult = {
 };
 
 /**
- * One turn of the "Create image with AI" chat: create an image, or edit the
+ * One turn of the "Create image for me" studio: create an image, or edit the
  * one passed inline in `contents` (multi-turn image editing). The contents
  * and system instruction are built by lib/ai/image/chat-prompt.ts.
  */
 export async function generateGeminiChatImage(input: {
   contents: unknown;
   systemInstruction: string;
+  /** Requested frame, e.g. "16:9". Dropped if this model revision rejects it. */
+  aspectRatio?: string;
 }): Promise<GeminiChatImageResult> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
@@ -153,17 +155,35 @@ export async function generateGeminiChatImage(input: {
 
   const model = resolveModel();
   const ai = new GoogleGenAI({ apiKey });
-  const response = await ai.models.generateContent({
-    model,
-    contents: input.contents as Parameters<
-      typeof ai.models.generateContent
-    >[0]["contents"],
-    config: {
-      systemInstruction: input.systemInstruction,
-      responseModalities: ["IMAGE", "TEXT"],
-      httpOptions: { timeout: resolveTimeoutMs() },
-    },
-  });
+  const baseConfig = {
+    systemInstruction: input.systemInstruction,
+    responseModalities: ["IMAGE", "TEXT"],
+    httpOptions: { timeout: resolveTimeoutMs() },
+  };
+  const generate = (config: Record<string, unknown>) =>
+    ai.models.generateContent({
+      model,
+      contents: input.contents as Parameters<
+        typeof ai.models.generateContent
+      >[0]["contents"],
+      config,
+    });
+
+  let response: GenerateContentResponse;
+  if (input.aspectRatio) {
+    try {
+      response = await generate({ ...baseConfig, imageConfig: { aspectRatio: input.aspectRatio } });
+    } catch (err) {
+      // Same fallback as the flyer: a config quirk must not stop the picture.
+      const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+      if (!(message.includes("imageconfig") || message.includes("aspect") || message.includes("unknown field"))) {
+        throw err;
+      }
+      response = await generate(baseConfig);
+    }
+  } else {
+    response = await generate(baseConfig);
+  }
 
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   let image: { bytes: Buffer; mimeType: string } | null = null;

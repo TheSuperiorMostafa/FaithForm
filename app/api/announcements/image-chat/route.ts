@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { isImageChatConfigured, runImageChatTurn } from "@/lib/ai/image/chat";
+import { isImageChatConfigured, loadImageChatBrand, runImageChatTurn } from "@/lib/ai/image/chat";
 import { parseImageChatRequest } from "@/lib/ai/image/chat-prompt";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { toUserError } from "@/lib/errors/user-error";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { checkRateLimit } from "@/lib/security/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -19,11 +20,13 @@ const PER_USER_LIMIT = { limit: 40, windowMs: 60 * 60 * 1000 };
 const PER_CHURCH_LIMIT = { limit: 150, windowMs: 24 * 60 * 60 * 1000 };
 
 /**
- * One turn of the event composer's "Create image with AI" chat.
+ * One turn of the event composer's "Create image for me" studio.
  *
  * Nothing is stored: the conversation lives in the browser, which sends the
  * current image back to edit it. The image the church picks is saved through
  * /api/announcements/graphic-upload, exactly like a picture they uploaded.
+ * The church's name, colours and logo come from its own record, read with the
+ * service client for the caller's church only.
  */
 export async function POST(request: Request) {
   try {
@@ -75,7 +78,8 @@ export async function POST(request: Request) {
       }
     }
 
-    const result = await runImageChatTurn(parsed.request);
+    const brand = await loadImageChatBrand(createAdminClient(), auth.churchId);
+    const result = await runImageChatTurn(parsed.request, brand);
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized") {
