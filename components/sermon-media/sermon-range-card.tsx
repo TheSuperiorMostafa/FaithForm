@@ -122,6 +122,8 @@ export function SermonRangeCard({
   };
 
   const evidence = suggestion.evidence ?? [];
+  // FaithForm confirmed the times by itself: show them, but ask for a check.
+  const automatic = Boolean(confirmed?.automatic);
   const hasSuggestion = suggestion.status === "suggested" && suggestion.startSec !== null && suggestion.endSec !== null;
 
   return (
@@ -133,7 +135,9 @@ export function SermonRangeCard({
         <div className="min-w-0 space-y-1">
           <h3 id="sermon-range-heading" className="font-heading text-lg font-semibold">
             {confirmed && !changing
-              ? "Sermon times"
+              ? automatic
+                ? "Check the sermon times"
+                : "Sermon times"
               : hasSuggestion
                 ? "Check the sermon times"
                 : "Choose where the sermon starts and ends"}
@@ -144,6 +148,7 @@ export function SermonRangeCard({
             </p>
           ) : confirmed && !changing ? (
             <p className="text-[15px]">
+              {automatic ? "FaithForm found the sermon automatically — check it. " : null}
               The sermon runs{" "}
               <strong className="font-semibold tabular-nums">
                 {formatTime(confirmed.startSec)} – {formatTime(confirmed.endSec)}
@@ -165,10 +170,14 @@ export function SermonRangeCard({
           )}
         </div>
         {confirmed && !changing ? (
-          <StatusBadge tone="done">
-            <CheckCircle2 className="size-4" aria-hidden />
-            Confirmed
-          </StatusBadge>
+          automatic ? (
+            <StatusBadge tone="ready">Found automatically</StatusBadge>
+          ) : (
+            <StatusBadge tone="done">
+              <CheckCircle2 className="size-4" aria-hidden />
+              Confirmed
+            </StatusBadge>
+          )
         ) : transcriptReady ? (
           <StatusBadge tone="attention">Needs your check</StatusBadge>
         ) : null}
@@ -177,8 +186,12 @@ export function SermonRangeCard({
       {confirmed && !changing ? (
         <>
           <p className="text-sm text-muted-foreground">
-            Confirmed {new Date(confirmed.at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
-            {confirmed.by ? (confirmed.by === currentUserId ? " by you" : " by a teammate") : ""}.
+            {automatic
+              ? "Play the start and end to check them. If they're off, press Change."
+              : <>
+                  Confirmed {new Date(confirmed.at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
+                  {confirmed.by ? (confirmed.by === currentUserId ? " by you" : " by a teammate") : ""}.
+                </>}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => onPlayFrom(confirmed.startSec, confirmed.startSec + 20)} className="gap-1.5">

@@ -5,7 +5,14 @@
  * plain language, so `error` can be shown as is.
  */
 
+import type { JobProgress as JobProgressView } from "@/lib/sermon-media/progress";
+
 export type JobStatus = "queued" | "dispatched" | "running" | "succeeded" | "failed" | "cancelled";
+
+/** A job that is still going: the page keeps checking on it. */
+export const ACTIVE_JOB_STATUSES: readonly JobStatus[] = ["queued", "dispatched", "running"];
+export const isJobActive = (job: { status: JobStatus } | null | undefined): boolean =>
+  Boolean(job && ACTIVE_JOB_STATUSES.includes(job.status));
 
 export type PublicJob = {
   id: string;
@@ -20,6 +27,8 @@ export type PublicJob = {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  /** Stage in plain words, percent and time left, for JobProgress. */
+  progressView?: JobProgressView | null;
 };
 
 export type RangeEvidence = {
@@ -47,7 +56,15 @@ export type SermonMediaState = {
     evidence: RangeEvidence[];
     forVersion: number | null;
   };
-  confirmed: { startSec: number; endSec: number; by: string | null; at: string; transcriptVersion: number | null } | null;
+  confirmed: {
+    startSec: number;
+    endSec: number;
+    by: string | null;
+    at: string;
+    transcriptVersion: number | null;
+    /** FaithForm confirmed it by itself; staff should still check it. */
+    automatic?: boolean;
+  } | null;
   inputVersion: number;
 };
 
@@ -162,6 +179,24 @@ export type ClipDetail = {
   facebook: { connected: boolean; pageName: string | null; pageId: string | null; needsReconnect: boolean };
   canPublish: boolean;
 };
+
+/** One row of the Transcripts section (GET /api/sermon-media/library). */
+export type LibraryItem = {
+  id: string;
+  title: string | null;
+  source: "livestream" | "upload";
+  recordingStatus: "processing" | "ready" | "published" | "failed" | string;
+  durationSec: number | null;
+  createdAt: string;
+  serviceDate: string | null;
+  transcript: "ready" | "none" | JobStatus;
+  job: PublicJob | null;
+  sermon: { startSec: number; endSec: number; automatic: boolean } | null;
+  suggestion: string;
+  clips: { total: number; waiting: number; scheduled: number; posted: number };
+};
+
+export type LibraryPage = { items: LibraryItem[]; total: number; page: number; pageSize: number };
 
 export type ApiResult<T> =
   | { ok: true; status: number; data: T }

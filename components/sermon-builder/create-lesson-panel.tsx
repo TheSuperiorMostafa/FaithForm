@@ -55,7 +55,7 @@ function evidenceTimes(
 }
 
 function recordingHref(recordingId: string, sec: number): string {
-  return `/dashboard/live-streaming/recordings/${recordingId}?t=${sec}#transcript`;
+  return `/dashboard/transcripts/${recordingId}?t=${sec}#transcript`;
 }
 
 /** "Check in the recording: 31:04 · 33:10", or nothing when there is no evidence. */

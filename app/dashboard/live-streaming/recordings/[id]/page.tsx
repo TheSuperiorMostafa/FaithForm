@@ -56,14 +56,14 @@ export default async function RecordingReviewPage({
 
   const stillChanging = isStillChanging(recording.phase.phase);
 
-  // `?t=<seconds>#transcript` from a lesson: open the transcript at that moment.
+  const showSermonMedia = Boolean(sermonMedia?.enabled) && Boolean(access?.allowed.includes("sermon_media")) && (recording.status === "ready" || recording.status === "published");
+  // `?t=<seconds>#transcript` from an older lesson link: the transcript now
+  // lives in Transcripts, so open it there at that moment.
   const rawT = (await searchParams).t;
   const parsedT = Number(Array.isArray(rawT) ? rawT[0] : rawT);
-  const initialSeekSec = Number.isFinite(parsedT) && parsedT >= 0 ? parsedT : null;
-  const showSermonMedia = Boolean(sermonMedia?.enabled) && Boolean(access?.allowed.includes("sermon_media")) && (recording.status === "ready" || recording.status === "published");
-  // The review player only loads for ready/processing recordings; the panel
-  // needs the source for published ones too.
-  const sermonMediaPlayback = showSermonMedia ? (playback ?? (await getStaffPlayback(auth.churchId, id))) : null;
+  if (showSermonMedia && Number.isFinite(parsedT) && parsedT >= 0) {
+    redirect(`/dashboard/transcripts/${id}?t=${Math.floor(parsedT)}#transcript`);
+  }
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -94,15 +94,7 @@ export default async function RecordingReviewPage({
         }
       />
       {showSermonMedia ? (
-        <SermonMediaPanel
-          recordingId={id}
-          playback={sermonMediaPlayback}
-          posterUrl={recording.posterUrl}
-          title={recording.title}
-          durationSec={recording.fullDurationSec ?? recording.durationSec}
-          currentUserId={auth.userId}
-          initialSeekSec={initialSeekSec}
-        />
+        <SermonMediaPanel recordingId={id} recordingStatus={recording.status} />
       ) : null}
     </div>
   );
