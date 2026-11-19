@@ -724,7 +724,9 @@ function LiveView({
   const lostVideo = !overview.video.arriving;
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+    // One column: the live picture gets the full card width and every control
+    // sits underneath it, so nothing squeezes the video on a Sunday morning.
+    <div className="flex flex-col gap-6">
       <div className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-wrap items-center gap-4">
           <span className="inline-flex items-center gap-2.5 rounded-full bg-red-600 px-4 py-2 text-base font-bold uppercase tracking-wider text-white">
@@ -748,8 +750,6 @@ function LiveView({
       </div>
 
       <div className="flex flex-col gap-5">
-        <RecordingCard indicator={overview.recordingIndicator} />
-
         {lostVideo ? (
           <div
             className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10"
@@ -765,17 +765,20 @@ function LiveView({
           </div>
         ) : null}
 
-        {isAdmin ? (
-          <Button
-            size="lg"
-            onClick={onEnd}
-            disabled={pending}
-            className="min-h-16 w-full gap-3 bg-red-600 text-xl text-white hover:bg-red-700 hover:text-white"
-          >
-            <Square className="size-5" aria-hidden />
-            End service
-          </Button>
-        ) : null}
+        <div className={cn("grid gap-4", isAdmin && "sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-center")}>
+          <RecordingCard indicator={overview.recordingIndicator} />
+          {isAdmin ? (
+            <Button
+              size="lg"
+              onClick={onEnd}
+              disabled={pending}
+              className="min-h-16 w-full gap-3 bg-red-600 text-xl text-white hover:bg-red-700 hover:text-white"
+            >
+              <Square className="size-5" aria-hidden />
+              End service
+            </Button>
+          ) : null}
+        </div>
 
         <div className="flex flex-col divide-y divide-border rounded-2xl border border-border">
           <Disclosure open={linksOpen} onToggle={() => setLinksOpen((open) => !open)} title="Where to watch">

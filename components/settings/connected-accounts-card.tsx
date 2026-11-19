@@ -21,6 +21,7 @@ import { confirmAction } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { List } from "@/components/ui/list-row";
 import type { FeatureKey } from "@/lib/features/catalog";
+import { integrationConnectHref, type OAuthAccount } from "@/lib/integrations/connect-href";
 import type { IntegrationStatus } from "@/lib/integrations/tokens";
 
 export type ConnectedAccountsCardProps = {
@@ -30,14 +31,8 @@ export type ConnectedAccountsCardProps = {
 };
 
 /** A connect link that goes through the provider's sign-in and comes back here. */
-function ConnectLink({ account, label }: { account: AccountId; label: string }) {
-  const path =
-    account === "google"
-      ? "/api/integrations/google/connect"
-      : account === "youtube"
-        ? "/api/integrations/youtube/connect"
-        : "/api/integrations/facebook/connect";
-  const href = `${path}?return_to=${encodeURIComponent(accountReturnTo(account))}`;
+function ConnectLink({ account, label }: { account: OAuthAccount; label: string }) {
+  const href = integrationConnectHref(account, accountReturnTo(account));
   return (
     <a href={href} className={buttonVariants()}>
       {label}

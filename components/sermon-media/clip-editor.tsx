@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertTriangle, CheckCircle2, Download, ExternalLink, Film, Play, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 
@@ -25,6 +26,7 @@ import { ClipEditorBodySkeleton } from "@/components/sermon-media/clip-editor-sk
 import { SourcePlayer, type SourcePlayerHandle } from "@/components/sermon-media/source-player";
 import { TimeField } from "@/components/sermon-media/time-field";
 import { formatLength, formatTime } from "@/components/sermon-media/time";
+import { integrationConnectHref } from "@/lib/integrations/connect-href";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5000;
@@ -93,6 +95,7 @@ export function ClipEditor({
   source: { kind: "hls" | "progressive"; url: string } | null;
   posterUrl: string | null;
 }) {
+  const pathname = usePathname();
   const player = useRef<SourcePlayerHandle>(null);
   const [detail, setDetail] = useState<ClipDetail | null>(null);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error" | "off" | "missing">("loading");
@@ -714,9 +717,12 @@ export function ClipEditor({
                   ? "Your church's Facebook Page needs to be reconnected before you can post."
                   : "Connect your church's Facebook Page to post clips."}
               </p>
-              <Link href="/dashboard/settings" className={buttonVariants({ variant: "outline" })}>
-                {detail.facebook.needsReconnect ? "Reconnect Facebook in Settings" : "Connect Facebook in Settings"}
-              </Link>
+              <a
+                href={integrationConnectHref("facebook", pathname)}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                {detail.facebook.needsReconnect ? "Reconnect Facebook" : "Connect Facebook"}
+              </a>
             </div>
           ) : alreadyPosted ? null : (
             <div className="flex flex-col gap-4">

@@ -254,15 +254,16 @@ export async function POST(request: Request) {
     if (err instanceof GoogleReconnectRequiredError) {
       return NextResponse.json(
         {
-          error: "Google needs to be reconnected in Settings.",
+          error: "Google needs to be reconnected.",
           reconnect: true,
+          provider: "google",
         },
         { status: 409 },
       );
     }
     if (err instanceof AppleReconnectRequiredError) {
       return NextResponse.json(
-        { error: "iCloud needs to be reconnected in Settings.", reconnect: true },
+        { error: "iCloud needs to be reconnected.", reconnect: true, provider: "apple" },
         { status: 409 },
       );
     }

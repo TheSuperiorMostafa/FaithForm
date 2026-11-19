@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { EventLocationField } from "@/components/announcements/event-location-field";
 import { EventRepeatFields } from "@/components/announcements/event-repeat-fields";
 import {
@@ -32,6 +33,7 @@ import {
 } from "@/components/announcements/event-attendance-editor";
 import type { AttendanceSetupPolicy } from "@/lib/attendance/v2/setup";
 import type { EventAttendanceSettings } from "@/lib/attendance/v2/event-attendance-types";
+import { APPLE_ACCOUNT_HREF, integrationConnectHref } from "@/lib/integrations/connect-href";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { fromDatetimeLocalValue } from "@/lib/utils/announcement-placeholders";
 import { announcementWhen } from "@/lib/announcements/composer";
@@ -79,7 +81,10 @@ export function CreateEventDialog({
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pathname = usePathname();
   const [needsReconnect, setNeedsReconnect] = useState(false);
+  /** Which account to reconnect, when the calendar said which one. */
+  const [reconnectProvider, setReconnectProvider] = useState<"google" | "apple" | null>(null);
   const allDayWhen = announcementWhen({ dated: true, allDay: true, date: startAt.slice(0, 10), startTime: "", endTime: "" });
   const startIso = allDay
     ? ("startAt" in allDayWhen ? allDayWhen.startAt : null)
@@ -153,7 +158,10 @@ export function CreateEventDialog({
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data?.reconnect) setNeedsReconnect(true);
+        if (data?.reconnect) {
+          setNeedsReconnect(true);
+          setReconnectProvider(data.provider === "google" || data.provider === "apple" ? data.provider : null);
+        }
         throw new Error(data?.error ?? "We couldn't add the event. Please try again.");
       }
       onCreated(
@@ -285,12 +293,22 @@ export function CreateEventDialog({
                 {needsReconnect && (
                   <>
                     {" "}
-                    <Link
-                      href="/dashboard/settings?tab=accounts"
-                      className="font-semibold underline underline-offset-2"
-                    >
-                      Reconnect it in Settings
-                    </Link>
+                    {reconnectProvider === "google" ? (
+                      // A full page load: the sign-in leaves FaithForm and comes back here.
+                      <a
+                        href={integrationConnectHref("google", pathname)}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        Reconnect Google
+                      </a>
+                    ) : (
+                      <Link
+                        href={reconnectProvider === "apple" ? APPLE_ACCOUNT_HREF : "/dashboard/settings?tab=accounts"}
+                        className="font-semibold underline underline-offset-2"
+                      >
+                        {reconnectProvider === "apple" ? "Reconnect iCloud" : "Connect a calendar"}
+                      </Link>
+                    )}
                   </>
                 )}
               </p>

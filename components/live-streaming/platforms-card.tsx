@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { CheckCircle2, CircleDashed, Play, Share2, TriangleAlert } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
+import { integrationConnectHref, type OAuthAccount } from "@/lib/integrations/connect-href";
 import type { SyndicationStatus } from "@/lib/stream/syndication";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export function PlatformsCard({ isAdmin, youtube, facebook, variant = "full" }: 
       <PlatformRow
         icon={<Play className="size-5 text-red-500" aria-hidden />}
         name="YouTube"
+        account="youtube"
         state={youtube}
         isAdmin={isAdmin}
         showPush={variant === "full"}
@@ -47,6 +49,7 @@ export function PlatformsCard({ isAdmin, youtube, facebook, variant = "full" }: 
       <PlatformRow
         icon={<Share2 className="size-5 text-blue-500" aria-hidden />}
         name="Facebook"
+        account="facebook"
         state={facebook}
         isAdmin={isAdmin}
         showPush={variant === "full"}
@@ -82,16 +85,20 @@ function PushStatus({ name, state }: { name: string; state: PlatformPushState })
 function PlatformRow({
   icon,
   name,
+  account,
   state,
   isAdmin,
   showPush,
 }: {
   icon: React.ReactNode;
   name: string;
+  account: OAuthAccount;
   state: PlatformPushState;
   isAdmin: boolean;
   showPush: boolean;
 }) {
+  // Reconnect goes straight to the provider and comes back to this page.
+  const pathname = usePathname();
   return (
     <li className="flex min-h-[72px] flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
@@ -116,9 +123,9 @@ function PlatformRow({
       </div>
 
       {isAdmin && !state.connected ? (
-        <Link href={CONNECTED_ACCOUNTS_HREF} className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
+        <a href={integrationConnectHref(account, pathname)} className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
           {state.needsReconnect ? `Reconnect ${name}` : `Connect ${name}`}
-        </Link>
+        </a>
       ) : null}
     </li>
   );
