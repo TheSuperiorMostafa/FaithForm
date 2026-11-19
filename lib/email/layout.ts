@@ -221,6 +221,13 @@ function renderHtml(doc: EmailDocument): string {
     doc.permissionNote ??
     "You received this because someone at your church uses FaithForm.";
   const site = getCanonicalSiteUrl();
+  // A church-branded message (receipts, statements, donor sign-in) is the
+  // church's, so it carries no link back to the product.
+  const productLink = doc.brand
+    ? ""
+    : `              <p style="margin:8px 0 0;font-family:${FONT_STACK};font-size:13px;line-height:1.6;color:${BRAND.faint};">
+                <a href="${escapeHtml(site)}" style="color:${BRAND.muted};text-decoration:underline;">faithform.io</a>
+              </p>`;
 
   // A logo is optional: a church that has not uploaded one gets its name set
   // in the wordmark alone, which is better than a broken image icon.
@@ -296,9 +303,7 @@ ${body}
             <td class="ff-pad" style="padding:0 40px 32px;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="border-top:1px solid ${BRAND.border};font-size:0;line-height:0;height:1px;">&nbsp;</td></tr></table>
               <p style="margin:20px 0 0;font-family:${FONT_STACK};font-size:13px;line-height:1.6;color:${BRAND.faint};">${escapeHtml(footerNote)}</p>
-              <p style="margin:8px 0 0;font-family:${FONT_STACK};font-size:13px;line-height:1.6;color:${BRAND.faint};">
-                <a href="${escapeHtml(site)}" style="color:${BRAND.muted};text-decoration:underline;">faithform.io</a>
-              </p>
+${productLink}
             </td>
           </tr>
 
@@ -364,7 +369,7 @@ function renderText(doc: EmailDocument): string {
     }
   }
 
-  lines.push("", doc.footerNote ?? DEFAULT_FOOTER, getCanonicalSiteUrl());
+  lines.push("", doc.footerNote ?? DEFAULT_FOOTER, ...(doc.brand ? [] : [getCanonicalSiteUrl()]));
 
   // Collapse the runs of blank lines the detail rows leave behind.
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();

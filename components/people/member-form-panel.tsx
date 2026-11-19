@@ -1,5 +1,7 @@
 "use client";
 
+import { EventLocationField, type EventLocationProvider } from "@/components/announcements/event-location-field";
+import { noChurchAddressForPeople, resolvePersonAddress, searchPersonAddresses } from "@/app/dashboard/people/address-actions";
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { Home, Smartphone, UserPlus, Users, X } from "lucide-react";
@@ -221,6 +223,12 @@ const inputClassName =
  * says exactly what it saves, so nobody wonders whether "Save" on one tab
  * also saved the other.
  */
+const personAddressProvider: EventLocationProvider = {
+  search: searchPersonAddresses,
+  resolve: resolvePersonAddress,
+  churchAddress: noChurchAddressForPeople,
+};
+
 export function MemberFormPanel({
   member,
   isAdmin,
@@ -409,16 +417,27 @@ export function MemberFormPanel({
         <label htmlFor="member-address" className="text-base font-semibold">
           Address
         </label>
-        <input
-          id="member-address"
-          value={address}
-          onChange={(event) => setAddress(event.target.value)}
-          readOnly={readOnly}
-          autoComplete="off"
-          placeholder={readOnly ? undefined : "Street, city, state, ZIP"}
-          maxLength={300}
-          className={inputClassName}
-        />
+        {readOnly ? (
+          <input
+            id="member-address"
+            value={address}
+            readOnly
+            autoComplete="off"
+            className={inputClassName}
+          />
+        ) : (
+          <EventLocationField
+            id="member-address"
+            value={address}
+            onChange={setAddress}
+            maxLength={300}
+            provider={personAddressProvider}
+            placeholder="Start typing a street address"
+            hint="Choose the address from the list, or type it in full."
+            selectedLabel="Address added"
+            showChurchAddress={false}
+          />
+        )}
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">

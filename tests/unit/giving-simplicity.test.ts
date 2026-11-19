@@ -345,3 +345,40 @@ test("statements page keeps the year picker first and the ZIP as a second option
   assert.match(page, /<GenerateStatementsButton/);
   assert.match(read("components/giving/generate-statements-button.tsx"), /variant="outline"/);
 });
+
+// ---------------------------------------------------------------------------
+// Donor-facing pages carry the church's name, never the product's
+// ---------------------------------------------------------------------------
+
+test("public giving pages show no product name to donors", () => {
+  const files = [
+    ...walk("app/give").filter((path) => /\.(tsx?|css)$/.test(path)),
+    "components/giving/give-page-header.tsx",
+    "components/giving/give-branded-styles.tsx",
+  ];
+  for (const path of files) {
+    const visible = read(path)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "")
+      .replace(/^import .*$/gm, "");
+    assert.doesNotMatch(visible, /faithform/i, `${path} shows the product name to donors`);
+  }
+});
+
+test("donor portal lists active payments before labelled section buttons", async () => {
+  const { PORTAL_SECTIONS } = await import("@/app/give/[slug]/portal/portal-sections");
+  assert.deepEqual(
+    PORTAL_SECTIONS.map((section) => section.label),
+    ["Give now", "Statements", "Payment methods", "Payment history"],
+  );
+  const portal = read("app/give/[slug]/portal/portal-dashboard.tsx");
+  assert.ok(portal.indexOf('id="active-payments-title"') < portal.indexOf("PORTAL_SECTIONS.map"));
+  for (const { id } of PORTAL_SECTIONS) assert.match(portal, new RegExp(`<section id="${id}"`));
+});
+
+test("the offline donation form hides the search once a giver is chosen", () => {
+  const form = read("components/giving/offline-giving-form.tsx");
+  // The picker only renders in the branch where no giver is chosen yet.
+  assert.match(form, /\{chosenGiver \? \([\s\S]*?onClick=\{\(\) => chooseGiver\(\)\}[\s\S]*?\) : \([\s\S]*?<SearchPicker/);
+  assert.doesNotMatch(form, /<SearchPicker[^>]*multiple/);
+});

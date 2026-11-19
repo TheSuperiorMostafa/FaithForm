@@ -24,6 +24,7 @@ test("an offline gift accepts one donor identity", () => {
   assert.equal(offlineGiftSchema.safeParse({ ...gift, ...details }).success, true);
   assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId, ...details }).success, false);
   assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId: [donorId, funds[0].id] }).success, false);
+  assert.equal(offlineGiftSchema.safeParse({ ...gift, donorId, donorIds: [donorId, funds[0].id] }).success, false);
 });
 
 test("spreadsheet imports preserve quoted names and monetary cents with exact known funds", () => {

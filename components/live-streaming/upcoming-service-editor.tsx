@@ -98,7 +98,7 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
               <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
             </fieldset>
           </AdvancedSection>
-          <div className="flex flex-col gap-3 border-t border-border pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image.</p></div>
+          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col gap-3 rounded-b-2xl border-t border-border bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image.</p></div>
         </section>
       </form>
     </div>

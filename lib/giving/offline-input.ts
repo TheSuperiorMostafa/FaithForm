@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-export const offlineGiftSchema = z.object({
+// Strict: a gift carries at most one donor; extra keys such as a list of donors are rejected.
+export const offlineGiftSchema = z.strictObject({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value => {
     const date = new Date(`${value}T12:00:00Z`);
     return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;

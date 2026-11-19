@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import { recordOfflineGifts } from "@/app/dashboard/giving/offline-actions";
 import { Button } from "@/components/ui/button";
@@ -130,19 +131,18 @@ export function OfflineGivingForm({funds, donors, people = []}: {
               {chosenGiver ? (
                 <div className="space-y-2">
                   <p className="text-[15px] font-semibold">Who gave? (optional)</p>
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2">
-                    <span className="min-w-0 break-words font-medium">{chosenGiver.label}</span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      autoFocus
-                      onClick={() => chooseGiver()}
-                      aria-label={`Remove donor ${chosenGiver.label}`}
-                    >
-                      Remove donor
-                    </Button>
-                  </div>
+                  {/* One giver per donation: the search is hidden until this chip is cleared. */}
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => chooseGiver()}
+                    aria-label={`Remove ${chosenGiver.label} and choose someone else`}
+                    className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full bg-primary px-4 text-[15px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
+                    <span className="min-w-0 break-words text-left">{chosenGiver.label}</span>
+                    <X className="size-4 shrink-0" aria-hidden />
+                  </button>
+                  <p className="text-sm text-muted-foreground">Press × to choose a different giver.</p>
                 </div>
               ) : (
                 <SearchPicker

@@ -682,7 +682,7 @@ export function RecordingReview({
             </AdvancedSection>
 
             {isAdmin ? (
-              <div className="flex flex-col gap-3 border-t border-border pt-5">
+              <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col gap-3 rounded-b-2xl border-t border-border bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
                 {showPrimary ? (
                   <Button
                     size="lg"

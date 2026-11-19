@@ -27,6 +27,10 @@ export function EventLocationField({
   name,
   maxLength = 500,
   provider = announcementLocations,
+  placeholder = "Search for an address or place",
+  hint = "Search for a place, then choose its address below.",
+  selectedLabel = "Location added",
+  showChurchAddress = true,
 }: {
   id: string;
   value: string;
@@ -35,6 +39,11 @@ export function EventLocationField({
   name?: string;
   maxLength?: number;
   provider?: EventLocationProvider;
+  placeholder?: string;
+  hint?: string;
+  selectedLabel?: string;
+  /** People's home addresses have no reason to offer the church's address. */
+  showChurchAddress?: boolean;
 }) {
   const [suggestions, setSuggestions] = useState<EventLocationSuggestion[]>([]);
   const [focused, setFocused] = useState(false);
@@ -68,10 +77,11 @@ export function EventLocationField({
         setLoading(false);
         if (!result.ok) { setMessage(result.error); return; }
         setSuggestions(result.suggestions);
+        const fallback = showChurchAddress ? "You can still type the full address or use the church address." : "You can still type the full address.";
         const note = result.addressSearch === "unconfigured"
-          ? "Address search hasn't been set up yet. You can still type the full address or use the church address."
+          ? `Address search hasn't been set up yet. ${fallback}`
           : result.addressSearch === "unavailable"
-          ? "Address search is unavailable right now. You can still type the full address or use the church address."
+          ? `Address search is unavailable right now. ${fallback}`
           : !result.suggestions.length && !result.notice ? "No matching addresses. You can still type the full address." : "";
         setMessage([result.notice, note].filter(Boolean).join(" "));
       }).catch(() => {
@@ -79,7 +89,7 @@ export function EventLocationField({
       });
     }, 300);
     return () => { active = false; clearTimeout(timer); };
-  }, [value, focused, selectedValue, provider]);
+  }, [value, focused, selectedValue, provider, showChurchAddress]);
 
   const commit = (address: string) => {
     if (address.length > maxLength) {
@@ -157,7 +167,7 @@ export function EventLocationField({
             void choose(suggestions[activeIndex]);
           }
         }}
-        placeholder="Search for an address or place"
+        placeholder={placeholder}
         autoComplete="off"
         role="combobox"
         aria-autocomplete="list"
@@ -168,7 +178,7 @@ export function EventLocationField({
         aria-busy={loading || resolving}
       />
       </div>
-      <p id={`${id}-location-hint`} className="text-sm text-muted-foreground">Search for a place, then choose its address below.</p>
+      <p id={`${id}-location-hint`} className="text-sm text-muted-foreground">{hint}</p>
       {resolving ? <SkeletonContainer label="full address" className="rounded-xl border border-border p-3"><SkeletonText lines={2} /></SkeletonContainer> : null}
       {focused && loading ? <SkeletonContainer label="address suggestions" className="rounded-xl border border-border p-3"><SkeletonText lines={2} /></SkeletonContainer> : null}
       {focused && suggestions.length > 0 ? <ul id={`${id}-suggestions`} role="listbox" aria-label="Address suggestions" className="max-h-56 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-sm">
@@ -183,15 +193,15 @@ export function EventLocationField({
       </ul> : null}
       {selectedValue && value === selectedValue ? <div role="status" className="flex min-w-0 items-start gap-3 rounded-xl border border-border bg-muted/30 p-3">
         <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-300" aria-hidden />
-        <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Location added</p><p className="break-words text-[15px]">{selectedValue}</p></div>
+        <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{selectedLabel}</p><p className="break-words text-[15px]">{selectedValue}</p></div>
         <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2" onClick={() => { selection.current++; onChange(""); setSelectedValue(null); setFocused(true); inputRef.current?.focus(); }}>Clear</Button>
       </div> : null}
       {message ? <p id={`${id}-location-message`} role="status" className="text-sm text-muted-foreground">{message}</p> : null}
-      <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
+      {actions || showChurchAddress ? <div className="flex flex-wrap gap-2 [&_button]:min-h-11">
         {actions ?? <Button type="button" variant="outline" size="sm" disabled={churchPending || resolving} onClick={() => { void fillChurchAddress(); }}>
           {churchPending ? "Loading church address…" : "Use church address"}
         </Button>}
-      </div>
+      </div> : null}
     </div>
   );
 }

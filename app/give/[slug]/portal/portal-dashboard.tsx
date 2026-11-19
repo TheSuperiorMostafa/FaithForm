@@ -216,9 +216,18 @@ export function PortalDashboard({
       <section aria-labelledby="active-payments-title" className="space-y-3">
         <h2 id="active-payments-title" className="font-heading text-lg font-semibold">Active payments</h2>
         {hasFailedPayment && (
-          <p className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-            A recurring payment failed. Open Payment methods to update your card.
-          </p>
+          <div className="space-y-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+            <p>A recurring payment failed. Update your card to keep your gift active.</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              aria-controls="payment-methods"
+              onClick={() => setSection("payment-methods")}
+            >
+              Open payment methods
+            </Button>
+          </div>
         )}
         {subscriptionError && <p role="alert" className="text-sm text-destructive">{subscriptionError}</p>}
         {activeSubscriptions.length === 0 ? (

@@ -99,6 +99,20 @@ test("a church brand replaces our colours and wordmark", () => {
   assert.ok(!html.includes("<img"), "no logo means no broken image icon");
 });
 
+test("church-branded mail has no product wording for donors", () => {
+  const { html, text } = renderEmail({
+    title: "Receipt",
+    preheader: "Your gift",
+    heading: "Thank you",
+    blocks: [{ kind: "paragraph", text: "Thank you for your gift." }],
+    footerNote: "Questions? Contact Grace Community directly.",
+    permissionNote: "You received this because you gave to Grace Community.",
+    brand: { name: "Grace Community", primary: "#123456", accent: "#ABCDEF", logoUrl: null },
+  });
+  assert.doesNotMatch(html, /faithform/i);
+  assert.doesNotMatch(text, /faithform/i);
+});
+
 /**
  * A relative logo path has no origin to resolve against once the message is in
  * someone's inbox, so it must never reach the markup.
