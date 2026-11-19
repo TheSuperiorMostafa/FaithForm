@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds a fresh disposable database (bootstrap + sermon-media prerequisites +
-// 0167), runs tests/database/sermon-media.test.ts against it, and drops it.
+// 0170), runs tests/database/sermon-media.test.ts against it, and drops it.
 //
 //   FAITHFORM_PG_HOST=localhost FAITHFORM_PG_PORT=5432 pnpm test:sermon-media-database
 //
@@ -27,7 +27,7 @@ try {
   for (const file of [
     "tests/database/fixtures/bootstrap.sql",
     "tests/database/fixtures/sermon-media-prereqs.sql",
-    "supabase/migrations/0167_sermon_media.sql",
+    "supabase/migrations/0170_sermon_media.sql",
   ]) {
     psql(["-d", db, "-f", file]);
   }

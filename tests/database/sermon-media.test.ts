@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 /**
- * Concurrency and versioning guarantees of 0167_sermon_media.sql.
+ * Concurrency and versioning guarantees of 0170_sermon_media.sql.
  * Run with `pnpm test:sermon-media-database` (builds a disposable database).
  */
 const DATABASE_URL = process.env.FAITHFORM_SERMON_MEDIA_DATABASE_URL;

@@ -4,7 +4,7 @@ import { signJobToken } from "@/lib/sermon-media/job-token";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Durable job queue for sermon media (media_jobs, migration 0167).
+ * Durable job queue for sermon media (media_jobs, migration 0170).
  *
  * Enqueue is one atomic, idempotent RPC. Dispatch claims due jobs within the
  * global and per-church caps, issues each a fresh lease, and hands it to the

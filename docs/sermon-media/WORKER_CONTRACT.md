@@ -1,6 +1,6 @@
 # Sermon media worker contract
 
-The dashboard (Vercel) owns job state in Supabase (`media_jobs`, migration 0167).
+The dashboard (Vercel) owns job state in Supabase (`media_jobs`, migration 0170).
 The worker (Modal) owns only compute. It never holds a database key, a Facebook
 token, or a long-lived storage credential.
 

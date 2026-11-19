@@ -1,4 +1,4 @@
--- What 0167_sermon_media.sql references beyond tests/database/fixtures/bootstrap.sql.
+-- What 0170_sermon_media.sql references beyond tests/database/fixtures/bootstrap.sql.
 -- Used by scripts/run-sermon-media-database-tests.mjs on a disposable database.
 
 alter table public.stream_recordings add column if not exists deleted_at timestamptz;

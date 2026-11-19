@@ -86,7 +86,7 @@ export type Sermon = {
   created_at: string;
   updated_at: string;
   outline_generated_at?: string | null;
-  /** Which section made it: Sermon Builder or Lesson Builder (migration 0168). */
+  /** Which section made it: Sermon Builder or Lesson Builder (migration 0171). */
   builder?: "sermon" | "lesson";
   content_generated_at?: string | null;
   published_at?: string | null;

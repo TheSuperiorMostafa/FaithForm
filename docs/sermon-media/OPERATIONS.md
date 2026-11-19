@@ -8,8 +8,8 @@ from what the pastor said, and Facebook Reels clips. Contract with the worker:
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Job state, transcripts, ranges, clips, posts | Supabase (0167) | service-role only; RLS on with no browser grants |
-| Lesson Builder marker | Supabase (0168) | `sermons.builder` ('sermon' / 'lesson') |
+| Job state, transcripts, ranges, clips, posts | Supabase (0170) | service-role only; RLS on with no browser grants |
+| Lesson Builder marker | Supabase (0171) | `sermons.builder` ('sermon' / 'lesson') |
 | Dashboard + authorized requests | Vercel | `app/api/sermon-media/**`, `app/api/lessons` |
 | Dispatch / reconcile | Vercel cron `* * * * *` | `/api/sermon-media/dispatch` (CRON_SECRET) |
 | Transcription | Modal, L4, scale to zero | `Transcriber`, `max_containers` (default 10) |
@@ -18,10 +18,10 @@ from what the pastor said, and Facebook Reels clips. Contract with the worker:
 
 ## Rollout slices (each reviewable on its own)
 
-1. **Schema** — apply `0167_sermon_media.sql`, then `0168_lesson_builder.sql`. Both are
+1. **Schema** — apply `0170_sermon_media.sql`, then `0171_lesson_builder.sql`. Both are
    additive; old app versions keep working. Rehearse on a disposable database first:
    `FAITHFORM_PG_PORT=<port> pnpm test:sermon-media-database`.
-2. **Lesson Builder split** — ships with 0168 and is independent of the flag below.
+2. **Lesson Builder split** — ships with 0171 and is independent of the flag below.
 3. **Worker** — deploy Modal (README steps), create the proxy token.
 4. **Dashboard env** (Vercel): `SERMON_MEDIA_WORKER_SECRET` (32+ chars), `SERMON_MEDIA_WORKER_URL`,
    `MODAL_PROXY_TOKEN_ID`, `MODAL_PROXY_TOKEN_SECRET`, `SERMON_MEDIA_CALLBACK_ORIGIN`

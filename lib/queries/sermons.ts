@@ -135,7 +135,7 @@ export async function listSermons(
     true,
   );
 
-  // A database without migration 0168 has no builder column: every row is a
+  // A database without migration 0171 has no builder column: every row is a
   // sermon, and a lesson is a sermon with an outline.
   if (error && /builder/i.test(error.message)) {
     ({ data, error, count } = await query(`${SERMON_LIST_COLUMNS}, ${SERMON_LIST_APP_COLUMNS}`, false));
@@ -186,7 +186,7 @@ export async function createSermon(input: {
   theme_id?: string | null;
   translation?: string | null;
   sermon_date?: string | null;
-  /** Which section made it (migration 0168). Defaults to Sermon Builder. */
+  /** Which section made it (migration 0171). Defaults to Sermon Builder. */
   builder?: "sermon" | "lesson";
 }): Promise<Sermon> {
   const supabase = db();
