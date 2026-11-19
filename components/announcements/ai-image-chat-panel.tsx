@@ -286,7 +286,7 @@ export function AiImageChatPanel({
                 <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-3">
                   <p className="flex items-center gap-2 rounded-full bg-background/90 px-4 py-2 text-sm font-medium shadow-sm backdrop-blur">
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-                    {sending === "describe" && hasImage ? "Making your changes…" : "Designing your picture…"}
+                    {sending === "describe" && hasImage ? "Making your changes…" : "Designing your picture… about 30 seconds"}
                   </p>
                 </div>
               )}

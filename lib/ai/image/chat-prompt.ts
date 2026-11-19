@@ -96,15 +96,16 @@ export type ImageChatParseResult =
  * the failure people notice most.
  */
 export const IMAGE_CHAT_SYSTEM_INSTRUCTION = [
-  "You are a senior graphic designer on a church's communications team. You create and edit the graphics the church posts for its events: Facebook posts, app posters and flyers.",
+  "You are a senior designer on a church's creative team. You make the event graphics the church posts: Facebook posts, app posters and flyers. Your work looks like a modern brand campaign, not a template.",
   "LISTEN FIRST: follow the person's words literally and completely. Every subject, colour, style, word, size and placement they ask for must be clearly visible in the result. Never skip part of a request, never swap it for something you think looks better, and never add subjects they did not ask for. If a request is ambiguous, take the most literal reading.",
   "FRAME: every image is one 16:9 landscape graphic that will be shown at 1200×630. Keep all text and the logo inside the central 80% of the frame so nothing is lost when the edges are trimmed.",
-  "STYLE: modern, polished graphic design: a striking hero image of places, objects, light and texture, rich colour, a clear focal point and confident typography. Not clip-art, not a generic stock photo with words pasted on.",
+  "LOOK: contemporary and premium: cinematic photography or a high-end 3D render with real light, depth of field, texture and a subtle film grain; a confident colour grade. Not cartoon, not flat vector illustration, not clip-art, unless the person asks for that style.",
+  "TYPE IS PART OF THE ARTWORK: design the words into the image as one composition, lit by the same light, coloured to match the scene, layered with depth (a title that sits in the sky or the space of the scene, passes partly behind an object, or glows with the scene's light). Never split the frame into a flat colour block with text beside a picture, and never paste plain text on a box. Use a bold modern display face (a condensed grotesk, a wide geometric sans, or a high-contrast serif) with a clear hierarchy: a huge title, then the date and time, then the place, then the church name.",
   NO_PEOPLE_RULE,
   "If a request asks for people, show the setting and the objects that suggest them instead (an empty room set up for the event, a table laid for a meal, instruments on a stage) and say so in your sentence.",
-  "TEXT: render only the words the brief lists or the person asks for, spelled exactly as written: same capitalisation, digits and punctuation. Real, sharp, well-kerned type; never garbled, warped or duplicated. No watermarks and no UI chrome.",
-  "LOGO: never invent a logo. When the church's logo is attached, use that exact mark: same shape, colours and proportions, not redrawn, recoloured, cropped or distorted. Give it clear space, usually small in a corner or beside the church name.",
-  "EDITING: when given the current design with an instruction, edit that design. Make the requested change clearly and fully, and keep everything else (layout, words, logo, colours, scene) the same unless the change needs it to move.",
+  "TEXT: render only the words the brief lists or the person asks for, spelled exactly as written: same capitalisation, digits and punctuation. Every listed line must appear; check before you finish. Real, sharp, well-kerned type; never garbled, warped or duplicated. No watermarks and no UI chrome.",
+  "LOGO: never invent a logo. When the church's logo is attached, use that exact mark ONCE: same shape, colours and proportions, not redrawn, recoloured, cropped or distorted, small (about a tenth of the image height) in one corner or beside the church name. Never repeat it and never make it a hero element unless asked.",
+  "EDITING: when given the current design with an instruction, edit that design. The words and the logo are part of the design: when asked to move, resize, restyle or rewrite them, redraw the layout so the change really happens (moved text is gone from its old place). Keep everything that was not mentioned the same.",
   "Always respond with one finished image, plus one short sentence saying what you made or changed.",
 ].join("\n");
 
@@ -222,33 +223,39 @@ function brandLines(brand: ImageChatBrand | null, { forEdit }: { forEdit: boolea
       : `COLOUR: build the palette from the church's colours, ${brand.primaryColor} and ${brand.accentColor}, unless the person asks for other colours.`,
     brand.logo
       ? forEdit
-        ? "LOGO: keep the church's attached logo exactly as it is unless the instruction is about the logo."
-        : "LOGO: place the church's attached logo, unaltered, small and clean in a corner or beside the church name."
+        ? "LOGO: keep the church's attached logo exactly as it is, once, unless the instruction is about the logo."
+        : "LOGO: use the church's attached logo exactly once, unaltered and small, in one corner or beside the church name."
       : null,
   ].filter((line): line is string => Boolean(line));
+}
+
+/** The words an event graphic carries, as numbered must-include lines. */
+function eventTextLines(event: ImageChatEventContext, brand: ImageChatBrand | null): string[] {
+  return [
+    event.title ? `Title, huge, the dominant element: "${event.title}"` : null,
+    event.when ? `Date and time, clearly readable: "${event.when}"` : null,
+    event.location ? `Place: "${event.location}"` : null,
+    brand ? `Church name, small: "${brand.churchName}"` : null,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .map((line, i) => `${i + 1}. ${line}`);
 }
 
 /** A finished event graphic, designed from what the church wrote. */
 function buildEventBrief(request: ImageChatRequest, brand: ImageChatBrand | null): string {
   const event = request.event ?? {};
-  const details = [event.when, event.location]
-    .filter((part): part is string => Boolean(part))
-    .map((part) => `"${part}"`);
   const description = event.details?.trim();
   const subject = [event.title, description].filter(Boolean).join(" ");
   return [
-    "Design a complete, ready-to-post CHURCH EVENT GRAPHIC: 16:9 landscape, shown at 1200×630.",
-    "HERO IMAGE: a striking scene that clearly says what this event is, chosen from the title" +
+    "Design a complete, ready-to-post CHURCH EVENT GRAPHIC: 16:9 landscape, shown at 1200×630. Modern, striking and cohesive, the kind of graphic people stop scrolling for.",
+    "HERO SCENE: a cinematic scene that clearly says what this event is, chosen from the title" +
       (description ? " and the description below." : "."),
     description
       ? `EVENT DESCRIPTION (use it to choose the scene, mood and props; do not print it): ${description}`
       : null,
-    "TEXT TO RENDER (the only words allowed in the image, each copied character for character):",
-    event.title ? `- Large hero title: "${event.title}". The dominant element.` : null,
-    brand ? `- Church name: "${brand.churchName}", small, clean, letter-spaced.` : null,
-    details.length ? `- Details, small, on one or two lines: ${details.join(" · ")}.` : null,
+    "TEXT: set ALL of these lines, and no other words, each copied character for character, designed into the scene as described in your brief (no flat panel, no text box):",
+    ...eventTextLines(event, brand),
     ...brandLines(brand, { forEdit: false }),
-    "LAYOUT: set the words on the calmer side over a soft gradient or a brand-colour panel so they are crisp and high-contrast; keep the hero scene clearly visible on the other side.",
     mentionsPeople(subject) ? "Reminder: no people may appear. Show the place and things instead." : null,
   ]
     .filter(Boolean)
@@ -264,15 +271,21 @@ export function buildImageChatInstruction(
 
   const editing = Boolean(request.previousImage);
   const lines = eventLines(request.event);
+  const defaultText =
+    !editing && request.event?.title ? eventTextLines(request.event, brand) : [];
   const parts = [
     editing
       ? `Edit the CURRENT DESIGN. Make exactly this change, fully and visibly: ${request.instruction}`
       : `Create a new 16:9 landscape graphic (shown at 1200×630). Follow this description exactly, including every subject, colour, style and word it names: ${request.instruction}`,
     ...brandLines(brand, { forEdit: editing }),
-    lines.length
-      ? `EVENT DETAILS (for reference; only put these words in the image if asked, and then copy them exactly): ${lines.join(" · ")}`
+    defaultText.length
+      ? "TEXT: unless the description says no text or gives its own words, set these lines, copied exactly and designed into the scene:"
       : null,
-    brand && !editing
+    ...defaultText,
+    editing && lines.length
+      ? `EVENT DETAILS (copy exactly if the instruction asks for any of them): ${lines.join(" · ")}`
+      : null,
+    !editing && !defaultText.length && brand
       ? `The church is "${brand.churchName}"; only print its name if asked.`
       : null,
     mentionsPeople(request.instruction)

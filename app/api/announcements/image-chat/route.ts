@@ -9,7 +9,8 @@ import { checkRateLimit } from "@/lib/security/rate-limit";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+/** The Pro image model can take most of a minute; vercel.json sets the same. */
+export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 /** Vercel refuses bodies over 4.5MB; the browser never sends close to this. */

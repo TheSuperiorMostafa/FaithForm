@@ -33,7 +33,7 @@ function parsed(body: unknown): ImageChatRequest {
 
 test("system instruction keeps the no-people house rule", () => {
   assert.ok(IMAGE_CHAT_SYSTEM_INSTRUCTION.includes(NO_PEOPLE_RULE));
-  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /graphic designer/i);
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /designer/i);
 });
 
 test("rejects an empty or missing instruction", () => {
@@ -168,7 +168,10 @@ test("event brief prints the title, church name and details, and uses the descri
   assert.match(brief, /16:9/);
   assert.match(brief, /"Fall Potluck"/);
   assert.match(brief, /"Grace Fellowship"/);
-  assert.match(brief, /"Sun, Nov 23 · 5 PM" · "Fellowship Hall"/);
+  assert.match(brief, /Date and time, clearly readable: "Sun, Nov 23 · 5 PM"/);
+  assert.match(brief, /Place: "Fellowship Hall"/);
+  assert.match(brief, /no flat panel/);
+  assert.match(brief, /exactly once/);
   assert.match(brief, /do not print it\): Chili cook-off/);
   assert.match(brief, /#002D5F/);
   assert.match(brief, /attached logo/);
@@ -193,4 +196,26 @@ test("without a logo, nothing logo-related is sent", () => {
     .map((part) => ("text" in part ? part.text : ""))
     .join("\n");
   assert.doesNotMatch(text, /LOGO/);
+});
+
+test("system instruction asks for designed type, one logo, and edits that really move things", () => {
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /Never split the frame into a flat colour block/);
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /ONCE/);
+  assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /moved text is gone from its old place/);
+});
+
+test("a described picture still carries the event's title and date unless told otherwise", () => {
+  const create = buildImageChatInstruction(
+    parsed({ instruction: "a cosy reading nook", event: { title: "Bible Study", when: "Wed, Nov 26 · 7 PM" } }),
+    BRAND,
+  );
+  assert.match(create, /unless the description says no text/);
+  assert.match(create, /"Bible Study"/);
+  assert.match(create, /"Wed, Nov 26 · 7 PM"/);
+  assert.match(create, /"Grace Fellowship"/);
+  const edit = buildImageChatInstruction(
+    parsed({ instruction: "move the title left", previousImage: IMAGE, event: { title: "Bible Study" } }),
+    BRAND,
+  );
+  assert.doesNotMatch(edit, /unless the description says no text/);
 });

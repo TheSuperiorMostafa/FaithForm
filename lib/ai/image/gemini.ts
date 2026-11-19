@@ -142,6 +142,44 @@ export type GeminiChatImageResult = {
  * one passed inline in `contents` (multi-turn image editing). The contents
  * and system instruction are built by lib/ai/image/chat-prompt.ts.
  */
+/**
+ * The studio's first-choice model: Nano Banana Pro, which sets type and follows
+ * layout instructions far better than the fast model. GEMINI_IMAGE_CHAT_MODEL
+ * overrides it; if the key can't use it, the studio falls back to the fast one.
+ */
+const DEFAULT_GEMINI_IMAGE_CHAT_MODEL = "gemini-3-pro-image-preview";
+
+/** Room for the Pro model, inside the route's 120s limit. */
+const DEFAULT_CHAT_TIMEOUT_MS = 100_000;
+
+function resolveChatTimeoutMs(): number {
+  const raw = Number(process.env.GEMINI_IMAGE_CHAT_TIMEOUT_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_CHAT_TIMEOUT_MS;
+}
+
+function resolveChatModels(): string[] {
+  const preferred = process.env.GEMINI_IMAGE_CHAT_MODEL?.trim() || DEFAULT_GEMINI_IMAGE_CHAT_MODEL;
+  return [...new Set([preferred, resolveModel()])];
+}
+
+/** The model isn't available to this key or this API version. */
+function isModelUnavailable(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return (
+    message.includes("not_found") ||
+    message.includes("not found") ||
+    message.includes("is not supported") ||
+    message.includes("permission_denied") ||
+    message.includes("\"code\":404") ||
+    message.includes("\"code\":403")
+  );
+}
+
+function isImageConfigRejection(err: unknown): boolean {
+  const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+  return message.includes("imageconfig") || message.includes("aspect") || message.includes("unknown field");
+}
+
 export async function generateGeminiChatImage(input: {
   contents: unknown;
   systemInstruction: string;
@@ -153,14 +191,13 @@ export async function generateGeminiChatImage(input: {
     throw new Error("GEMINI_API_KEY is not configured");
   }
 
-  const model = resolveModel();
   const ai = new GoogleGenAI({ apiKey });
   const baseConfig = {
     systemInstruction: input.systemInstruction,
     responseModalities: ["IMAGE", "TEXT"],
-    httpOptions: { timeout: resolveTimeoutMs() },
+    httpOptions: { timeout: resolveChatTimeoutMs() },
   };
-  const generate = (config: Record<string, unknown>) =>
+  const generate = (model: string, config: Record<string, unknown>) =>
     ai.models.generateContent({
       model,
       contents: input.contents as Parameters<
@@ -169,32 +206,46 @@ export async function generateGeminiChatImage(input: {
       config,
     });
 
-  let response: GenerateContentResponse;
-  if (input.aspectRatio) {
+  const runModel = async (model: string): Promise<GenerateContentResponse> => {
+    if (!input.aspectRatio) return generate(model, baseConfig);
     try {
-      response = await generate({ ...baseConfig, imageConfig: { aspectRatio: input.aspectRatio } });
+      return await generate(model, { ...baseConfig, imageConfig: { aspectRatio: input.aspectRatio } });
     } catch (err) {
       // Same fallback as the flyer: a config quirk must not stop the picture.
-      const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
-      if (!(message.includes("imageconfig") || message.includes("aspect") || message.includes("unknown field"))) {
-        throw err;
-      }
-      response = await generate(baseConfig);
+      if (!isImageConfigRejection(err)) throw err;
+      return generate(model, baseConfig);
     }
-  } else {
-    response = await generate(baseConfig);
-  }
+  };
 
+  const models = resolveChatModels();
+  let response: GenerateContentResponse | null = null;
+  let model = models[0]!;
+  for (let i = 0; i < models.length; i += 1) {
+    model = models[i]!;
+    try {
+      response = await runModel(model);
+      break;
+    } catch (err) {
+      // Only a model this key can't use moves on; anything else is real.
+      if (i === models.length - 1 || !isModelUnavailable(err)) throw err;
+      console.warn(`[ai-image-chat] ${model} unavailable, falling back:`, err instanceof Error ? err.message : err);
+    }
+  }
+  if (!response) throw new Error("Gemini returned no image data");
+
+  // Thinking models can return draft images marked as thoughts; the finished
+  // image is the last one that isn't.
   const parts = response.candidates?.[0]?.content?.parts ?? [];
   let image: { bytes: Buffer; mimeType: string } | null = null;
   const notes: string[] = [];
   for (const part of parts) {
-    if (!image && part.inlineData?.data) {
+    if (part.thought) continue;
+    if (part.inlineData?.data) {
       image = {
         bytes: Buffer.from(part.inlineData.data, "base64"),
         mimeType: part.inlineData.mimeType || "image/png",
       };
-    } else if (part.text?.trim() && !part.thought) {
+    } else if (part.text?.trim()) {
       notes.push(part.text.trim());
     }
   }

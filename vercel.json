@@ -12,6 +12,9 @@
     "app/api/sermon/[id]/export/pptx/route.ts": {
       "maxDuration": 60
     },
+    "app/api/announcements/image-chat/route.ts": {
+      "maxDuration": 120
+    },
     "app/api/announcements/social-preview/route.ts": {
       "maxDuration": 60
     },
