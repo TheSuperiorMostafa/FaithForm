@@ -1,6 +1,7 @@
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 import { emptyStaffPreferences, staffPreferencesSchema } from "@/lib/notifications/staff-preferences";
 import { DocumentsPanel } from "@/components/settings/documents-panel";
+import { getFaithFormSmsSender } from "@/lib/sms/church-sender";
 import Link from "next/link";
 import { ArrowRight, Heart, Mail } from "lucide-react";
 
@@ -225,5 +226,8 @@ async function NotificationsPanel({ auth, allowedFeatures }: SettingsPanelContex
   if (error) throw new Error("notification_preferences_unavailable");
   const initial = data ? staffPreferencesSchema.safeParse({ phone: data.phone, events: { ...emptyStaffPreferences().events, ...data.events } }) : null;
   if (initial && !initial.success) throw new Error("notification_preferences_invalid");
-  return <NotificationPreferencesForm initial={initial?.success ? initial.data : emptyStaffPreferences()} email={auth.userEmail} allowedFeatures={allowedFeatures} />;
+  // Only the sending number reaches the browser, never the credential.
+  const faithFormSender = getFaithFormSmsSender();
+  const textSender = { available: Boolean(faithFormSender), number: faithFormSender?.fromNumber ?? null };
+  return <NotificationPreferencesForm initial={initial?.success ? initial.data : emptyStaffPreferences()} email={auth.userEmail} allowedFeatures={allowedFeatures} textSender={textSender} />;
 }

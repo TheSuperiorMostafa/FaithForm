@@ -10,7 +10,11 @@ import { STAFF_NOTIFICATION_EVENTS, type StaffPreferences } from "@/lib/notifica
 import type { FeatureKey } from "@/lib/features/catalog";
 import { formatUsPhoneDisplay, formatUsPhoneInput, toE164 } from "@/lib/sms/phone";
 
-export function NotificationPreferencesForm({ initial, email, allowedFeatures }: { initial: StaffPreferences; email: string; allowedFeatures: FeatureKey[] }) {
+/** FaithForm's own texting line, never the church's phone. `number` is display-only. */
+export type StaffTextSender = { available: boolean; number: string | null };
+
+export function NotificationPreferencesForm({ initial, email, allowedFeatures, textSender }: { initial: StaffPreferences; email: string; allowedFeatures: FeatureKey[]; textSender: StaffTextSender }) {
+  const senderNumber = textSender.number ? formatUsPhoneDisplay(textSender.number) ?? textSender.number : null;
   const [value, setValue] = useState(initial);
   const [editingPhone, setEditingPhone] = useState(false);
   const [phoneDraft, setPhoneDraft] = useState("");
@@ -83,7 +87,15 @@ export function NotificationPreferencesForm({ initial, email, allowedFeatures }:
         <p className="text-[15px] text-muted-foreground">{event.description}</p>
         <div className="mt-3 flex flex-wrap gap-6">{(["email", "phone"] as const).map(channel => <label key={channel} className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px]"><input type="checkbox" className="size-5 accent-primary" checked={value.events[event.id][channel]} onChange={e => setValue({ ...value, events: { ...value.events, [event.id]: { ...value.events[event.id], [channel]: e.target.checked } } })} />{channel === "email" ? "Email" : "Phone (text message)"}</label>)}</div>
       </fieldset>)}
-      <p className="text-sm text-muted-foreground">Text messages come from FaithForm&apos;s phone number. Guardian app alerts remain available to guardians.</p>
+      {textSender.available ? (
+        <p className="text-sm text-muted-foreground">
+          Text messages come from FaithForm{senderNumber ? <> at <span className="font-medium text-foreground">{senderNumber}</span></> : null}, not your church&apos;s phone. Save it as a contact so you know it&apos;s us. Guardian app alerts remain available to guardians.
+        </p>
+      ) : (
+        <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10" role="status">
+          Text notifications from FaithForm aren&apos;t turned on yet, so for now you&apos;ll only get emails. Your text choices are saved and will start once they are.
+        </p>
+      )}
       <Button type="submit" disabled={pending || editingPhone} className="self-start">{pending ? "Saving…" : "Save notification choices"}</Button>
     </form></CardContent></Card>;
 }

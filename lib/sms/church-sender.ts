@@ -34,6 +34,17 @@ export type ChurchSmsSender =
       fromNumber: string;
       deviceSid: null;
       source: "server";
+    }
+  | {
+      /** Quo (formerly OpenPhone). Used only for FaithForm's own line. */
+      gateway: "quo";
+      apiKey: string;
+      /** E.164 number, or the Quo phone number id (PN…), to send from. */
+      from: string;
+      /** E.164 for display; null when only a PN… id is configured. */
+      fromNumber: string | null;
+      deviceSid: null;
+      source: "server";
     };
 
 /** What the dashboards may know about a church's texting phone. Never the key. */
@@ -200,12 +211,27 @@ export async function removeChurchSmsSender(
  * (Settings → Your notifications). These are not the church speaking to its
  * members, so they never leave from the church's connected phone.
  *
- * Configured with `FAITHFORM_TWILIO_ACCOUNT_SID`, `FAITHFORM_TWILIO_AUTH_TOKEN`
+ * Configured with `FAITHFORM_QUO_API_KEY` and `FAITHFORM_QUO_FROM` (an E.164
+ * number or Quo phone number id), or with `FAITHFORM_TWILIO_ACCOUNT_SID`, `FAITHFORM_TWILIO_AUTH_TOKEN`
  * and `FAITHFORM_TWILIO_FROM_NUMBER`, or with `FAITHFORM_SMS_MOBILE_API_KEY`
  * (and `FAITHFORM_SMS_MOBILE_API_NUMBER`) for an SMSMobileAPI handset. Without
  * either, staff text notices are not sent; email notices are unaffected.
  */
 export function getFaithFormSmsSender(): ChurchSmsSender | null {
+  // Quo (formerly OpenPhone) is FaithForm's line; Twilio and SMSMobileAPI remain fallbacks.
+  const quoKey = process.env.FAITHFORM_QUO_API_KEY?.trim();
+  const quoFrom = process.env.FAITHFORM_QUO_FROM?.trim();
+  if (quoKey && quoFrom) {
+    return {
+      gateway: "quo",
+      apiKey: quoKey,
+      from: quoFrom,
+      fromNumber: quoFrom.startsWith("+") ? quoFrom : null,
+      deviceSid: null,
+      source: "server",
+    };
+  }
+
   const accountSid = process.env.FAITHFORM_TWILIO_ACCOUNT_SID?.trim();
   const authToken = process.env.FAITHFORM_TWILIO_AUTH_TOKEN?.trim();
   const fromNumber = process.env.FAITHFORM_TWILIO_FROM_NUMBER?.trim();
