@@ -18,6 +18,7 @@ const CLIP_PAGE_DESCRIPTION =
 
 export default async function ClipEditorPage({ params }: { params: Promise<{ id: string; clipId: string }> }) {
   if (await pageFeatureBlocked("live_stream")) return null;
+  if (await pageFeatureBlocked("sermon_media")) return null;
 
   const { id, clipId } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id) || !/^[0-9a-f-]{36}$/i.test(clipId)) notFound();

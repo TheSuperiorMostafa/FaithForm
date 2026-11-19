@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { enqueueTranscription, logSermonMedia } from "@/lib/sermon-media/jobs";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -40,6 +41,10 @@ export async function sweepAutoTranscriptions(
     .eq("enabled", true)
     .eq("auto_transcribe", true);
   const churches = new Map((settings ?? []).map((row) => [row.church_id as string, String(row.language ?? "auto")]));
+  // Only churches whose Transcripts & Clips feature is switched on.
+  for (const churchId of [...churches.keys()]) {
+    if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) churches.delete(churchId);
+  }
   if (churches.size === 0) return { queued: 0, checked: 0 };
 
   const since = new Date((options.now ?? new Date()).getTime() - SWEEP_LOOKBACK_DAYS * 86_400_000).toISOString();
@@ -93,6 +98,7 @@ export async function onRecordingVerifiedReady(
     .eq("church_id", recording.churchId)
     .maybeSingle();
   if (!settings?.enabled || !settings.auto_transcribe) return;
+  if (!(await isChurchFeatureEnabled(recording.churchId, "sermon_media"))) return;
   const { data: jobs } = await db
     .from("media_jobs")
     .select("id")

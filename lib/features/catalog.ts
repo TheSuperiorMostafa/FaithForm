@@ -1,6 +1,7 @@
 import {
   Baby as BabyIcon,
   BookOpen,
+  Captions,
   Contact,
   FolderOpen,
   Globe,
@@ -36,6 +37,7 @@ export const FEATURE_KEYS = [
   "announcements",
   "sermon_builder",
   "live_stream",
+  "sermon_media",
   "voice_assistant",
   "giving",
   "library",
@@ -78,6 +80,12 @@ export type FeatureDefinition = {
    * reach and manage their own gifts.
    */
   emails?: string;
+  /**
+   * Whether a church with no saved switch has this feature. Almost everything
+   * ships on; a feature with a running cost per use (transcription) ships off
+   * until a platform admin turns it on for that church.
+   */
+  defaultEnabled?: boolean;
 };
 
 export const FEATURES: FeatureDefinition[] = [
@@ -157,6 +165,17 @@ export const FEATURES: FeatureDefinition[] = [
     routes: ["/dashboard/live-streaming"],
   },
   {
+    key: "sermon_media",
+    label: "Transcripts & Clips",
+    description:
+      "Sermon transcripts, short clips and lessons made from a recording. Shown on each finished recording under Live Stream, so Live Stream must be on too.",
+    href: "/dashboard/live-streaming/recordings",
+    icon: Captions,
+    // A panel inside recording pages; Live Stream owns the routes.
+    routes: [],
+    defaultEnabled: false,
+  },
+  {
     key: "voice_assistant",
     label: "Voice Assistant",
     description:
@@ -217,6 +236,11 @@ export function getFeature(key: FeatureKey): FeatureDefinition {
   const feature = FEATURES_BY_KEY.get(key);
   if (!feature) throw new Error(`Unknown feature key: ${key}`);
   return feature;
+}
+
+/** What a church with no saved switch gets for this feature. */
+export function featureDefaultEnabled(key: FeatureKey): boolean {
+  return FEATURES_BY_KEY.get(key)?.defaultEnabled ?? true;
 }
 
 export function isFeatureKey(value: unknown): value is FeatureKey {

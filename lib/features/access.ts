@@ -5,6 +5,7 @@ import { cache } from "react";
 import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
 import {
   FEATURE_KEYS,
+  featureDefaultEnabled,
   isFeatureKey,
   type FeatureKey,
 } from "@/lib/features/catalog";
@@ -24,10 +25,13 @@ export function churchFeatureCacheTag(churchId: string): string {
   return `church-features:${churchId}`;
 }
 
-/** Every feature ships enabled; a platform admin opts an account out. */
+/**
+ * The catalog default for each feature: nearly all ship enabled and a platform
+ * admin opts an account out; a few (see `defaultEnabled`) ship off until opted in.
+ */
 export function defaultFeatureFlags(): FeatureFlags {
   return Object.fromEntries(
-    FEATURE_KEYS.map((key) => [key, true]),
+    FEATURE_KEYS.map((key) => [key, featureDefaultEnabled(key)]),
   ) as FeatureFlags;
 }
 
@@ -142,7 +146,7 @@ export async function isChurchFeatureEnabled(
   key: FeatureKey,
 ): Promise<boolean> {
   const admin = createAdminClientOrNull();
-  if (!admin) return true;
+  if (!admin) return featureDefaultEnabled(key);
 
   const { data, error } = await admin
     .from("church_features")
@@ -155,11 +159,11 @@ export async function isChurchFeatureEnabled(
     if (!isMissingFeatureTable(error.message)) {
       console.error("isChurchFeatureEnabled:", error.message);
     }
-    return true;
+    return featureDefaultEnabled(key);
   }
 
-  // No row means never changed, which means the catalog default: on.
-  return data ? Boolean(data.enabled) : true;
+  // No row means never changed, which means the catalog default.
+  return data ? Boolean(data.enabled) : featureDefaultEnabled(key);
 }
 
 function isMissingEmailsColumn(message: string): boolean {

@@ -60,7 +60,7 @@ export default async function RecordingReviewPage({
   const rawT = (await searchParams).t;
   const parsedT = Number(Array.isArray(rawT) ? rawT[0] : rawT);
   const initialSeekSec = Number.isFinite(parsedT) && parsedT >= 0 ? parsedT : null;
-  const showSermonMedia = Boolean(sermonMedia?.enabled) && (recording.status === "ready" || recording.status === "published");
+  const showSermonMedia = Boolean(sermonMedia?.enabled) && Boolean(access?.allowed.includes("sermon_media")) && (recording.status === "ready" || recording.status === "published");
   // The review player only loads for ready/processing recordings; the panel
   // needs the source for published ones too.
   const sermonMediaPlayback = showSermonMedia ? (playback ?? (await getStaffPlayback(auth.churchId, id))) : null;

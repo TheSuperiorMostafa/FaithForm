@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 
 import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,17 +27,20 @@ export function sermonMediaGloballyEnabled(): boolean {
 export async function getSermonMediaSettings(churchId: string): Promise<SermonMediaSettings> {
   const disabled: SermonMediaSettings = { enabled: false, autoTranscribe: false, language: "auto", maxConcurrentJobs: 2 };
   if (!sermonMediaGloballyEnabled()) return disabled;
-  const { data, error } = await createAdminClient()
+  // The church's "Transcripts & Clips" feature switch (off until a platform
+  // admin turns it on) decides whether the church has it at all. The settings
+  // row is optional and only tunes it: automatic transcription, language, caps.
+  if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) return disabled;
+  const { data } = await createAdminClient()
     .from("sermon_media_settings")
     .select("enabled, auto_transcribe, language, max_concurrent_jobs")
     .eq("church_id", churchId)
     .maybeSingle();
-  if (error || !data) return disabled;
   return {
-    enabled: Boolean(data.enabled),
-    autoTranscribe: Boolean(data.enabled && data.auto_transcribe),
-    language: String(data.language ?? "auto"),
-    maxConcurrentJobs: Number(data.max_concurrent_jobs ?? 2),
+    enabled: true,
+    autoTranscribe: Boolean(data?.enabled && data.auto_transcribe),
+    language: String(data?.language ?? "auto"),
+    maxConcurrentJobs: Number(data?.max_concurrent_jobs ?? 2),
   };
 }
 
@@ -76,6 +80,8 @@ export async function requireRecordingAccess(
   if (!auth) return deny(401, "Please sign in again.");
   const featureDenied = await featureAccessDenied("live_stream");
   if (featureDenied) return { ok: false, response: featureDenied };
+  const mediaDenied = await featureAccessDenied("sermon_media");
+  if (mediaDenied) return { ok: false, response: mediaDenied };
   if (need === "publish" && !auth.isAdmin) {
     return deny(403, "Only a church administrator can post to Facebook.");
   }
