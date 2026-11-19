@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AlertTriangle, CheckCircle2, Download, ExternalLink, Film, Play, RotateCcw, Send } from "lucide-react";
+import { AlertTriangle, CalendarCheck, CalendarX2, CheckCircle2, Download, ExternalLink, Film, Play, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import { ClipEditorBodySkeleton } from "@/components/sermon-media/clip-editor-sk
 import { SourcePlayer, type SourcePlayerHandle } from "@/components/sermon-media/source-player";
 import { TimeField } from "@/components/sermon-media/time-field";
 import { formatLength, formatTime } from "@/components/sermon-media/time";
+import { formatPostTime, scheduledMessage } from "@/components/clips/format";
 import { integrationConnectHref } from "@/lib/integrations/connect-href";
 import { cn } from "@/lib/utils";
 
@@ -56,6 +57,12 @@ const draftFrom = (detail: ClipDetail): Draft => ({
   facebookCaption: detail.clip.facebook_caption ?? "",
 });
 
+/** Approval fields the clip route returns (the shared ClipRow type predates them). */
+type ApprovalFields = {
+  approval_status?: "pending" | "approved" | "skipped" | "posted";
+  scheduled_for?: string | null;
+};
+
 const sameFraming = (a: Framing, b: Framing) => a.mode === b.mode && (a.mode !== "manual" || (a.x ?? 0.5) === (b.x ?? 0.5));
 
 function postStatusText(post: ReelPost): { tone: "working" | "done" | "attention"; label: string; detail: string } {
@@ -84,16 +91,22 @@ function postStatusText(post: ReelPost): { tone: "working" | "done" | "attention
  */
 export function ClipEditor({
   clipId,
-  recordingId,
   recordingTitle,
   source,
   posterUrl,
+  backHref: backHrefProp,
+  timezone = "America/New_York",
 }: {
   clipId: string;
+  /** The clip's recording (resolved by the page; kept for callers). */
   recordingId: string;
   recordingTitle: string;
   source: { kind: "hls" | "progressive"; url: string } | null;
   posterUrl: string | null;
+  /** Where "Back" goes; the Clips section by default. */
+  backHref?: string;
+  /** The church's time zone, for scheduled post times. */
+  timezone?: string;
 }) {
   const pathname = usePathname();
   const player = useRef<SourcePlayerHandle>(null);
@@ -107,10 +120,12 @@ export function ClipEditor({
   const [reviewed, setReviewed] = useState(false);
   const [posting, setPosting] = useState(false);
   const [postProblem, setPostProblem] = useState<string | null>(null);
+  const [approving, setApproving] = useState<"schedule" | "now" | "unschedule" | null>(null);
   const postLock = useRef(false);
   const dirtyRef = useRef(false);
 
-  const backHref = `/dashboard/live-streaming/recordings/${recordingId}`;
+  const backHref = backHrefProp ?? "/dashboard/clips";
+  const backLabel = backHref === "/dashboard/clips" ? "Back to Clips" : "Back to the recording";
 
   const load = useCallback(
     async (reset = false) => {
@@ -205,9 +220,9 @@ export function ClipEditor({
   if (loadState === "missing") {
     return (
       <div className="flex flex-col items-start gap-4">
-        <ErrorState compact title="We couldn't find this clip" description="It may have been removed. Go back to the recording to see its clips." />
+        <ErrorState compact title="We couldn't find this clip" description="It may have been removed or skipped. Go back to see your other clips." />
         <Link href={backHref} className={buttonVariants({ variant: "outline" })}>
-          Back to the recording
+          {backLabel}
         </Link>
       </div>
     );
@@ -318,6 +333,68 @@ export function ClipEditor({
     else if (fresh.status !== "failed") toast.success("Sent to Facebook. We'll show here when it's live.");
   };
 
+  const pageLabel = detail.facebook.pageName ?? "your Facebook Page";
+  const confirmPostNow = () =>
+    confirmAction({
+      title: `Post this clip to ${pageLabel} now?`,
+      description: `It will be public on ${pageLabel} as a Reel within a minute or two, with the text you wrote. To take it down later, delete it on Facebook.`,
+      confirmLabel: "Post to Facebook now",
+    });
+
+  /** One-tap approval: the watched video posts at the next time on the church's schedule, or now. */
+  const approve = async (postNow: boolean): Promise<void> => {
+    if (!render || approving) return;
+    if (postNow && !(await confirmPostNow())) return;
+    setApproving(postNow ? "now" : "schedule");
+    setPostProblem(null);
+    const result = await apiRequest<{ scheduledFor: string; pageName: string | null }>(
+      `${clipApi(clipId)}/approve`,
+      {
+        method: "POST",
+        body: {
+          renderId: render.id,
+          specHash: render.specHash,
+          caption: draft.facebookCaption,
+          reviewed: true,
+          ...(postNow ? { postNow: true } : {}),
+        },
+      },
+      "We couldn't approve this clip. Please try again.",
+    );
+    setApproving(null);
+    if (!result.ok) {
+      setPostProblem(result.error);
+      return;
+    }
+    const page = result.data.pageName ?? pageLabel;
+    if (postNow) {
+      toast.success(`Posting to ${page} now. It shows as Posted in Clips within a minute or two.`);
+    } else {
+      toast.success(scheduledMessage(result.data.scheduledFor, timezone, result.data.pageName), {
+        duration: 10_000,
+        action: { label: "Post now instead", onClick: () => void approve(true) },
+      });
+    }
+    await load(true);
+  };
+
+  const unschedule = async () => {
+    if (approving) return;
+    setApproving("unschedule");
+    const result = await apiRequest(
+      `${clipApi(clipId)}/approve`,
+      { method: "PATCH", body: { decision: "unschedule" } },
+      "We couldn't take this clip off the schedule. Please try again.",
+    );
+    setApproving(null);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success("Took the clip off the schedule. It's back in Ready to review.");
+    await load(true);
+  };
+
   const playClip = () => player.current?.playFrom(draft.start, draft.end);
   const captions = draft.captions ?? detail.captions;
   const approximate = captions.some((cue) => cue.approximate);
@@ -327,6 +404,9 @@ export function ClipEditor({
   const facebookReady = detail.facebook.connected && !detail.facebook.needsReconnect && Boolean(detail.facebook.pageId);
   const alreadyPosted = Boolean(currentPost && currentPost.status !== "failed");
   const postStatus = currentPost ? postStatusText(currentPost) : null;
+  const approval = (clip as typeof clip & ApprovalFields).approval_status ?? "pending";
+  const scheduledFor = (clip as typeof clip & ApprovalFields).scheduled_for ?? null;
+  const scheduled = approval === "approved";
 
   // Crop guide position over the 16:9 player.
   const cropX = draft.framing.mode === "manual" ? (draft.framing.x ?? 0.5) : 0.5;
@@ -668,7 +748,7 @@ export function ClipEditor({
               ) : render && !render.matchesCurrentEdit ? (
                 <p className="text-[15px]">The captions or sermon text changed after this video was made. Make the final video again before posting.</p>
               ) : dirtyRender || detail.posts.length > 0 ? (
-                <p className="text-[15px]">You changed the clip. Make the final video again before posting.</p>
+                <p className="text-[15px]">You changed the clip. Make the final video again before approving.</p>
               ) : (
                 <p className="text-[15px] text-muted-foreground">Make the final video to see exactly what will be posted.</p>
               )}
@@ -682,9 +762,14 @@ export function ClipEditor({
         </section>
 
         <section aria-labelledby="clip-post-heading" className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
-          <h2 id="clip-post-heading" className="font-heading text-lg font-semibold">
-            Post to Facebook
-          </h2>
+          <div className="space-y-1">
+            <h2 id="clip-post-heading" className="font-heading text-lg font-semibold">
+              Approve and post
+            </h2>
+            <p className="text-[15px] text-muted-foreground">
+              Approved clips post to {detail.facebook.pageName ?? "your Facebook Page"} at the next time on your posting schedule.
+            </p>
+          </div>
 
           {postStatus && currentPost ? (
             <div className="flex flex-col gap-2" aria-live="polite">
@@ -706,29 +791,63 @@ export function ClipEditor({
             </div>
           ) : null}
 
-          {!renderReady ? (
-            <p className="text-[15px] text-muted-foreground">Make the final video and watch it, then you can post it.</p>
+          {scheduled && !dirtyRender && !alreadyPosted ? (
+            <div className="flex flex-col gap-3" aria-live="polite">
+              <StatusBadge tone="working" className="w-fit">
+                <CalendarCheck className="size-4" aria-hidden />
+                Scheduled
+              </StatusBadge>
+              <p className="text-[15px]">
+                {scheduledFor
+                  ? `Posts ${formatPostTime(scheduledFor, timezone)} on ${detail.facebook.pageName ?? "your Facebook Page"}.`
+                  : "Waiting for its time on your posting schedule."}
+              </p>
+              {postProblem ? (
+                <p role="alert" className="rounded-xl bg-destructive/[0.06] px-4 py-3 text-[15px]">
+                  {postProblem}
+                </p>
+              ) : null}
+              {detail.canPublish ? (
+                <div className="flex flex-wrap gap-3">
+                  <Button type="button" variant="outline" onClick={() => void approve(true)} disabled={approving !== null || !facebookReady} className="gap-2">
+                    <Send aria-hidden />
+                    {approving === "now" ? "Posting…" : "Post now instead"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => void unschedule()} disabled={approving !== null} className="gap-2">
+                    <CalendarX2 aria-hidden />
+                    {approving === "unschedule" ? "Unscheduling…" : "Unschedule"}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-[15px] text-muted-foreground">Only a church administrator can change when it posts.</p>
+              )}
+            </div>
+          ) : scheduled && dirtyRender ? (
+            <p className="text-[15px]">
+              This clip is scheduled. Saving these changes takes it off the schedule, so you&apos;ll watch and approve the new video.
+            </p>
+          ) : null}
+
+          {scheduled && !dirtyRender ? null : !renderReady ? (
+            alreadyPosted ? null : (
+              <p className="text-[15px] text-muted-foreground">Make the final video and watch it, then you can approve it.</p>
+            )
           ) : !detail.canPublish ? (
-            <p className="text-[15px] text-muted-foreground">Ask a church administrator to post this.</p>
+            alreadyPosted ? null : <p className="text-[15px] text-muted-foreground">Ask a church administrator to approve this clip.</p>
           ) : !facebookReady ? (
             <div className="flex flex-col items-start gap-3">
               <p className="text-[15px]">
                 {detail.facebook.needsReconnect
-                  ? "Your church's Facebook Page needs to be reconnected before you can post."
-                  : "Connect your church's Facebook Page to post clips."}
+                  ? "Your church's Facebook Page needs to be reconnected before clips can be approved."
+                  : "Connect your church's Facebook Page to approve and post clips."}
               </p>
-              <a
-                href={integrationConnectHref("facebook", pathname)}
-                className={buttonVariants({ variant: "outline" })}
-              >
+              <a href={integrationConnectHref("facebook", pathname)} className={buttonVariants({ variant: "outline" })}>
                 {detail.facebook.needsReconnect ? "Reconnect Facebook" : "Connect Facebook"}
               </a>
             </div>
           ) : alreadyPosted ? null : (
             <div className="flex flex-col gap-4">
-              {needsReview ? (
-                <p className="text-[15px]">Check the clip&apos;s start and end and save before posting.</p>
-              ) : null}
+              {needsReview ? <p className="text-[15px]">Check the clip&apos;s start and end and save before approving.</p> : null}
               <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-xl border border-border px-4 py-3 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
                 <input
                   type="checkbox"
@@ -737,7 +856,7 @@ export function ClipEditor({
                   className="mt-1 size-4 shrink-0"
                 />
                 <span className="text-[15px]">
-                  I watched the final video. It&apos;s OK to share publicly — no children or private moments shown without permission.
+                  I watched this video. It&apos;s OK to share publicly — no children or private moments shown without permission.
                 </span>
               </label>
               {postProblem ? (
@@ -745,20 +864,43 @@ export function ClipEditor({
                   {postProblem}
                 </p>
               ) : null}
-              <Button
-                type="button"
-                size="lg"
-                onClick={() => void post()}
-                disabled={!reviewed || posting || needsReview || validationProblems.length > 0}
-                className="w-fit gap-2"
-              >
-                <Send aria-hidden />
-                {posting
-                  ? "Posting…"
-                  : currentPost?.status === "failed"
-                    ? "Try again"
-                    : `Post to Facebook as ${detail.facebook.pageName ?? "your Page"}`}
-              </Button>
+              {approval === "posted" || currentPost?.status === "failed" ? (
+                // Already handed to Facebook once (or it failed there): post this video directly.
+                <Button
+                  type="button"
+                  size="lg"
+                  onClick={() => void post()}
+                  disabled={!reviewed || posting || needsReview || validationProblems.length > 0}
+                  className="w-fit gap-2"
+                >
+                  <Send aria-hidden />
+                  {posting ? "Posting…" : currentPost?.status === "failed" ? "Try again" : `Post to Facebook as ${detail.facebook.pageName ?? "your Page"}`}
+                </Button>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <Button
+                    type="button"
+                    size="lg"
+                    onClick={() => void approve(false)}
+                    disabled={!reviewed || approving !== null || needsReview || validationProblems.length > 0}
+                    className="gap-2"
+                  >
+                    <CheckCircle2 aria-hidden />
+                    {approving === "schedule" ? "Approving…" : "Approve & schedule"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="lg"
+                    variant="outline"
+                    onClick={() => void approve(true)}
+                    disabled={!reviewed || approving !== null || needsReview || validationProblems.length > 0}
+                    className="gap-2"
+                  >
+                    <Send aria-hidden />
+                    {approving === "now" ? "Posting…" : "Post now"}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </section>

@@ -307,7 +307,10 @@ test("every Live, Recordings and Reports route has its own skeleton with static 
   const pages = [
     ...walk("app/dashboard/live-streaming"),
     ...walk("app/dashboard/library"),
-  ].filter((file) => file.endsWith("page.tsx") && !file.includes("/media/"));
+  ]
+    .filter((file) => file.endsWith("page.tsx") && !file.includes("/media/"))
+    // A page that only redirects (an old address) renders nothing to load.
+    .filter((file) => !(/redirect\(/.test(read(file)) && !/return\s*\(?\s*</.test(read(file))));
   assert.ok(pages.length >= 8, `only ${pages.length} pages`);
   for (const page of pages) {
     const loading = page.replace(/page\.tsx$/, "loading.tsx");

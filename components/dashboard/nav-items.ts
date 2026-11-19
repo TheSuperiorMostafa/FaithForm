@@ -1,6 +1,8 @@
 import {
   Baby,
   BookOpen,
+  Captions,
+  Clapperboard,
   CircleHelp,
   ClipboardCheck,
   Globe,
@@ -141,6 +143,24 @@ export const navItems: NavItem[] = [
     href: "/dashboard/lesson-builder",
     icon: GraduationCap,
     features: ["sermon_builder"],
+    group: "weekly",
+  },
+  {
+    // Every service and uploaded video, transcribed with live progress.
+    label: "Transcripts",
+    shortLabel: "Transcripts",
+    href: "/dashboard/transcripts",
+    icon: Captions,
+    features: ["sermon_media"],
+    group: "weekly",
+  },
+  {
+    // Clips made from sermons: approve in one tap, they post on schedule.
+    label: "Clips",
+    shortLabel: "Clips",
+    href: "/dashboard/clips",
+    icon: Clapperboard,
+    features: ["sermon_media"],
     group: "weekly",
   },
   {

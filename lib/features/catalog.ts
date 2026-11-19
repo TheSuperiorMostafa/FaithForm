@@ -168,11 +168,11 @@ export const FEATURES: FeatureDefinition[] = [
     key: "sermon_media",
     label: "Transcripts & Clips",
     description:
-      "Sermon transcripts, short clips and lessons made from a recording. Shown on each finished recording under Live Stream, so Live Stream must be on too.",
-    href: "/dashboard/live-streaming/recordings",
+      "Sermon transcripts, short clips for Facebook and lessons made from a service or an uploaded video. Uses Live Stream recordings, so Live Stream must be on too.",
+    href: "/dashboard/transcripts",
     icon: Captions,
-    // A panel inside recording pages; Live Stream owns the routes.
-    routes: [],
+    // Its own Transcripts and Clips sections. Recording pages stay under Live Stream.
+    routes: ["/dashboard/transcripts", "/dashboard/clips"],
     defaultEnabled: false,
   },
   {

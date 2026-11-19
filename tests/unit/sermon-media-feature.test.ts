@@ -30,7 +30,7 @@ test("sermon media requires the church switch, the staff grant, and the server k
   assert.match(access, /featureAccessDenied\("sermon_media"\)/);
   assert.match(access, /process\.env\.SERMON_MEDIA_ENABLED === "1"/);
   assert.match(read("app/dashboard/live-streaming/recordings/[id]/page.tsx"), /access\?\.allowed\.includes\("sermon_media"\)/);
-  assert.match(read("app/dashboard/live-streaming/recordings/[id]/clips/[clipId]/page.tsx"), /pageFeatureBlocked\("sermon_media"\)/);
+  assert.match(read("app/dashboard/clips/[clipId]/page.tsx"), /pageFeatureBlocked\("sermon_media"\)/);
   const auto = read("lib/sermon-media/auto.ts");
   assert.equal((auto.match(/isChurchFeatureEnabled\((churchId|recording\.churchId), "sermon_media"\)/g) ?? []).length, 2);
 });

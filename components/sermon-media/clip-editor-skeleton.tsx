@@ -69,7 +69,10 @@ function Body() {
           <Skeleton className="min-h-12 w-52 rounded-[10px]" />
         </div>
         <div className={card}>
-          <span className="font-heading text-lg font-semibold">Post to Facebook</span>
+          <div className="space-y-1">
+            <span className="block font-heading text-lg font-semibold">Approve and post</span>
+            <SkeletonText lines={1} lastLineWidth="w-4/5" />
+          </div>
           <SkeletonText lines={1} lastLineWidth="w-3/4" />
         </div>
       </div>
