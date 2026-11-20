@@ -67,8 +67,11 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
       <StatusBadge tone="working">Upcoming</StatusBadge>
       <PageHeader title={title || "Upcoming service"} description={`${formatServiceTime(event.startsAt, timeZone)}. Changes apply to this service only.`} />
     </div>
-    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-      <div className="flex min-w-0 flex-col gap-6">
+    {/* One form across both columns. On wide screens the rarely-needed "More
+        options" sit under the preview, so the right side stays a short form
+        that ends in Save; on phones they follow the details as before. */}
+    <form onSubmit={e => { e.preventDefault(); save(); }} className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
+      <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
         <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl bg-muted">
           {preview ? <>
             {/* eslint-disable-next-line @next/next/no-img-element -- church-supplied artwork */}
@@ -77,30 +80,28 @@ export function UpcomingServiceEditor({ event, series, timeZone, appEnabled, set
         </div>
         <p className="text-[15px] text-muted-foreground">The video preview will be available in Recordings after this service ends.</p>
       </div>
-      <form onSubmit={e => { e.preventDefault(); save(); }} className="flex min-w-0 flex-col gap-6">
-        <section aria-labelledby="service-details-heading" className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
-          <div className="flex items-start gap-3">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent"><CalendarDays className="size-5" aria-hidden /></span>
-            <div><h2 id="service-details-heading" className="font-heading text-xl font-semibold">Service details</h2><p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">Prepare the same details and artwork used by your recording.</p></div>
-          </div>
-          <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">Service details</legend>
-            <RecordingPrimaryFields idPrefix="upcoming" title={title} onTitleChange={setTitle} seriesId={seriesId} onSeriesChange={setSeriesId} newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} titleMaxLength={120} />
-            <RecordingVisibilityChoice checked={toWebsite} onChange={setToWebsite} icon={<Globe className="size-5" aria-hidden />} label="Show it on your church website" hint="Anyone can watch this service on your church's watch page." />
-            {appEnabled ? <RecordingVisibilityChoice checked={toApp} onChange={setToApp} icon={<Smartphone className="size-5" aria-hidden />} label="Show it in the FaithForm app" hint="Your recording keeps this choice when you publish it." /> : null}
-          </fieldset>
-          <ItemArtworkPanel target={{ kind: "service", id: event.id }} title={title} artwork={artwork} seriesArtwork={selectedSeries?.artwork ?? EMPTY_ARTWORK} seriesName={selectedSeries?.name ?? null} seriesSlug={selectedSeries?.slug ?? null} />
-          <AdvancedSection title="More options" description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}>
-            <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">More options</legend>
-              {appEnabled && toApp ? <>
-                <div className="flex flex-col gap-2"><Label htmlFor="upcoming-audience">Who can watch it in the app</Label><Select id="upcoming-audience" value={audience === "members" ? "followers" : audience} onChange={e => setAudience(e.target.value as typeof audience)}><option value="public">Everyone</option><option value="followers">People who follow your church</option></Select></div>
-                <RecordingVisibilityChoice checked={notify} onChange={setNotify} label="Let members know it's available" hint="Used when the recording is published." />
-              </> : null}
-              <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
-            </fieldset>
-          </AdvancedSection>
-          <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col gap-3 rounded-b-2xl border-t border-border bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image.</p></div>
-        </section>
-      </form>
-    </div>
+      <section aria-labelledby="service-details-heading" className="flex min-w-0 flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card lg:col-start-2 lg:row-span-2 lg:row-start-1 dark:shadow-none">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent"><CalendarDays className="size-5" aria-hidden /></span>
+          <div><h2 id="service-details-heading" className="font-heading text-xl font-semibold">Service details</h2><p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">Prepare the same details and artwork used by your recording.</p></div>
+        </div>
+        <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">Service details</legend>
+          <RecordingPrimaryFields idPrefix="upcoming" title={title} onTitleChange={setTitle} seriesId={seriesId} onSeriesChange={setSeriesId} newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} titleMaxLength={120} />
+          <RecordingVisibilityChoice checked={toWebsite} onChange={setToWebsite} icon={<Globe className="size-5" aria-hidden />} label="Show it on your church website" hint="Anyone can watch this service on your church's watch page." />
+          {appEnabled ? <RecordingVisibilityChoice checked={toApp} onChange={setToApp} icon={<Smartphone className="size-5" aria-hidden />} label="Show it in the FaithForm app" hint="Your recording keeps this choice when you publish it." /> : null}
+        </fieldset>
+        <ItemArtworkPanel target={{ kind: "service", id: event.id }} title={title} artwork={artwork} seriesArtwork={selectedSeries?.artwork ?? EMPTY_ARTWORK} seriesName={selectedSeries?.name ?? null} seriesSlug={selectedSeries?.slug ?? null} />
+        <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col gap-3 rounded-b-2xl border-t border-border bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5"><Button type="submit" size="lg" disabled={pending} className="w-full gap-2">{pending ? <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden /> : null}{pending ? "Saving…" : "Save service details"}</Button><p className="text-sm text-muted-foreground">Artwork saves when you upload or remove an image. More options save with this button.</p></div>
+      </section>
+      <AdvancedSection className="min-w-0 lg:col-start-1 lg:row-start-2" title="More options" description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}>
+        <fieldset disabled={pending} className="flex min-w-0 flex-col gap-5"><legend className="sr-only">More options</legend>
+          {appEnabled && toApp ? <>
+            <div className="flex flex-col gap-2"><Label htmlFor="upcoming-audience">Who can watch it in the app</Label><Select id="upcoming-audience" value={audience === "members" ? "followers" : audience} onChange={e => setAudience(e.target.value as typeof audience)}><option value="public">Everyone</option><option value="followers">People who follow your church</option></Select></div>
+            <RecordingVisibilityChoice checked={notify} onChange={setNotify} label="Let members know it's available" hint="Used when the recording is published." />
+          </> : null}
+          <RecordingExtraFields idPrefix="upcoming" speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription} chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
+        </fieldset>
+      </AdvancedSection>
+    </form>
   </div>;
 }

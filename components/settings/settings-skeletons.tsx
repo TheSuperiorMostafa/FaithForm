@@ -351,7 +351,7 @@ export function SettingsTabSkeleton({
   tab,
   bare = false,
   documentsAccess,
-  notificationFeatures = ["attendance", "checkin"],
+  notificationFeatures = ["attendance", "checkin", "website"],
 }: {
   tab: ResolvedSettingsTab;
   /** Set when an outer SkeletonContainer already announces the loading state. */

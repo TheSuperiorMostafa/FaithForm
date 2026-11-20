@@ -13,8 +13,12 @@ test("Transcripts & Clips is a church feature that ships off; every other featur
   for (const other of FEATURES.filter(f => f.key !== "sermon_media")) {
     assert.equal(featureDefaultEnabled(other.key), true, other.key);
   }
-  // It owns no route: recording pages stay under Live Stream.
+  // Recording pages stay under Live Stream; only the Clips view under Recordings is its own.
   assert.equal(featureKeyForPath("/dashboard/live-streaming/recordings/abc/clips/def"), "live_stream");
+  assert.equal(featureKeyForPath("/dashboard/live-streaming/recordings/abc"), "live_stream");
+  assert.equal(featureKeyForPath("/dashboard/live-streaming/recordings/clips"), "sermon_media");
+  assert.equal(featureKeyForPath("/dashboard/live-streaming/recordings/clips/abc"), "sermon_media");
+  assert.equal(feature.href, "/dashboard/live-streaming/recordings/clips");
 });
 
 test("missing or unreadable switches fall back to the catalog default, not to on", () => {
@@ -30,7 +34,19 @@ test("sermon media requires the church switch, the staff grant, and the server k
   assert.match(access, /featureAccessDenied\("sermon_media"\)/);
   assert.match(access, /process\.env\.SERMON_MEDIA_ENABLED === "1"/);
   assert.match(read("app/dashboard/live-streaming/recordings/[id]/page.tsx"), /access\?\.allowed\.includes\("sermon_media"\)/);
-  assert.match(read("app/dashboard/clips/[clipId]/page.tsx"), /pageFeatureBlocked\("sermon_media"\)/);
+  for (const page of [
+    "app/dashboard/live-streaming/recordings/clips/page.tsx",
+    "app/dashboard/live-streaming/recordings/clips/[clipId]/page.tsx",
+    "app/dashboard/live-streaming/recordings/[id]/transcript/page.tsx",
+  ]) {
+    assert.match(read(page), /pageFeatureBlocked\("sermon_media"\)/, page);
+  }
+  for (const layout of [
+    "app/dashboard/live-streaming/recordings/clips/layout.tsx",
+    "app/dashboard/live-streaming/recordings/[id]/transcript/layout.tsx",
+  ]) {
+    assert.match(read(layout), /<FeatureGate feature="sermon_media">/, layout);
+  }
   const auto = read("lib/sermon-media/auto.ts");
   assert.equal((auto.match(/isChurchFeatureEnabled\((churchId|recording\.churchId), "sermon_media"\)/g) ?? []).length, 2);
 });

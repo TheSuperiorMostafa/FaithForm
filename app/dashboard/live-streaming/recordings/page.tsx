@@ -22,6 +22,7 @@ import {
 } from "@/lib/stream/recording-status";
 import { loadRecordingStatuses } from "@/lib/stream/recording-status-server";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
+import { getSermonMediaSettings } from "@/lib/sermon-media/access";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,12 @@ export default async function RecordingsPage({
   const filter = parseRecordingFilter(query.show);
   const search = (Array.isArray(query.q) ? query.q[0] : query.q)?.trim() ?? "";
   const upload = auth.isAdmin ? <UploadRecording timeZone={auth.churchTimezone} /> : null;
+  // Clips made from these recordings sit beside the filters (Transcripts & Clips).
+  const [access, sermonMedia] = await Promise.all([
+    getFeatureAccess(),
+    getSermonMediaSettings(auth.churchId).catch(() => null),
+  ]);
+  const showClips = Boolean(sermonMedia?.enabled) && Boolean(access?.allowed.includes("sermon_media"));
 
   if (filter === "series") {
     let library: Awaited<ReturnType<typeof loadLibraryBrowse>>;
@@ -56,7 +63,7 @@ export default async function RecordingsPage({
       return (
         <div className="flex w-full flex-col gap-6">
           {upload}
-          <RecordingFilters active="series" />
+          <RecordingFilters active="series" showClips={showClips} />
           <RecordingsLoadError />
         </div>
       );
@@ -64,7 +71,7 @@ export default async function RecordingsPage({
     return (
       <div className="flex w-full flex-col gap-6">
         {upload}
-        <RecordingFilters active="series" />
+        <RecordingFilters active="series" showClips={showClips} />
         <p className="text-base text-muted-foreground">
           Browse by series, topic and speaker. Give a series its artwork once, and every message in it uses it.
         </p>
@@ -89,7 +96,7 @@ export default async function RecordingsPage({
     return (
       <div className="flex w-full flex-col gap-6">
         {upload}
-        <RecordingFilters active={filter} search={search} />
+        <RecordingFilters active={filter} search={search} showClips={showClips} />
         <RecordingsLoadError />
       </div>
     );
@@ -101,13 +108,11 @@ export default async function RecordingsPage({
     all: matching.length,
     published: matching.filter((recording) => recording.phase.phase === "published").length,
   };
-  const access = await getFeatureAccess();
-
   return (
     <div className="flex w-full flex-col gap-6">
       {upload}
       <AutoRefresh active={recordings.some((recording) => isStillChanging(recording.phase.phase))} />
-      <RecordingFilters active={filter} counts={counts} search={search} />
+      <RecordingFilters active={filter} counts={counts} search={search} showClips={showClips} />
       <RecordingList
         recordings={filterRecordings(matching, filter)}
         filter={filter}

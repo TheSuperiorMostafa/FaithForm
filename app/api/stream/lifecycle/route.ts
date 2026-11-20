@@ -34,9 +34,11 @@ export async function POST(request: Request) {
     await setPreviewIngestActive(parsedPath.churchId, true);
     await onIngestStarted(parsedPath.churchId);
   } else if (body.event === "unpublish") {
-    // Only the flag. The session stays live until an operator ends it —
-    // `enableAutoStop` is off on YouTube so a momentary encoder gap cannot end a
-    // service, and ending it here would reintroduce exactly that.
+    // Only the flag (and when it stopped). The service is not ended here: a
+    // momentary encoder gap must not end it, which is also why `enableAutoStop`
+    // is off on YouTube. If the video has not come back within
+    // ENCODER_STOP_GRACE_MS, the status poll or the reconcile cron ends the
+    // service exactly as End service does — see `lib/stream/video-stop.ts`.
     await setPreviewIngestActive(parsedPath.churchId, false);
   }
 

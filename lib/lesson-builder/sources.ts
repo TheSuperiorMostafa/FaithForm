@@ -3,8 +3,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
- * Which of these lessons were made from a recording, for the "From a
- * recording" note on the Lessons list. Church-scoped; a deleted recording no
+ * Which of these lessons were made from a recording, for the "From a past
+ * sermon" note on the Lessons list. Church-scoped; a deleted recording no
  * longer counts. A failed lookup only hides the note.
  */
 export async function listLessonIdsFromRecordings(

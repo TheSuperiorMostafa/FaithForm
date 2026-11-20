@@ -118,10 +118,18 @@ export function PortalDashboard({
       ? loadStripe(publishableKey, { stripeAccount: stripeAccountId })
       : null;
 
-  const activeSubscriptions = subscriptions.filter(
+  // What a confirmed action changed, shown at once instead of after a reload.
+  const [subscriptionOverrides, setSubscriptionOverrides] = useState<
+    Record<string, Partial<Pick<Subscription, "status" | "pausedAt" | "amountCents">>>
+  >({});
+  const shownSubscriptions = subscriptions.map((s) =>
+    subscriptionOverrides[s.id] ? { ...s, ...subscriptionOverrides[s.id] } : s,
+  );
+
+  const activeSubscriptions = shownSubscriptions.filter(
     (s) => recurringState(s.status, s.pausedAt) !== "cancelled",
   );
-  const inactiveSubscriptions = subscriptions.filter(
+  const inactiveSubscriptions = shownSubscriptions.filter(
     (s) => recurringState(s.status, s.pausedAt) === "cancelled",
   );
   const hasFailedPayment = activeSubscriptions.some(
@@ -143,6 +151,15 @@ export function PortalDashboard({
           body: JSON.stringify({ slug, subscriptionId: subId, action, newAmountCents }),
         });
         if (response.ok) {
+          const change: Partial<Pick<Subscription, "status" | "pausedAt" | "amountCents">> =
+            action === "cancel"
+              ? { status: "canceled", pausedAt: null }
+              : action === "pause"
+                ? { pausedAt: new Date().toISOString() }
+                : action === "resume"
+                  ? { pausedAt: null }
+                  : { amountCents: newAmountCents };
+          setSubscriptionOverrides((prev) => ({ ...prev, [subId]: { ...prev[subId], ...change } }));
           if (action === "update_amount") setAmountEdits((prev) => ({ ...prev, [subId]: "" }));
           router.refresh();
           return;

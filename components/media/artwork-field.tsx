@@ -14,6 +14,14 @@ import {
 import { ImageLibraryDialog, type LibraryPick } from "@/components/media/image-library-dialog";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { ARTWORK_SPECS, type ArtworkCrop } from "@/lib/media/artwork";
 import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
@@ -61,6 +69,7 @@ function ArtworkEditor({
   const [notice, setNotice] = useState<string | null>(null);
   const [applyAll, setApplyAll] = useState(false);
   const [libraryTab, setLibraryTab] = useState<"library" | "stock" | null>(null);
+  const [managing, setManaging] = useState(false);
   const operation = useRef<"preparing" | "cropping" | "uploading" | "confirming" | "clearing" | null>(null);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -142,33 +151,6 @@ function ArtworkEditor({
     </label>
   );
 
-  const sourceButtons = (
-    <div className="grid grid-cols-2 gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled || busy}
-        onClick={() => setLibraryTab("library")}
-        className="min-w-0 px-2"
-      >
-        <Images className="size-4" aria-hidden />
-        Library
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={disabled || busy}
-        onClick={() => setLibraryTab("stock")}
-        className="min-w-0 px-2"
-      >
-        <ImageIcon className="size-4" aria-hidden />
-        Stock
-      </Button>
-    </div>
-  );
-
   async function accept(file: File) {
     if (disabled || operation.current) return;
     operation.current = "preparing";
@@ -239,73 +221,50 @@ function ArtworkEditor({
     });
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-2" aria-busy={busy} data-artwork-field={crop}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold">{spec.label}</p>
-        {isInherited ? (
-          <span className="text-sm text-muted-foreground">From series</span>
-        ) : null}
-      </div>
+  /** Closes the manage dialog first, so the picker or cropper is the only one open. */
+  const fromDialog = (next: () => void) => () => {
+    setManaging(false);
+    next();
+  };
 
-      {showing ? (
-        <div className="flex min-w-0 flex-col gap-2">
-          {/* eslint-disable-next-line @next/next/no-img-element -- church-supplied storage URL */}
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5" aria-busy={busy} data-artwork-field={crop}>
+      {/* A small thumbnail at the image's own shape; clicking it opens the
+          full-size view with Upload, Library, Stock and Remove. */}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setManaging(true)}
+        aria-label={showing ? `${spec.label} image. View or change it` : `${spec.label} image. Add one`}
+        className={cn(
+          "relative flex h-24 w-full items-center justify-center overflow-hidden rounded-lg border bg-muted/30 p-1.5 transition-colors hover:border-accent hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+          showing ? "border-border" : "border-dashed border-border",
+        )}
+      >
+        {showing ? (
+          // eslint-disable-next-line @next/next/no-img-element -- church-supplied storage URL
           <img
             src={showing}
             alt=""
-            className={cn(
-              "w-full rounded-lg border border-border bg-background object-cover",
-              isInherited && "opacity-60",
-            )}
+            className={cn("max-h-full max-w-full rounded object-cover", isInherited && "opacity-60")}
             style={{ aspectRatio: String(spec.ratio) }}
           />
-          <div className="flex min-w-0 flex-col gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={disabled || busy}
-              onClick={() => inputRef.current?.click()}
-              className="w-full min-w-0 whitespace-normal px-3 text-center"
-            >
-              {isInherited ? "Upload its own image" : "Upload a new image"}
-            </Button>
-            {sourceButtons}
-            {ownImage ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={disabled || busy}
-                onClick={() => void clear()}
-                className="w-full min-w-0 gap-2 whitespace-normal px-3 text-center"
-              >
-                <Trash2 className="size-4" aria-hidden />
-                {inherited ? "Use series" : "Remove"}
-              </Button>
-            ) : null}
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          disabled={disabled || busy}
-          onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-muted/20 px-3 py-6 text-center transition-colors hover:border-accent hover:bg-accent/5 disabled:opacity-60"
-          style={{ aspectRatio: String(spec.ratio) }}
-        >
-          {busy ? (
-            <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
-          ) : (
+        ) : (
+          <span className="flex flex-col items-center gap-1 text-sm font-medium text-primary dark:text-accent">
             <ImageUp className="size-5 text-muted-foreground" aria-hidden />
-          )}
-          <span className="text-sm font-medium text-primary dark:text-accent">
-            {busy ? (preparing ? "Preparing…" : "Uploading…") : "Upload artwork"}
+            Add
           </span>
-        </button>
-      )}
-      {!showing ? sourceButtons : null}
-
-      <p className="text-sm leading-snug text-muted-foreground">{spec.hint}</p>
+        )}
+        {busy ? (
+          <span className="absolute inset-0 flex items-center justify-center bg-background/70" aria-hidden>
+            <Loader2 className="size-5 text-muted-foreground motion-safe:animate-spin" />
+          </span>
+        ) : null}
+      </button>
+      <p className="flex min-w-0 items-baseline justify-between gap-1 text-sm">
+        <span className="truncate font-semibold">{spec.label}</span>
+        {isInherited ? <span className="shrink-0 text-muted-foreground">Series</span> : null}
+      </p>
 
       <input
         ref={inputRef}
@@ -320,6 +279,74 @@ function ArtworkEditor({
           if (file) void accept(file);
         }}
       />
+
+      <Dialog open={managing} onOpenChange={setManaging}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader className="pr-16">
+            <DialogTitle>{spec.label} image</DialogTitle>
+            <DialogDescription>
+              {spec.hint}
+              {isInherited ? " This is your series image; add one here only if this message needs its own." : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-0 flex-auto flex-col items-center gap-3 overflow-y-auto px-6 py-5">
+            {showing ? (
+              // eslint-disable-next-line @next/next/no-img-element -- church-supplied storage URL
+              <img
+                src={showing}
+                alt={`${spec.label} image`}
+                className="max-h-[50dvh] w-auto max-w-full rounded-lg border border-border bg-background object-contain"
+                style={{ aspectRatio: String(spec.ratio) }}
+              />
+            ) : (
+              <p className="py-6 text-center text-[15px] text-muted-foreground">No image yet.</p>
+            )}
+          </div>
+          <DialogFooter className="sm:flex-wrap">
+            {ownImage ? (
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={disabled || busy}
+                onClick={fromDialog(() => void clear())}
+                className="gap-2 sm:mr-auto"
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {inherited ? "Use series image" : "Remove"}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || busy}
+              onClick={fromDialog(() => setLibraryTab("library"))}
+              className="gap-2"
+            >
+              <Images className="size-4" aria-hidden />
+              Library
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || busy}
+              onClick={fromDialog(() => setLibraryTab("stock"))}
+              className="gap-2"
+            >
+              <ImageIcon className="size-4" aria-hidden />
+              Stock
+            </Button>
+            <Button
+              type="button"
+              disabled={disabled || busy}
+              onClick={fromDialog(() => inputRef.current?.click())}
+              className="gap-2"
+            >
+              <ImageUp className="size-4" aria-hidden />
+              {showing ? (isInherited ? "Upload its own image" : "Upload a new image") : "Upload an image"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {cropping ? (
         <ImageCropper
@@ -345,8 +372,8 @@ function ArtworkEditor({
       />
 
       {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-      {busy && showing ? <p role="status" className="text-sm text-muted-foreground">{confirming ? "Waiting for your choice…" : preparing ? "Preparing image…" : "Saving image…"}</p> : null}
-      {notice ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
+      {busy ? <p role="status" className="text-sm text-muted-foreground">{confirming ? "Waiting for your choice…" : preparing ? "Preparing image…" : "Saving image…"}</p> : null}
+      {notice && !busy ? <p role="status" className="text-sm text-muted-foreground">{notice}</p> : null}
     </div>
   );
 }

@@ -81,7 +81,7 @@ function ListBody() {
     <dl className="g-summary">{["Active groups", "People in groups", "Group leaders"].map(t => <div key={t}><dt>{t}</dt><dd><Skeleton className="mt-1 h-[30px] w-14" /></dd></div>)}</dl>
     <div className="g-toolbar">
       <div className="g-segment">{["Active", "Waiting to join", "Archived"].map((t, i) => <button type="button" key={t} disabled className={i === 0 ? "is-active" : undefined}>{t} <Skeleton className="h-4 w-4" /></button>)}</div>
-      <div className="flex flex-1 flex-wrap justify-end gap-3"><label className="g-search"><Search aria-hidden /><input type="search" disabled placeholder="Search groups or leaders" aria-hidden tabIndex={-1} /></label><label className="g-select-inline"><select disabled aria-hidden tabIndex={-1}><option>All kinds of groups</option></select></label></div>
+      <div className="flex flex-1 flex-wrap justify-end gap-3"><label className="g-search"><Search aria-hidden /><input type="search" disabled placeholder="Search groups or leaders" aria-hidden tabIndex={-1} /></label><label className="g-select-inline"><select disabled aria-hidden tabIndex={-1}><option>All Groups</option></select></label></div>
     </div>
     <ul className="g-grid">{Array.from({ length: 6 }).map((_, i) => <li key={i}><div className="g-group-card">
       <div className="g-card-head"><Skeleton className="size-16 rounded-[19px]" /><div className="flex-1 space-y-2"><Skeleton className="h-6 w-40" /><Skeleton className="h-6 w-24 rounded-full" /></div></div>

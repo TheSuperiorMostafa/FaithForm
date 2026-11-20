@@ -91,7 +91,7 @@
     },
     {
       "path": "/api/webhooks/notifications/dispatch",
-      "schedule": "*/2 * * * *"
+      "schedule": "*/1 * * * *"
     },
     {
       "path": "/api/webhooks/attendance/generate",

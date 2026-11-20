@@ -29,6 +29,7 @@ import { formatLength, formatTime } from "@/components/sermon-media/time";
 import { formatPostTime, scheduledMessage } from "@/components/clips/format";
 import { integrationConnectHref } from "@/lib/integrations/connect-href";
 import { cn } from "@/lib/utils";
+import { CLIPS_HREF } from "@/lib/sermon-media/hrefs";
 
 const POLL_MS = 5000;
 const REEL_MIN_SEC = 3;
@@ -124,8 +125,8 @@ export function ClipEditor({
   const postLock = useRef(false);
   const dirtyRef = useRef(false);
 
-  const backHref = backHrefProp ?? "/dashboard/clips";
-  const backLabel = backHref === "/dashboard/clips" ? "Back to Clips" : "Back to the recording";
+  const backHref = backHrefProp ?? CLIPS_HREF;
+  const backLabel = backHref === CLIPS_HREF ? "Back to Clips" : "Back to the recording";
 
   const load = useCallback(
     async (reset = false) => {

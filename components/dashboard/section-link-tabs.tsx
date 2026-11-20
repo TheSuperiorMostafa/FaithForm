@@ -19,6 +19,8 @@ export type SectionLinkTab = {
   match?: "exact" | "prefix";
   /** Other routes that should also light up this tab (prefix match). */
   also?: string[];
+  /** Something new waiting here, such as unread messages: shown as a red count. */
+  badge?: number;
 };
 
 type SectionLinkTabsProps = {
@@ -70,6 +72,12 @@ export function SectionLinkTabs({ tabs, className, label = "In this section" }: 
             )}
           >
             {tab.label}
+            {tab.badge ? (
+              <span className="ml-2 inline-flex min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-xs font-bold leading-5 text-white">
+                {tab.badge > 99 ? "99+" : tab.badge}
+                <span className="sr-only"> new</span>
+              </span>
+            ) : null}
           </Link>
         );
       })}

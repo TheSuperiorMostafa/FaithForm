@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { mediaPlaybackConfigured } from "@/lib/media/v1/playback-capability";
-import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
+import { getPreviewIngestEvidence } from "@/lib/stream/preview-ingest";
 import { advanceRecording } from "@/lib/stream/recording-lifecycle";
 import {
   describeStreamHealth,
@@ -22,6 +22,7 @@ import {
   signRecordingPlaybackToken,
 } from "@/lib/stream/recording-playback";
 import { getActiveStreamSession, type StreamSession } from "@/lib/stream/sessions";
+import { decideVideoStop, videoEvidence, type VideoStopReason } from "@/lib/stream/video-stop";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -72,6 +73,11 @@ export type BroadcastOverview = {
     } | null;
   };
   recordingIndicator: RecordingIndicator;
+  /**
+   * Live, but the video stopped: when FaithForm ends the service by itself if
+   * the video does not come back. `due` means it should end now.
+   */
+  autoEnd: { reason: VideoStopReason; endsAt: string; due: boolean } | null;
   /** The recording of the current or most recent broadcast. */
   recording: StaffRecording | null;
   /** A player URL for the dashboard preview of that recording, when it has one. */
@@ -97,15 +103,25 @@ export async function getBroadcastOverview(
   const now = options.now ?? Date.now();
   const deps = productionLifecycleDeps(db);
 
-  const [session, previewActive, ingest] = await Promise.all([
+  const [session, preview, ingest] = await Promise.all([
     getActiveStreamSession(churchId, db),
-    isPreviewIngestActive(churchId, db),
+    getPreviewIngestEvidence(churchId, db, now),
     deps.repo.getIngestStatus(churchId),
   ]);
 
-  const ingestFresh =
-    ingest !== null && now - Date.parse(ingest.heartbeatAt) <= RELAY_HEARTBEAT_TTL_MS && ingest.publishing;
-  const videoArriving = previewActive || ingestFresh;
+  const previewActive = preview.active;
+  const evidence = videoEvidence({ preview, ingest, ingestTtlMs: RELAY_HEARTBEAT_TTL_MS, now });
+  const videoArriving = evidence.videoArriving;
+  const stop = session
+    ? decideVideoStop({
+        sessionStatus: session.status,
+        liveSince: session.liveStartedAt ?? session.ingestStartedAt,
+        ...evidence,
+        now,
+      })
+    : ({ action: "keep" } as const);
+  const autoEnd =
+    stop.action === "keep" ? null : { reason: stop.reason, endsAt: stop.endsAt, due: stop.action === "end" };
 
   // The broadcast to talk about: the one on air, or the one that just ended.
   let sessionForRecording: { id: string; createdAt: string; endedAt: string | null } | null = session
@@ -256,6 +272,7 @@ export async function getBroadcastOverview(
         : null,
     },
     recordingIndicator,
+    autoEnd,
     recording,
     recordingPreviewUrl,
     readiness: {

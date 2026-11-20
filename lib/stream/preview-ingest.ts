@@ -41,6 +41,9 @@ export async function setPreviewIngestActive(
           // Dropped from the document when inactive — `undefined` does not
           // survive serialization, which is the intent.
           preview_ingest_at: active ? new Date().toISOString() : undefined,
+          // When the streaming software stopped. A live service ends once this
+          // is older than the reconnect grace (see `lib/stream/video-stop.ts`).
+          preview_ingest_stopped_at: active ? undefined : new Date().toISOString(),
         },
       })
       .eq("church_id", churchId)
@@ -64,24 +67,41 @@ export async function setPreviewIngestActive(
  */
 const HEARTBEAT_TTL_MS = 90_000;
 
-export async function isPreviewIngestActive(
+export type PreviewIngestEvidence = {
+  /** An encoder is publishing right now (a heartbeat inside the TTL). */
+  active: boolean;
+  /** The newest publish heartbeat, while the relay still reports publishing. */
+  lastBeatAt: string | null;
+  /** When the relay last reported that the encoder stopped publishing. */
+  stoppedAt: string | null;
+};
+
+export async function getPreviewIngestEvidence(
   churchId: string,
   supabase?: SupabaseClient,
-): Promise<boolean> {
+  now = Date.now(),
+): Promise<PreviewIngestEvidence> {
   const integration = await getIntegration(churchId, "stream", supabase);
-  if (!integration) return false;
+  if (!integration) return { active: false, lastBeatAt: null, stoppedAt: null };
 
   const metadata = (integration.metadata ?? {}) as {
     preview_ingest_active?: boolean;
     preview_ingest_at?: string;
+    preview_ingest_stopped_at?: string;
   };
 
-  if (!metadata.preview_ingest_active) return false;
+  const lastBeatAt = metadata.preview_ingest_active ? (metadata.preview_ingest_at ?? null) : null;
+  const beatAt = lastBeatAt ? Date.parse(lastBeatAt) : NaN;
+  return {
+    active: !Number.isNaN(beatAt) && now - beatAt < HEARTBEAT_TTL_MS,
+    lastBeatAt: Number.isNaN(beatAt) ? null : lastBeatAt,
+    stoppedAt: metadata.preview_ingest_stopped_at ?? null,
+  };
+}
 
-  const beatAt = metadata.preview_ingest_at
-    ? Date.parse(metadata.preview_ingest_at)
-    : NaN;
-  if (Number.isNaN(beatAt)) return false;
-
-  return Date.now() - beatAt < HEARTBEAT_TTL_MS;
+export async function isPreviewIngestActive(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  return (await getPreviewIngestEvidence(churchId, supabase)).active;
 }

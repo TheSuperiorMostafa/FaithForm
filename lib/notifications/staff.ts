@@ -64,12 +64,13 @@ export async function dispatchStaffNotifications(client?: SupabaseClient) {
       ]);
       if (membership.error || preference.error || state.error) throw new Error("staff_notification_recipient_unavailable");
       const definition = STAFF_NOTIFICATION_EVENTS.find(event => event.id === job.event)!;
-      const current = staffPreferencesSchema.safeParse(preference.data);
+      // Saved choices from before an event existed simply have it switched off.
+      const current = staffPreferencesSchema.safeParse(preference.data ? { phone: preference.data.phone, events: { ...emptyStaffPreferences().events, ...preference.data.events } } : null);
       const hasAccess = membership.data && state.data?.enabled !== false && (membership.data.role === "admin" || parseFeatureKeys(membership.data.feature_permissions).includes(definition.feature));
       const fresh = Date.now() - new Date(job.created_at).getTime() < 86_400_000;
       if (hasAccess && fresh && current.success && current.data.events[job.event][job.channel]) {
         const href = absoluteAppPath(job.href);
-        const body = job.event === "attendance_completed" ? "Your team saved weekly attendance. Open FaithForm to review it." : job.event === "attendance_documents" ? "An attendance report is ready. Open Documents in FaithForm to download it." : "The Kids desk requested a guardian. Open FaithForm to review the alert.";
+        const body = job.event === "attendance_completed" ? "Your team saved weekly attendance. Open FaithForm to review it." : job.event === "attendance_documents" ? "An attendance report is ready. Open Documents in FaithForm to download it." : job.event === "website_inbox" ? "Someone sent a message through your church website. Open FaithForm to read and reply." : "The Kids desk requested a guardian. Open FaithForm to review the alert.";
         if (job.channel === "email") {
           const user = await admin.auth.admin.getUserById(job.user_id);
           if (user.error) throw new Error("staff_notification_recipient_unavailable");

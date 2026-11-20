@@ -13,7 +13,8 @@ import {
   NEW_LESSON_DESCRIPTION,
   NEW_LESSON_TITLE,
 } from "@/lib/lesson-builder/page-copy";
-import { getChurchAISettings, listSeries } from "@/lib/queries/sermons";
+import { listPastSermonsForLessons } from "@/lib/lesson-builder/past-sermons";
+import { getChurchAISettings } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,10 @@ export default async function NewLessonPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const [settings, translationOptions, series] = await Promise.all([
+  const [settings, translationOptions, pastSermons] = await Promise.all([
     getChurchAISettings(auth.churchId),
     getCuratedTranslations(),
-    listSeries(auth.churchId),
+    listPastSermonsForLessons(auth.churchId, auth.churchTimezone || "America/New_York"),
   ]);
   const defaultTranslation = await getDefaultTranslationId(settings?.default_translation);
 
@@ -37,7 +38,8 @@ export default async function NewLessonPage() {
       <NewLessonForm
         translationOptions={translationOptions}
         defaultTranslation={defaultTranslation}
-        series={series.map((s) => ({ id: s.id, title: s.title }))}
+        pastSermons={pastSermons.sermons}
+        pastSermonsAvailable={pastSermons.available}
       />
     </div>
   );

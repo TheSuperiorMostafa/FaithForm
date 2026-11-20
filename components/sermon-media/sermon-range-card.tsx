@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Pencil, Play } from "lucide-react";
+import { Pencil, Play } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { TimeField } from "@/components/sermon-media/time-field";
 import { apiRequest, recordingApi, type RangeEvidence, type SermonMediaState } from "@/components/sermon-media/api";
 import { formatLength, formatTime } from "@/components/sermon-media/time";
@@ -21,20 +20,14 @@ const EVIDENCE_LABEL: Record<RangeEvidence["kind"], string> = {
   music_after: "Music after the sermon",
 };
 
-function confidenceWords(confidence: number | null): string {
-  if (confidence === null) return "Please check it before you confirm.";
-  if (confidence >= 0.8) return "We're fairly sure. Play the start and end to check.";
-  if (confidence >= 0.6) return "Please play the start and end to check it.";
-  return "We're not sure. Please check it carefully.";
-}
-
 const MIN_SERMON_SEC = 60;
 
 /**
- * Where the sermon starts and ends. Shows FaithForm's suggestion with the
- * reasons behind it, lets staff adjust it with typed times, nudges or the
- * player's position, and confirms it. A confirmed range unlocks the lesson and
- * clips; changing it later marks what was made from the old times for review.
+ * Where the sermon starts and ends. FaithForm finds it by itself and uses it
+ * straight away (or the whole recording when it can't tell); nothing waits
+ * for anyone to confirm it. Staff can still move it with typed times, the
+ * player's position or a preview, and moving it marks lessons and clips made
+ * from the old times for review.
  */
 export function SermonRangeCard({
   recordingId,
@@ -55,7 +48,7 @@ export function SermonRangeCard({
   transcriptReady: boolean;
   durationSec: number | null;
   currentUserId: string;
-  /** Lessons and clips already made from the confirmed range. */
+  /** Lessons and clips already made from the current range. */
   dependents: number;
   canEdit: boolean;
   getCurrentTime: () => number;
@@ -66,17 +59,21 @@ export function SermonRangeCard({
 }) {
   const { suggestion, confirmed } = state;
   const [changing, setChanging] = useState(false);
-  const initial = () => ({
-    start: confirmed?.startSec ?? suggestion.startSec ?? 0,
-    end: confirmed?.endSec ?? suggestion.endSec ?? durationSec ?? 0,
-  });
+  // What FaithForm uses: the saved range, else what it detected, else the whole recording.
+  const detected =
+    suggestion.startSec !== null && suggestion.endSec !== null && suggestion.endSec > suggestion.startSec
+      ? { startSec: suggestion.startSec, endSec: suggestion.endSec }
+      : null;
+  const whole = durationSec && durationSec > 0 ? { startSec: 0, endSec: durationSec } : null;
+  const current = confirmed ?? detected ?? whole;
+  const initial = () => ({ start: current?.startSec ?? 0, end: current?.endSec ?? 0 });
   const [start, setStart] = useState(() => initial().start);
   const [end, setEnd] = useState(() => initial().end);
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<{ message: string; stale: boolean } | null>(null);
 
   // Follow the server when nobody is editing (a new suggestion, a teammate's change).
-  const key = `${state.inputVersion}:${confirmed?.startSec}:${confirmed?.endSec}:${suggestion.startSec}:${suggestion.endSec}`;
+  const key = `${state.inputVersion}:${current?.startSec}:${current?.endSec}`;
   useEffect(() => {
     if (changing) return;
     const next = initial();
@@ -86,7 +83,7 @@ export function SermonRangeCard({
   }, [key]);
 
   const max = durationSec ?? undefined;
-  const editing = canEdit && transcriptReady && (!confirmed || changing);
+  const editing = canEdit && transcriptReady && changing;
   const lengthProblem =
     end <= start
       ? "The sermon has to end after it starts."
@@ -94,7 +91,7 @@ export function SermonRangeCard({
         ? "The sermon has to be at least a minute long."
         : null;
 
-  const confirm = async () => {
+  const save = async () => {
     if (lengthProblem || saving) return;
     if (confirmed && dependents > 0) {
       const ok = await confirmAction({
@@ -117,110 +114,79 @@ export function SermonRangeCard({
       return;
     }
     setChanging(false);
-    toast.success(`Sermon times saved: ${formatTime(start)} – ${formatTime(end)}. You can now make a lesson and clips.`);
+    toast.success(`Sermon times saved: ${formatTime(start)} – ${formatTime(end)}.`);
     onConfirmed(result.data.state);
   };
 
   const evidence = suggestion.evidence ?? [];
-  // FaithForm confirmed the times by itself: show them, but ask for a check.
-  const automatic = Boolean(confirmed?.automatic);
-  const hasSuggestion = suggestion.status === "suggested" && suggestion.startSec !== null && suggestion.endSec !== null;
+  const setByPerson = Boolean(confirmed && !confirmed.automatic && confirmed.by);
+  const isWhole = Boolean(
+    current &&
+      !setByPerson &&
+      ((!confirmed && !detected) || (current.startSec === 0 && durationSec && current.endSec >= durationSec - 1 && !detected)),
+  );
 
   return (
     <section
       aria-labelledby="sermon-range-heading"
       className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none"
     >
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h3 id="sermon-range-heading" className="font-heading text-lg font-semibold">
-            {confirmed && !changing
-              ? automatic
-                ? "Check the sermon times"
-                : "Sermon times"
-              : hasSuggestion
-                ? "Check the sermon times"
-                : "Choose where the sermon starts and ends"}
-          </h3>
-          {!transcriptReady ? (
-            <p className="text-[15px] text-muted-foreground">
-              Once the transcript is ready, we&apos;ll suggest where the sermon starts and ends.
-            </p>
-          ) : confirmed && !changing ? (
-            <p className="text-[15px]">
-              {automatic ? "FaithForm found the sermon automatically — check it. " : null}
-              The sermon runs{" "}
-              <strong className="font-semibold tabular-nums">
-                {formatTime(confirmed.startSec)} – {formatTime(confirmed.endSec)}
-              </strong>{" "}
-              ({formatLength(confirmed.endSec - confirmed.startSec)}).
-            </p>
-          ) : hasSuggestion ? (
-            <p className="text-[15px]">
-              We think the sermon runs{" "}
-              <strong className="font-semibold tabular-nums">
-                {formatTime(suggestion.startSec!)} – {formatTime(suggestion.endSec!)}
-              </strong>
-              . {confidenceWords(suggestion.confidence)}
-            </p>
-          ) : (
-            <p className="text-[15px] text-muted-foreground">
-              We couldn&apos;t tell for sure from the recording. Play it, then set the start and end below.
-            </p>
-          )}
-        </div>
-        {confirmed && !changing ? (
-          automatic ? (
-            <StatusBadge tone="ready">Found automatically</StatusBadge>
-          ) : (
-            <StatusBadge tone="done">
-              <CheckCircle2 className="size-4" aria-hidden />
-              Confirmed
-            </StatusBadge>
-          )
-        ) : transcriptReady ? (
-          <StatusBadge tone="attention">Needs your check</StatusBadge>
-        ) : null}
+      <div className="min-w-0 space-y-1">
+        <h3 id="sermon-range-heading" className="font-heading text-lg font-semibold">
+          Sermon times
+        </h3>
+        {!transcriptReady ? (
+          <p className="text-[15px] text-muted-foreground">
+            Once the transcript is ready, FaithForm finds where the sermon starts and ends.
+          </p>
+        ) : current ? (
+          <p className="text-[15px]">
+            The sermon runs{" "}
+            <strong className="font-semibold tabular-nums">
+              {formatTime(current.startSec)} – {formatTime(current.endSec)}
+            </strong>{" "}
+            ({formatLength(current.endSec - current.startSec)}).{" "}
+            <span className="text-muted-foreground">
+              {isWhole
+                ? "FaithForm couldn't tell where it starts, so it uses the whole recording."
+                : setByPerson
+                  ? `Set ${confirmed!.by === currentUserId ? "by you" : "by a teammate"}.`
+                  : "Found automatically."}
+            </span>
+          </p>
+        ) : (
+          <p className="text-[15px] text-muted-foreground">FaithForm uses the whole recording.</p>
+        )}
       </div>
 
-      {confirmed && !changing ? (
-        <>
-          <p className="text-sm text-muted-foreground">
-            {automatic
-              ? "Play the start and end to check them. If they're off, press Change."
-              : <>
-                  Confirmed {new Date(confirmed.at).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}
-                  {confirmed.by ? (confirmed.by === currentUserId ? " by you" : " by a teammate") : ""}.
-                </>}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => onPlayFrom(confirmed.startSec, confirmed.startSec + 20)} className="gap-1.5">
-              <Play aria-hidden />
-              Play the start
+      {transcriptReady && current && !changing ? (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" onClick={() => onPlayFrom(current.startSec, current.startSec + 20)} className="gap-1.5">
+            <Play aria-hidden />
+            Play the start
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onPlayFrom(Math.max(current.startSec, current.endSec - 20), current.endSec)}
+            className="gap-1.5"
+          >
+            <Play aria-hidden />
+            Play the end
+          </Button>
+          {canEdit ? (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setChanging(true)} className="gap-1.5">
+              <Pencil aria-hidden />
+              Change times
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => onPlayFrom(Math.max(confirmed.startSec, confirmed.endSec - 20), confirmed.endSec)}
-              className="gap-1.5"
-            >
-              <Play aria-hidden />
-              Play the end
-            </Button>
-            {canEdit ? (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setChanging(true)} className="gap-1.5">
-                <Pencil aria-hidden />
-                Change
-              </Button>
-            ) : null}
-          </div>
-        </>
+          ) : null}
+        </div>
       ) : null}
 
-      {transcriptReady && evidence.length > 0 && (!confirmed || changing) ? (
+      {editing && evidence.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <h4 className="text-[15px] font-semibold">Why we think so</h4>
+          <h4 className="text-[15px] font-semibold">What FaithForm noticed</h4>
           <ul className="flex flex-col gap-1">
             {evidence.slice(0, 8).map((item, index) => (
               <li key={`${item.kind}-${index}`} className="flex items-start gap-2">
@@ -285,24 +251,22 @@ export function SermonRangeCard({
             </div>
           ) : null}
           <div className="flex flex-wrap gap-3">
-            <Button type="button" onClick={() => void confirm()} disabled={saving || Boolean(lengthProblem)}>
-              {saving ? "Saving…" : "Confirm sermon times"}
+            <Button type="button" onClick={() => void save()} disabled={saving || Boolean(lengthProblem)}>
+              {saving ? "Saving…" : "Save sermon times"}
             </Button>
-            {changing ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={saving}
-                onClick={() => {
-                  setChanging(false);
-                  setProblem(null);
-                  setStart(confirmed?.startSec ?? start);
-                  setEnd(confirmed?.endSec ?? end);
-                }}
-              >
-                Cancel
-              </Button>
-            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={saving}
+              onClick={() => {
+                setChanging(false);
+                setProblem(null);
+                setStart(current?.startSec ?? start);
+                setEnd(current?.endSec ?? end);
+              }}
+            >
+              Cancel
+            </Button>
           </div>
         </div>
       ) : null}

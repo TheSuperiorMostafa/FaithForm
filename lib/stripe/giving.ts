@@ -310,7 +310,7 @@ export async function updateSubscriptionAmount(
   subscriptionId: string,
   newAmountCents: number,
   fundName: string,
-): Promise<void> {
+): Promise<Stripe.Subscription> {
   const stripe = getStripe();
   const sub = await stripe.subscriptions.retrieve(
     subscriptionId,
@@ -333,7 +333,7 @@ export async function updateSubscriptionAmount(
     { stripeAccount: stripeAccountId },
   );
 
-  await stripe.subscriptions.update(
+  return stripe.subscriptions.update(
     subscriptionId,
     {
       items: [{ id: itemId, price: price.id }],
@@ -352,9 +352,9 @@ export async function updateSubscriptionAmount(
 export async function pauseSubscription(
   stripeAccountId: string,
   subscriptionId: string,
-): Promise<void> {
+): Promise<Stripe.Subscription> {
   const stripe = getStripe();
-  await stripe.subscriptions.update(
+  return stripe.subscriptions.update(
     subscriptionId,
     { pause_collection: { behavior: "void" } },
     { stripeAccount: stripeAccountId },
@@ -364,25 +364,30 @@ export async function pauseSubscription(
 export async function resumeSubscription(
   stripeAccountId: string,
   subscriptionId: string,
-): Promise<void> {
+): Promise<Stripe.Subscription> {
   const stripe = getStripe();
-  await stripe.subscriptions.update(
+  return stripe.subscriptions.update(
     subscriptionId,
     { pause_collection: null as unknown as undefined },
     { stripeAccount: stripeAccountId },
   );
 }
 
+/**
+ * Cancelling a gift that Stripe already cancelled counts as done: a second
+ * press (or a page that had not caught up yet) must not report a failure.
+ */
 export async function cancelSubscription(
   stripeAccountId: string,
   subscriptionId: string,
-): Promise<void> {
+): Promise<Stripe.Subscription> {
   const stripe = getStripe();
-  await stripe.subscriptions.cancel(
-    subscriptionId,
-    {},
-    { stripeAccount: stripeAccountId },
-  );
+  const options = { stripeAccount: stripeAccountId };
+  const current = await stripe.subscriptions.retrieve(subscriptionId, {}, options);
+  if (current.status === "canceled" || current.status === "incomplete_expired") {
+    return current;
+  }
+  return stripe.subscriptions.cancel(subscriptionId, {}, options);
 }
 
 export async function refundPaymentIntent(

@@ -4,8 +4,8 @@ import { requireRecordingAccess } from "@/lib/sermon-media/access";
 import { assertClipBounds, refreshSuggestedClips } from "@/lib/sermon-media/clips";
 import { fail, limit, ok, readJson, routeError } from "@/lib/sermon-media/http";
 import { kickDispatch } from "@/lib/sermon-media/jobs";
-import { getSermonMediaState, getTranscript } from "@/lib/sermon-media/store";
-import { runPipelineForRecording } from "@/lib/sermon-media/studio";
+import { getSermonMediaState, getTranscript, publicJob } from "@/lib/sermon-media/store";
+import { ensureSermonRange, requestClips } from "@/lib/sermon-media/studio";
 import { segmentsInRange } from "@/lib/sermon-media/transcript";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,17 +29,21 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
 
 const bodySchema = z.union([
   z.object({ action: z.literal("suggest") }),
-  /** Find, caption, crop and render the best clips now (the Clips "Make clips" button). */
+  /** Find, caption, crop and render the best clips (transcribing first when needed). */
   z.object({ action: z.literal("make") }),
   z.object({ action: z.literal("create"), startSec: z.number().finite().min(0), endSec: z.number().finite().min(0) }),
 ]);
 
-/** Suggest clips from the confirmed sermon, or start a clip at chosen times. */
+/**
+ * Make clips from the recording (transcribing it first if needed), suggest
+ * clips, or start a clip at chosen times. None of these wait for anyone to
+ * confirm the sermon: FaithForm uses the range it found.
+ */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   const allowed = await requireRecordingAccess(id, "edit");
   if (!allowed.ok) return allowed.response;
-  const { auth } = allowed.access;
+  const { auth, recording, settings } = allowed.access;
   const parsed = bodySchema.safeParse(await readJson(request));
   if (!parsed.success) return fail(400, "We couldn't read that request.");
   const limited = await limit(`sermon-media-clips:${auth.churchId}`, 60);
@@ -47,21 +51,30 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   try {
     const db = createAdminClient();
-    const [state, transcript] = await Promise.all([
-      getSermonMediaState(db, auth.churchId, id),
-      getTranscript(db, auth.churchId, id),
-    ]);
-    if (!transcript) return fail(409, "The transcript isn't ready yet.");
     if (parsed.data.action === "make") {
-      const result = await runPipelineForRecording(db, auth.churchId, id, { manual: true });
-      if (result.status === "needs_range") {
-        return fail(409, "We weren't sure where the sermon starts and ends. Choose it on the transcript, then make clips.", { code: "range_required" });
+      if (!["ready", "published"].includes(recording.status)) {
+        return fail(409, "This recording isn't ready yet. You can make clips once it has finished processing.");
       }
-      if (result.status !== "done") return fail(409, "Transcripts & Clips isn't ready for this recording yet.");
+      const result = await requestClips(db, {
+        churchId: auth.churchId,
+        recordingId: id,
+        userId: auth.userId,
+        language: settings.language,
+      });
+      if (result.status === "transcribing") {
+        await kickDispatch(["transcribe"]);
+        return ok({ made: 0, transcribing: true, job: publicJob(result.job, recording.durationSec ?? 0) }, 202);
+      }
+      if (result.status === "needs_range") return fail(409, "This video is too short to make clips from.");
+      if (result.status !== "made") return fail(409, "Transcripts & Clips isn't ready for this recording yet.");
       if (result.clips > 0) await kickDispatch(["render_clip"]);
       return ok({ made: result.clips, autoConfirmed: result.autoConfirmed });
     }
-    if (!state.confirmed) return fail(409, "Confirm where the sermon starts and ends first.");
+
+    const transcript = await getTranscript(db, auth.churchId, id);
+    if (!transcript) return fail(409, "The transcript isn't ready yet.");
+    const { state } = await ensureSermonRange(db, auth.churchId, id, await getSermonMediaState(db, auth.churchId, id), transcript);
+    if (!state.confirmed) return fail(409, "This video is too short to make clips from.");
 
     if (parsed.data.action === "suggest") {
       const count = await refreshSuggestedClips(db, auth.churchId, id, state, transcript);

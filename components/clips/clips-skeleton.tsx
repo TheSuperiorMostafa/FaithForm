@@ -1,3 +1,6 @@
+import type { ReactNode } from "react";
+
+import { CLIPS_DESCRIPTION, CLIPS_TITLE } from "@/components/clips/format";
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -87,4 +90,24 @@ export function ClipsViewLoading({ view }: { view: "review" | "scheduled" | "pos
 /** Count chip placeholder in a tab label; same box as the real count. */
 export function TabCountSkeleton() {
   return <Skeleton className="ml-2 inline-block h-6 w-7 rounded-full align-middle" />;
+}
+
+/**
+ * The Clips view's first row under the recording filters: what it is, then
+ * the posting schedule and the one primary action. Shared with the route
+ * skeleton so both draw the same box.
+ */
+export function ClipsHeaderRow({ secondary, action }: { secondary: ReactNode; action: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <h2 className="sr-only">{CLIPS_TITLE}</h2>
+        <p className="max-w-2xl text-[15px] text-muted-foreground">{CLIPS_DESCRIPTION}</p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-3">
+        {secondary}
+        {action}
+      </div>
+    </div>
+  );
 }

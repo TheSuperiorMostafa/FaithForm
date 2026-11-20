@@ -4,6 +4,7 @@ export const STAFF_NOTIFICATION_EVENTS = [
   { id: "attendance_documents", label: "Attendance documents", description: "When a monthly, quarterly, or annual attendance report becomes available.", feature: "attendance" },
   { id: "attendance_completed", label: "Attendance completed", description: "When your team saves weekly attendance.", feature: "attendance" },
   { id: "kids_alerts", label: "Kids alerts", description: "When the Kids desk asks a guardian to return. Child details stay in FaithForm.", feature: "checkin" },
+  { id: "website_inbox", label: "Website messages", description: "When someone sends a message through your church website. Their message stays in FaithForm.", feature: "website" },
 ] as const;
 export type StaffNotificationEvent = (typeof STAFF_NOTIFICATION_EVENTS)[number]["id"];
 export const staffPreferencesSchema = z.object({
@@ -12,11 +13,12 @@ export const staffPreferencesSchema = z.object({
     attendance_documents: z.object({ email: z.boolean(), phone: z.boolean() }),
     attendance_completed: z.object({ email: z.boolean(), phone: z.boolean() }),
     kids_alerts: z.object({ email: z.boolean(), phone: z.boolean() }),
+    website_inbox: z.object({ email: z.boolean(), phone: z.boolean() }),
   }),
 });
 export type StaffPreferences = z.infer<typeof staffPreferencesSchema>;
 export function emptyStaffPreferences(): StaffPreferences {
-  return { phone: "", events: { attendance_documents: { email: false, phone: false }, attendance_completed: { email: false, phone: false }, kids_alerts: { email: false, phone: false } } };
+  return { phone: "", events: { attendance_documents: { email: false, phone: false }, attendance_completed: { email: false, phone: false }, kids_alerts: { email: false, phone: false }, website_inbox: { email: false, phone: false } } };
 }
 
 /** Report availability uses the church's calendar, including year boundaries. */

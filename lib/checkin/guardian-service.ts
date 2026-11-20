@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { issueWeeklyCode } from "@/lib/checkin/household-credentials";
 import { serviceWeekStart } from "@/lib/checkin/service-week";
+import type { PushAdapter } from "@/lib/faithform/push/adapters";
 
 function checked<T>(result: { data: T; error: unknown }): T {
   if (result.error) throw new Error("guardian_data_unavailable");
@@ -88,8 +89,20 @@ export async function notifyHouseholdCode(churchId: string, householdId: string,
   return true;
 }
 
-/** Called only after station authorization. Never invokes a provider from a request. */
-export async function queueGuardianAlert(churchId: string, sessionId: string, actorUserId: string, client?: SupabaseClient): Promise<{ queued: boolean; guardianCount: number }> {
+/**
+ * Called only after station authorization. The alert is recorded in the outbox
+ * first, then sent straight away in this request: a parent must not wait for
+ * the next worker pass. The outbox stays the retry path for anything the
+ * immediate send could not finish, and the send re-checks custody exactly as
+ * the worker does.
+ */
+export async function queueGuardianAlert(
+  churchId: string,
+  sessionId: string,
+  actorUserId: string,
+  client?: SupabaseClient,
+  delivery?: { adapters?: Partial<Record<"apns" | "fcm", PushAdapter>> },
+): Promise<{ queued: boolean; guardianCount: number }> {
   const admin = client ?? createAdminClient();
   const session = checked(await admin.from("checkin_sessions").select("id, household_id, member_id").eq("id", sessionId).eq("church_id", churchId).eq("status", "checked_in").maybeSingle());
   if (!session?.household_id) return { queued: false, guardianCount: 0 };
@@ -103,7 +116,27 @@ export async function queueGuardianAlert(churchId: string, sessionId: string, ac
   const id = randomUUID();
   // A short per-child bucket makes simultaneous/double clicks one alert.
   const bucket = Math.floor(Date.now() / 60_000);
-  const { data: queued, error } = await admin.rpc("queue_checkin_guardian_alert", { p_id: id, p_church_id: churchId, p_session_id: sessionId, p_household_id: session.household_id, p_actor_user_id: actorUserId, p_account_ids: accountIds, p_deep_link: `faithform://church/${church.slug}/check-in`, p_dedupe_key: `checkin-alert:${sessionId}:${bucket}` });
+  const dedupeKey = `checkin-alert:${sessionId}:${bucket}`;
+  const { data: queued, error } = await admin.rpc("queue_checkin_guardian_alert", { p_id: id, p_church_id: churchId, p_session_id: sessionId, p_household_id: session.household_id, p_actor_user_id: actorUserId, p_account_ids: accountIds, p_deep_link: `faithform://church/${church.slug}/check-in`, p_dedupe_key: dedupeKey });
   if (error) throw new Error("guardian_notification_unavailable");
+  if (queued === true) await sendGuardianAlertNow(admin, churchId, dedupeKey, delivery);
   return { queued: queued === true, guardianCount: accountIds.length };
+}
+
+/** Best effort: the alert is already durable, so a failure here only defers it to the worker. */
+async function sendGuardianAlertNow(
+  admin: SupabaseClient,
+  churchId: string,
+  dedupeKey: string,
+  delivery?: { adapters?: Partial<Record<"apns" | "fcm", PushAdapter>> },
+): Promise<void> {
+  try {
+    const { data: job, error } = await admin.from("notification_outbox").select("id").eq("church_id", churchId).eq("kind", "checkin_guardian_alert").eq("dedupe_key", dedupeKey).maybeSingle();
+    if (error || !job?.id) return;
+    // Loaded on use: the outbox resolves guardians through this module.
+    const { deliverNotificationNow } = await import("@/lib/faithform/push/outbox");
+    await deliverNotificationNow(job.id as string, { client: admin, adapters: delivery?.adapters });
+  } catch {
+    /* The worker sends it on its next pass. */
+  }
 }

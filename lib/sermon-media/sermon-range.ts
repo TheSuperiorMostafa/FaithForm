@@ -267,3 +267,26 @@ function excerpt(text: string): string {
 }
 
 const round1 = (value: number) => Math.round(value * 10) / 10;
+
+/**
+ * The sermon range FaithForm uses without asking anyone: the suggestion when
+ * there is one (even an uncertain one is the best guess), otherwise the whole
+ * recording. Staff can still move it on the transcript page, but nothing waits
+ * for them to. Null only when the recording has no usable length.
+ */
+export function automaticSermonRange(input: {
+  suggestion: { startSec: number | null; endSec: number | null };
+  durationSec: number | null;
+  segments: Array<{ start: number; end: number }>;
+}): { startSec: number; endSec: number; whole: boolean } | null {
+  const lastWord = input.segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+  const total = input.durationSec && input.durationSec > 0 ? input.durationSec : lastWord;
+  const { startSec, endSec } = input.suggestion;
+  if (startSec !== null && endSec !== null && Number.isFinite(startSec) && Number.isFinite(endSec)) {
+    const start = Math.max(0, startSec);
+    const end = total > 0 ? Math.min(endSec, total) : endSec;
+    if (end - start >= 1) return { startSec: round1(start), endSec: round1(end), whole: false };
+  }
+  if (!(total >= 1)) return null;
+  return { startSec: 0, endSec: Math.floor(total * 10) / 10, whole: true };
+}

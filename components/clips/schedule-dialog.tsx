@@ -210,7 +210,7 @@ export function ScheduleDialog({
                     <Label htmlFor="clips-auto" className="flex flex-col items-start gap-0.5 text-[15px] font-medium">
                       Prepare clips automatically
                       <span className="text-sm font-normal text-muted-foreground">
-                        FaithForm makes clips once the transcript is ready. Nothing posts until you approve it.
+                        FaithForm makes clips after each service. Nothing posts until you approve it.
                       </span>
                     </Label>
                     <Switch id="clips-auto" checked={draft.autoClips} disabled={!canEdit} onCheckedChange={(autoClips) => update({ autoClips })} />
@@ -226,20 +226,6 @@ export function ScheduleDialog({
                       />
                     </div>
                   ) : null}
-                  <div className="flex items-start justify-between gap-4">
-                    <Label htmlFor="clips-auto-range" className="flex flex-col items-start gap-0.5 text-[15px] font-medium">
-                      Find the sermon automatically
-                      <span className="text-sm font-normal text-muted-foreground">
-                        When FaithForm is sure where the sermon starts and ends. Otherwise it asks you on the transcript.
-                      </span>
-                    </Label>
-                    <Switch
-                      id="clips-auto-range"
-                      checked={draft.autoConfirmRange}
-                      disabled={!canEdit}
-                      onCheckedChange={(autoConfirmRange) => update({ autoConfirmRange })}
-                    />
-                  </div>
                 </section>
               </>
             )}

@@ -7,8 +7,10 @@ import { getStreamEvent, getStreamEventNearEncoderStart } from "@/lib/stream/eve
 import { endLiveBroadcastLocked, onIngestStarted, startLiveBroadcastLocked } from "@/lib/stream/go-live";
 import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
 import { getActiveStreamSession, updateStreamSession } from "@/lib/stream/sessions";
+import { ENCODER_STOP_GRACE_MS } from "@/lib/stream/video-stop";
 
-const DISCONNECT_GRACE_MS = 60_000;
+/** One reconnect grace for every way a stopped encoder ends a service. */
+const DISCONNECT_GRACE_MS = ENCODER_STOP_GRACE_MS;
 const HEARTBEAT_TIMEOUT_MS = 120_000;
 const sourceIdSchema = z.string().uuid().refine((id) => id !== "00000000-0000-0000-0000-000000000000");
 

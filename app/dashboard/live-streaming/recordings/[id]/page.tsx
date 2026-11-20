@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { AutoRefresh } from "@/components/live-streaming/recordings/auto-refresh";
 import { RecordingReview } from "@/components/live-streaming/recordings/recording-review";
 import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
-import { SermonMediaPanel } from "@/components/sermon-media/sermon-media-panel";
+import { RecordingMediaActions } from "@/components/live-streaming/recordings/recording-media-actions";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
 import { getMediaItem, getMediaStats, listMediaSeries, listMediaTagSuggestions } from "@/lib/stream/media-library";
@@ -17,6 +17,7 @@ import {
 import { isStillChanging } from "@/lib/stream/recording-status";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 import { getSermonMediaSettings } from "@/lib/sermon-media/access";
+import { transcriptHref } from "@/lib/sermon-media/hrefs";
 
 export const dynamic = "force-dynamic";
 
@@ -57,12 +58,12 @@ export default async function RecordingReviewPage({
   const stillChanging = isStillChanging(recording.phase.phase);
 
   const showSermonMedia = Boolean(sermonMedia?.enabled) && Boolean(access?.allowed.includes("sermon_media")) && (recording.status === "ready" || recording.status === "published");
-  // `?t=<seconds>#transcript` from an older lesson link: the transcript now
-  // lives in Transcripts, so open it there at that moment.
+  // `?t=<seconds>#transcript` from an older lesson link: the transcript has
+  // its own page under this recording, so open it there at that moment.
   const rawT = (await searchParams).t;
   const parsedT = Number(Array.isArray(rawT) ? rawT[0] : rawT);
   if (showSermonMedia && Number.isFinite(parsedT) && parsedT >= 0) {
-    redirect(`/dashboard/transcripts/${id}?t=${Math.floor(parsedT)}#transcript`);
+    redirect(`${transcriptHref(id, parsedT)}#transcript`);
   }
 
   return (
@@ -80,6 +81,7 @@ export default async function RecordingReviewPage({
         websiteSermonsUrl={websiteSermonsUrl}
         tagSuggestions={tagSuggestions}
         stats={{ live: stats.liveViews, replay: stats.replayViews }}
+        mediaSlot={showSermonMedia ? <RecordingMediaActions recordingId={id} recordingStatus={recording.status} /> : null}
         artworkSlot={
           auth.isAdmin && mediaItem ? (
             <ItemArtworkPanel
@@ -93,9 +95,6 @@ export default async function RecordingReviewPage({
           ) : null
         }
       />
-      {showSermonMedia ? (
-        <SermonMediaPanel recordingId={id} recordingStatus={recording.status} />
-      ) : null}
     </div>
   );
 }

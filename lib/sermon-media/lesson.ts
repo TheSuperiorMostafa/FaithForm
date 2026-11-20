@@ -1,13 +1,13 @@
 import { z } from "zod";
 
 import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
-import { formatTimestamp, wordCount, type TranscriptSegment } from "@/lib/sermon-media/transcript";
+import { formatTimestamp, segmentsInRange, wordCount, type TranscriptSegment } from "@/lib/sermon-media/transcript";
 import type { DiscussionQuestion, SermonOutline } from "@/types/sermon";
 
 /**
  * A lesson organized from what the pastor actually said.
  *
- * The model receives only the confirmed sermon's transcript, as untrusted data,
+ * The model receives only the sermon's transcript, as untrusted data,
  * with a stable id per segment. It must cite segment ids for every section,
  * point, quote, Scripture reference and discussion prompt. The server then
  * keeps only what the citations support: a point without evidence is dropped,
@@ -71,8 +71,12 @@ Rules — follow all of them:
   }${context.preachingStyle ? `\nPreaching style (for wording only): ${context.preachingStyle}` : ""}`;
 }
 
-/** The transcript as delimited, id-tagged data. */
-export function recordingLessonPrompt(segments: TranscriptSegment[]): string {
+/**
+ * The transcript as delimited, id-tagged data. `wholeService` says the text is
+ * the full recording (no sermon range was found), so the model is told to use
+ * only the preaching and leave out songs, announcements and the like.
+ */
+export function recordingLessonPrompt(segments: TranscriptSegment[], options: { wholeService?: boolean } = {}): string {
   const lines = segments
     .filter((segment) => segment.text.trim() && !segment.flags?.includes("music"))
     .map((segment) => {
@@ -81,7 +85,67 @@ export function recordingLessonPrompt(segments: TranscriptSegment[]): string {
       const text = segment.text.replace(/[<>]/g, " ");
       return `[${segment.id} ${formatTimestamp(segment.start)}]${flag} ${text}`;
     });
-  return `Make the lesson from this sermon transcript.\n\n<transcript>\n${lines.join("\n")}\n</transcript>`;
+  const scope = options.wholeService
+    ? "This transcript is the whole service recording, not only the sermon. Use only the sermon (the pastor's main teaching). Leave out songs, announcements, the offering, welcomes and anything else that is not the sermon, and cite only sermon segments.\n\n"
+    : "";
+  return `Make the lesson from this sermon transcript.\n\n${scope}<transcript>\n${lines.join("\n")}\n</transcript>`;
+}
+
+export type LessonRangeBasis = "confirmed" | "detected" | "full";
+
+export type LessonSourceRange = {
+  startSec: number;
+  endSec: number;
+  basis: LessonRangeBasis;
+  segments: TranscriptSegment[];
+};
+
+type RangeState = {
+  confirmed: { startSec: number; endSec: number } | null;
+  suggestion: {
+    status: "none" | "suggested" | "uncertain" | "failed";
+    startSec: number | null;
+    endSec: number | null;
+    forVersion: number | null;
+  };
+};
+
+/**
+ * Which part of a transcript a lesson is built from. Nobody has to confirm a
+ * range first: a confirmed sermon range is used when there is one, otherwise
+ * the automatically detected range (for this transcript version), otherwise
+ * the whole transcript. A detected range with too few words to teach from
+ * falls back to the whole transcript rather than refusing.
+ */
+export function lessonSourceRange(
+  state: RangeState,
+  transcript: { version: number; segments: TranscriptSegment[]; durationSec: number | null },
+): LessonSourceRange {
+  const { segments } = transcript;
+  if (state.confirmed && state.confirmed.endSec > state.confirmed.startSec) {
+    const { startSec, endSec } = state.confirmed;
+    return { startSec, endSec, basis: "confirmed", segments: segmentsInRange(segments, startSec, endSec) };
+  }
+  const { suggestion } = state;
+  if (
+    (suggestion.status === "suggested" || suggestion.status === "uncertain") &&
+    suggestion.startSec !== null &&
+    suggestion.endSec !== null &&
+    suggestion.endSec > suggestion.startSec &&
+    (suggestion.forVersion === null || suggestion.forVersion === transcript.version)
+  ) {
+    const detected = segmentsInRange(segments, suggestion.startSec, suggestion.endSec);
+    if (!lessonSourceProblem(detected)) {
+      return { startSec: suggestion.startSec, endSec: suggestion.endSec, basis: "detected", segments: detected };
+    }
+  }
+  const lastEnd = segments.reduce((max, segment) => Math.max(max, segment.end), 0);
+  return {
+    startSec: 0,
+    endSec: Math.max(lastEnd, transcript.durationSec ?? 0),
+    basis: "full",
+    segments,
+  };
 }
 
 export type LessonEvidence = {
@@ -121,7 +185,7 @@ const spokenNumbers = (text: string) => text.replace(/\b[a-z]+\b/g, (word) => NU
 
 /**
  * Keeps only what the transcript supports. `known` are the segment ids inside
- * the confirmed range — anything else (the worship set, announcements, a
+ * the sermon range — anything else (the worship set, announcements, a
  * fabricated id) is not evidence.
  */
 export function groundLesson(draft: RecordingLessonDraft, rangeSegments: TranscriptSegment[]): GroundedLesson {
@@ -255,14 +319,14 @@ export function groundLesson(draft: RecordingLessonDraft, rangeSegments: Transcr
 export function lessonSourceProblem(rangeSegments: TranscriptSegment[]): string | null {
   const words = wordCount(rangeSegments.filter((segment) => !segment.flags?.includes("music")));
   if (words < MIN_SERMON_WORDS) {
-    return "The confirmed sermon has too few clear words to make a faithful lesson. Check the sermon start and end, or correct the transcript, then try again.";
+    return "This sermon has too few clear words to make a faithful lesson. Check the transcript, or start a new lesson from Bible passages instead.";
   }
   return null;
 }
 
 export function groundedLessonProblem(lesson: GroundedLesson, draft: RecordingLessonDraft): string | null {
   if (lesson.outline.points.length === 0 || (draft.insufficient && lesson.outline.points.length < 2)) {
-    return "We couldn't find enough clear teaching in this recording to build a lesson. Check the transcript and sermon range, or start the lesson from a title and passage instead.";
+    return "We couldn't find enough clear teaching in this sermon to build a lesson. Check the transcript, or start a new lesson from a title and passage instead.";
   }
   return null;
 }

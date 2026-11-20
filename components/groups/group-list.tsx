@@ -33,7 +33,7 @@ export function GroupList({ groups, summary, types, campuses }: { groups: StaffG
       </div>
       <div className="flex flex-1 flex-wrap justify-end gap-3">
         <label className="g-search"><Search aria-hidden /><span className="sr-only">Search groups or leaders</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups or leaders" /></label>
-        <label className="g-select-inline"><span className="sr-only">Show one kind of group</span><select value={category} onChange={e => setCategory(e.target.value)}><option value="">All kinds of groups</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+        <label className="g-select-inline"><span className="sr-only">Show one kind of group</span><select value={category} onChange={e => setCategory(e.target.value)}><option value="">All Groups</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
       </div>
     </div>
 

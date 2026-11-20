@@ -512,6 +512,38 @@ export type WorkerResult = {
   failed: number;
 };
 
+type WorkerContext = {
+  admin: SupabaseClient;
+  adapters: Record<"apns" | "fcm", PushAdapter>;
+  leaseToken: string;
+  deadline: number;
+  now: () => number;
+  result: WorkerResult;
+};
+
+function workerContext(options: {
+  adapters?: Partial<Record<"apns" | "fcm", PushAdapter>>;
+  client?: SupabaseClient;
+  budgetMs?: number;
+  now?: () => number;
+} | undefined, defaultBudgetMs: number): WorkerContext {
+  const now = options?.now ?? Date.now;
+  // Every invocation (cron pass or immediate send) mints its own lease token,
+  // so two concurrent runs can only ever complete the jobs they claimed.
+  const leaseToken = randomUUID();
+  return {
+    admin: options?.client ?? createAdminClient(),
+    adapters: {
+      apns: options?.adapters?.apns ?? new ApnsAdapter(),
+      fcm: options?.adapters?.fcm ?? new FcmAdapter(),
+    },
+    leaseToken,
+    deadline: now() + (options?.budgetMs ?? defaultBudgetMs),
+    now,
+    result: { claimed: 0, sent: 0, cancelled: 0, retried: 0, failed: 0 },
+  };
+}
+
 /**
  * One pass of the delivery worker.
  *
@@ -526,165 +558,224 @@ export async function runNotificationWorker(options?: {
   budgetMs?: number;
   now?: () => number;
 }): Promise<WorkerResult> {
-  const admin = options?.client ?? createAdminClient();
-  const now = options?.now ?? Date.now;
-  const deadline = now() + (options?.budgetMs ?? SEND_BUDGET_MS);
-  const leaseToken = randomUUID();
-  const result: WorkerResult = { claimed: 0, sent: 0, cancelled: 0, retried: 0, failed: 0 };
+  const context = workerContext(options, SEND_BUDGET_MS);
 
-  const adapters: Record<"apns" | "fcm", PushAdapter> = {
-    apns: options?.adapters?.apns ?? new ApnsAdapter(),
-    fcm: options?.adapters?.fcm ?? new FcmAdapter(),
-  };
-
-  const { data: jobs, error } = await admin.rpc("claim_notification_jobs", {
-    p_lease_token: leaseToken,
+  const { data: jobs, error } = await context.admin.rpc("claim_notification_jobs", {
+    p_lease_token: context.leaseToken,
     p_limit: options?.limit ?? 10,
   });
 
-  if (error) return result;
+  if (error) return context.result;
 
   for (const raw of (jobs ?? []) as OutboxJob[]) {
-    result.claimed += 1;
-
-    // Claimed but not reached in time: handed back now rather than left to
-    // sit out its lease, and without spending one of its attempts.
-    if (now() >= deadline) {
-      await releaseUnspent(admin, raw, leaseToken);
-      result.retried += 1;
-      continue;
-    }
-
-    let current: boolean;
-    try {
-      current = await subjectIsStillCurrent(admin, raw);
-    } catch {
-      // An unavailable authority is not evidence that a child was picked up.
-      // Retain the job so the next worker can recheck before delivery.
-      await admin.rpc("complete_notification_job", {
-        p_id: raw.id,
-        p_lease_token: leaseToken,
-        p_outcome: "retryable",
-        p_error_category: "subject_unavailable",
-      });
-      result.retried += 1;
-      continue;
-    }
-    if (!current) {
-      await admin.rpc("complete_notification_job", {
-        p_id: raw.id,
-        p_lease_token: leaseToken,
-        p_outcome: "cancelled",
-        p_error_category: "subject_changed",
-      });
-      result.cancelled += 1;
-      continue;
-    }
-
-    // Who already has this notification. Without it every retry — one device's
-    // 503, or the function killed mid-list — sent the whole audience the same
-    // push again, up to five times, and the end of the list never got it.
-    let reached: Record<string, unknown>[];
-    let recipients: PushRecipient[];
-    let nextCursor: string | null;
-    let hasMore: boolean;
-    try {
-      ({ recipients, nextCursor, hasMore } = await resolveRecipients(admin, raw));
-      reached = await inChunks(recipients.map((recipient) => recipient.installationId), async (ids) => ({
-        data: await pagedRows(
-          (from, to) => admin
-            .from("notification_delivery_attempts")
-            .select("installation_id")
-            .eq("outbox_id", raw.id)
-            .in("installation_id", ids)
-            .in("outcome", ["sent", "permanent"])
-            .order("installation_id")
-            .range(from, to),
-          Number.POSITIVE_INFINITY,
-        ),
-        error: null,
-      }));
-    } catch {
-      await admin.rpc("complete_notification_job", {
-        p_id: raw.id,
-        p_lease_token: leaseToken,
-        p_outcome: "retryable",
-        p_error_category: "audience_unavailable",
-      });
-      result.retried += 1;
-      continue;
-    }
-    const done = new Set(reached.map((row) => row.installation_id as string | null));
-    const pending = recipients.filter((recipient) => !done.has(recipient.installationId));
-
-    const message: PushMessage = {
-      title: raw.title,
-      body: raw.body,
-      deepLink: raw.deep_link,
-      collapseKey: raw.collapse_key,
-      correlationId: raw.correlation_id,
-      topic: raw.topic,
-    };
-
-    let anyRetryable = false;
-    let outOfTime = false;
-
-    const sendOne = async (recipient: PushRecipient) => {
-      const adapter = adapters[recipient.provider];
-      const outcome: DeliveryResult = await adapter.send(recipient.token, message, recipient.apnsEnvironment);
-
-      const { error: deliveryWriteError } = await admin.from("notification_delivery_attempts").insert({
-        outbox_id: raw.id,
-        installation_id: recipient.installationId,
-        provider: recipient.provider,
-        attempt_number: raw.attempts,
-        outcome: outcome.outcome,
-        error_category: outcome.errorCategory ?? null,
-        provider_status: outcome.providerStatus ?? null,
-      });
-
-      if (outcome.invalidToken) {
-        await invalidateToken(recipient.token, outcome.errorCategory ?? "invalid_token");
-      }
-      if (outcome.outcome === "retryable" || deliveryWriteError) anyRetryable = true;
-    };
-
-    // A few at a time: one by one, a few hundred devices outran the function.
-    for (let start = 0; start < pending.length; start += SEND_CONCURRENCY) {
-      if (now() >= deadline) {
-        outOfTime = true;
-        break;
-      }
-      await Promise.all(pending.slice(start, start + SEND_CONCURRENCY).map(sendOne));
-    }
-
-    // Progress and the cursor must be durable before handing a full page back.
-    // Provider failures and interrupted pages retain their old cursor; terminal
-    // attempt rows prevent duplicate sends when that page is tried again.
-    if (!anyRetryable && !outOfTime && nextCursor !== (raw.audience_after_account_id ?? null)) {
-      const { data: advanced, error: cursorError } = await admin
-        .from("notification_outbox")
-        .update({ audience_after_account_id: nextCursor, updated_at: new Date().toISOString() })
-        .eq("id", raw.id)
-        .eq("lease_token", leaseToken)
-        .select("id");
-      if (cursorError || !advanced?.length) anyRetryable = true;
-    }
-    if (!anyRetryable && (outOfTime || hasMore)) {
-      await releaseUnspent(admin, raw, leaseToken);
-      result.retried += 1;
-    } else {
-      const jobOutcome = anyRetryable ? "retryable" : "sent";
-      await admin.rpc("complete_notification_job", {
-        p_id: raw.id,
-        p_lease_token: leaseToken,
-        p_outcome: jobOutcome,
-        p_error_category: anyRetryable ? "delivery_unavailable" : null,
-      });
-      if (anyRetryable) result.retried += 1;
-      else result.sent += 1;
-    }
+    await processClaimedJob(context, raw);
   }
 
-  return result;
+  return context.result;
+}
+
+/** Same lease the claim RPC grants; an abandoned immediate send is picked up after it. */
+const IMMEDIATE_LEASE_MS = 120_000;
+/** A request is waiting on this, so it is held to a few seconds rather than the cron's 40. */
+const IMMEDIATE_BUDGET_MS = 8_000;
+
+/**
+ * Sends one just-enqueued job now instead of waiting for the next cron pass.
+ *
+ * Used for time-critical notifications (a child's room asking for a guardian).
+ * The job is claimed with the same lease semantics as the worker: a conditional
+ * update succeeds only while the row is still pending and unclaimed, so this
+ * and a concurrent cron pass can never both send it. Anything not finished here
+ * — a provider 503, a timeout, a crash — stays in the outbox and the worker
+ * retries it exactly as before; nothing is sent twice to a device that already
+ * has it, because delivery attempts are checked on every pass.
+ */
+export async function deliverNotificationNow(
+  outboxId: string,
+  options?: {
+    adapters?: Partial<Record<"apns" | "fcm", PushAdapter>>;
+    client?: SupabaseClient;
+    budgetMs?: number;
+    now?: () => number;
+  },
+): Promise<WorkerResult> {
+  const context = workerContext(options, IMMEDIATE_BUDGET_MS);
+  const { admin, leaseToken, now } = context;
+
+  const { data: row, error } = await admin
+    .from("notification_outbox")
+    .select("*")
+    .eq("id", outboxId)
+    .maybeSingle();
+  if (error || !row) return context.result;
+  const job = row as OutboxJob & { status?: string; max_attempts?: number; next_attempt_at?: string };
+  if (job.status !== "pending") return context.result;
+  if (Number(job.attempts) >= Number(job.max_attempts ?? 5)) return context.result;
+  if (job.next_attempt_at && Date.parse(job.next_attempt_at) > now()) return context.result;
+
+  const at = new Date(now()).toISOString();
+  const { data: claimed, error: claimError } = await admin
+    .from("notification_outbox")
+    .update({
+      status: "claimed",
+      lease_token: leaseToken,
+      lease_expires_at: new Date(now() + IMMEDIATE_LEASE_MS).toISOString(),
+      attempts: Number(job.attempts) + 1,
+      updated_at: at,
+    })
+    .eq("id", outboxId)
+    // Optimistic claim: every claim bumps `attempts`, so a worker that got here
+    // first leaves this update matching nothing.
+    .eq("status", "pending")
+    .eq("attempts", Number(job.attempts))
+    .select("*");
+  if (claimError || !claimed?.length) return context.result;
+
+  await processClaimedJob(context, claimed[0] as OutboxJob);
+  return context.result;
+}
+
+async function processClaimedJob(context: WorkerContext, raw: OutboxJob): Promise<void> {
+  const { admin, adapters, leaseToken, deadline, now, result } = context;
+  result.claimed += 1;
+
+  // Claimed but not reached in time: handed back now rather than left to
+  // sit out its lease, and without spending one of its attempts.
+  if (now() >= deadline) {
+    await releaseUnspent(admin, raw, leaseToken);
+    result.retried += 1;
+    return;
+  }
+
+  let current: boolean;
+  try {
+    current = await subjectIsStillCurrent(admin, raw);
+  } catch {
+    // An unavailable authority is not evidence that a child was picked up.
+    // Retain the job so the next worker can recheck before delivery.
+    await admin.rpc("complete_notification_job", {
+      p_id: raw.id,
+      p_lease_token: leaseToken,
+      p_outcome: "retryable",
+      p_error_category: "subject_unavailable",
+    });
+    result.retried += 1;
+    return;
+  }
+  if (!current) {
+    await admin.rpc("complete_notification_job", {
+      p_id: raw.id,
+      p_lease_token: leaseToken,
+      p_outcome: "cancelled",
+      p_error_category: "subject_changed",
+    });
+    result.cancelled += 1;
+    return;
+  }
+
+  // Who already has this notification. Without it every retry — one device's
+  // 503, or the function killed mid-list — sent the whole audience the same
+  // push again, up to five times, and the end of the list never got it.
+  let reached: Record<string, unknown>[];
+  let recipients: PushRecipient[];
+  let nextCursor: string | null;
+  let hasMore: boolean;
+  try {
+    ({ recipients, nextCursor, hasMore } = await resolveRecipients(admin, raw));
+    reached = await inChunks(recipients.map((recipient) => recipient.installationId), async (ids) => ({
+      data: await pagedRows(
+        (from, to) => admin
+          .from("notification_delivery_attempts")
+          .select("installation_id")
+          .eq("outbox_id", raw.id)
+          .in("installation_id", ids)
+          .in("outcome", ["sent", "permanent"])
+          .order("installation_id")
+          .range(from, to),
+        Number.POSITIVE_INFINITY,
+      ),
+      error: null,
+    }));
+  } catch {
+    await admin.rpc("complete_notification_job", {
+      p_id: raw.id,
+      p_lease_token: leaseToken,
+      p_outcome: "retryable",
+      p_error_category: "audience_unavailable",
+    });
+    result.retried += 1;
+    return;
+  }
+  const done = new Set(reached.map((row) => row.installation_id as string | null));
+  const pending = recipients.filter((recipient) => !done.has(recipient.installationId));
+
+  const message: PushMessage = {
+    title: raw.title,
+    body: raw.body,
+    deepLink: raw.deep_link,
+    collapseKey: raw.collapse_key,
+    correlationId: raw.correlation_id,
+    topic: raw.topic,
+    // A room asking for a guardian must reach them now, past Focus and Doze.
+    urgent: raw.kind === "checkin_guardian_alert",
+  };
+
+  let anyRetryable = false;
+  let outOfTime = false;
+
+  const sendOne = async (recipient: PushRecipient) => {
+    const adapter = adapters[recipient.provider];
+    const outcome: DeliveryResult = await adapter.send(recipient.token, message, recipient.apnsEnvironment);
+
+    const { error: deliveryWriteError } = await admin.from("notification_delivery_attempts").insert({
+      outbox_id: raw.id,
+      installation_id: recipient.installationId,
+      provider: recipient.provider,
+      attempt_number: raw.attempts,
+      outcome: outcome.outcome,
+      error_category: outcome.errorCategory ?? null,
+      provider_status: outcome.providerStatus ?? null,
+    });
+
+    if (outcome.invalidToken) {
+      await invalidateToken(recipient.token, outcome.errorCategory ?? "invalid_token");
+    }
+    if (outcome.outcome === "retryable" || deliveryWriteError) anyRetryable = true;
+  };
+
+  // A few at a time: one by one, a few hundred devices outran the function.
+  for (let start = 0; start < pending.length; start += SEND_CONCURRENCY) {
+    if (now() >= deadline) {
+      outOfTime = true;
+      break;
+    }
+    await Promise.all(pending.slice(start, start + SEND_CONCURRENCY).map(sendOne));
+  }
+
+  // Progress and the cursor must be durable before handing a full page back.
+  // Provider failures and interrupted pages retain their old cursor; terminal
+  // attempt rows prevent duplicate sends when that page is tried again.
+  if (!anyRetryable && !outOfTime && nextCursor !== (raw.audience_after_account_id ?? null)) {
+    const { data: advanced, error: cursorError } = await admin
+      .from("notification_outbox")
+      .update({ audience_after_account_id: nextCursor, updated_at: new Date().toISOString() })
+      .eq("id", raw.id)
+      .eq("lease_token", leaseToken)
+      .select("id");
+    if (cursorError || !advanced?.length) anyRetryable = true;
+  }
+  if (!anyRetryable && (outOfTime || hasMore)) {
+    await releaseUnspent(admin, raw, leaseToken);
+    result.retried += 1;
+  } else {
+    const jobOutcome = anyRetryable ? "retryable" : "sent";
+    await admin.rpc("complete_notification_job", {
+      p_id: raw.id,
+      p_lease_token: leaseToken,
+      p_outcome: jobOutcome,
+      p_error_category: anyRetryable ? "delivery_unavailable" : null,
+    });
+    if (anyRetryable) result.retried += 1;
+    else result.sent += 1;
+  }
 }

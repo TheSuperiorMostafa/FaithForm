@@ -7,6 +7,8 @@ import {
   getInvitationsForSettings,
 } from "@/app/dashboard/settings/faithform-actions";
 import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
+import { flyerColors } from "@/components/church-app/app-flyer-content";
+import { AppQrCard } from "@/components/church-app/app-qr-card";
 import { AutomaticCheckinSummaryCard } from "@/components/attendance/automatic-checkin-summary-card";
 import { FaithFormVisibilityCard } from "@/components/member-app/app-visibility-card";
 import { ChurchAppSettings } from "@/components/member-app/church-app-settings";
@@ -65,6 +67,8 @@ export default async function MemberAppPage() {
   );
 
   const canUseAttendance = access?.allowed.includes("attendance") ?? false;
+  // The flyer can only promise app search when search will actually find the church.
+  const findableInSearch = discovery.isDiscoverable && discovery.joinPolicy !== "invite_only";
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -116,6 +120,12 @@ export default async function MemberAppPage() {
                   invitations={invitationPage.items}
                 />
               </div>
+              <AppQrCard
+                churchName={churchInfo?.info.name ?? auth.churchName ?? ""}
+                logoUrl={churchInfo?.info.logoUrl || null}
+                colors={flyerColors(churchInfo?.context.primaryColor, churchInfo?.context.accentColor)}
+                findableInSearch={findableInSearch}
+              />
             </section>
 
             {readiness ? (

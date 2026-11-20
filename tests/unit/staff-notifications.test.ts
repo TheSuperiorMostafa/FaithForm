@@ -90,3 +90,31 @@ test("email delivery uses the verified account, an idempotency key and a private
     if (previousKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = previousKey;
   }
 });
+
+test("choices saved before Website messages existed still deliver", async () => {
+  const db = database();
+  db.user.email_confirmed_at = new Date().toISOString();
+  const events = db.tables.staff_notification_preferences[0].events as Record<string, unknown>;
+  delete events.website_inbox;
+  db.tables.staff_notification_jobs.push(db.job());
+  const previousKey = process.env.RESEND_API_KEY;
+  const previousFetch = globalThis.fetch;
+  try {
+    process.env.RESEND_API_KEY = "re_synthetic_notification_test";
+    globalThis.fetch = async () => new Response(JSON.stringify({ id: "synthetic-email" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    assert.deepEqual(await dispatchStaffNotifications(db.client), { sent: 1, failed: 0, skipped: 0 });
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.RESEND_API_KEY; else process.env.RESEND_API_KEY = previousKey;
+  }
+});
+
+test("a website message queues only the channels staff chose", async () => {
+  const db = database();
+  const events = db.tables.staff_notification_preferences[0].events as ReturnType<typeof emptyStaffPreferences>["events"];
+  events.website_inbox = { email: false, phone: true };
+  db.tables.staff_notification_preferences[0].phone = "+15555550100";
+  await queueStaffNotification({ churchId: "church", event: "website_inbox", eventKey: "submission-1", href: "/dashboard/website/inbox" }, db.client);
+  const rows = db.writes[0].rows as Row[];
+  assert.deepEqual(rows.map(row => [row.event, row.channel, row.href]), [["website_inbox", "phone", "/dashboard/website/inbox"]]);
+});

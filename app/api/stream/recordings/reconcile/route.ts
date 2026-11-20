@@ -6,6 +6,7 @@ import { endDisconnectedEncoderBroadcasts } from "@/lib/stream/encoder-automatio
 import { endLiveBroadcast } from "@/lib/stream/go-live";
 import { logRecordingEvent, reconcileRecordings } from "@/lib/stream/recording-lifecycle";
 import { productionLifecycleDeps } from "@/lib/stream/recording-runtime";
+import { endLiveServicesWithStoppedVideo } from "@/lib/stream/video-stop-end";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -28,6 +29,11 @@ export async function GET(request: Request) {
 
   await endDisconnectedEncoderBroadcasts().catch((error) => {
     console.error("Encoder disconnect reconciliation failed", error);
+  });
+  // Any live service whose video stopped (OBS "Stop Streaming") and did not
+  // come back within the grace window, whichever encoder sent it.
+  await endLiveServicesWithStoppedVideo().catch((error) => {
+    console.error("Stopped-video reconciliation failed", error);
   });
   const deps = productionLifecycleDeps();
   const report = await reconcileRecordings(deps, {

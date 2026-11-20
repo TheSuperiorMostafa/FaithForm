@@ -6,7 +6,8 @@ import { buttonVariants } from "@/components/ui/button";
 
 /**
  * Mirrors the recording page: back link, status + title + date, then the
- * player (left) and the publish card (right), and the quiet delete section.
+ * player with More options under it (left) beside the publish card (right),
+ * and the quiet delete section.
  * Static labels ("All recordings", field labels, "Delete recording") are real
  * text; only the recording's own data shimmers.
  */
@@ -27,15 +28,15 @@ export default function RecordingReviewLoading() {
         <span className={buttonVariants({ variant: "outline" })}><Download className="size-4" aria-hidden />Download recording</span>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-6">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
           <Skeleton className="aspect-video w-full rounded-2xl" />
           <div className="flex min-h-14 items-center rounded-2xl border border-border bg-card px-5 py-3">
             <span className="text-base font-semibold">Trim the beginning or end</span>
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <div className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
             <div className="flex items-start gap-3">
               <Skeleton className="size-11 shrink-0 rounded-xl" />
@@ -53,13 +54,16 @@ export default function RecordingReviewLoading() {
             <Skeleton className="min-h-[88px] w-full rounded-xl" />
             <Skeleton className="min-h-[88px] w-full rounded-xl" />
             <ArtworkPanelSkeleton />
-            <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
-              <span className="text-[15px] font-semibold">More options</span>
-            </div>
             <div className="border-t border-border pt-5">
               <Skeleton className="min-h-12 w-full rounded-[10px]" />
             </div>
           </div>
+        </div>
+
+        {/* "More options" sits under the video on wide screens, as on the page. */}
+        <div className="flex min-h-12 min-w-0 flex-col justify-center gap-0.5 rounded-2xl border border-border bg-card/50 px-5 py-3 lg:col-start-1 lg:row-start-2">
+          <span className="text-[15px] font-semibold">More options</span>
+          <Skeleton className="h-4 w-56 max-w-full" />
         </div>
       </div>
 

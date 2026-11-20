@@ -38,35 +38,36 @@ export function ItemArtworkPanel({
 
   return (
     <Card>
-      <CardContent className="flex flex-col gap-5 pt-6">
-        <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-lg font-bold">Artwork</h3>
-          <p className="text-sm text-muted-foreground">
-            {seriesName && seriesSlug ? (
-              <>
-                This message inherits its artwork from{" "}
-                <Link
-                  href={`/dashboard/live-streaming/recordings/series/${seriesSlug}`}
-                  className="font-medium text-accent underline underline-offset-4"
-                >
-                  {seriesName}
-                </Link>
-                . Add an image here only if this one needs its own.
-              </>
-            ) : (
-              "Add images so this message shows a picture instead of its title. Filing it into a series lets it share one set of images with everything else in that series."
-            )}
-          </p>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-1 basis-48 flex-col gap-0.5">
+            <h3 className="font-heading text-lg font-bold">Artwork</h3>
+            <p className="text-sm text-muted-foreground">
+              {seriesName && seriesSlug ? (
+                <>
+                  Uses the artwork from{" "}
+                  <Link
+                    href={`/dashboard/live-streaming/recordings/series/${seriesSlug}`}
+                    className="font-medium text-accent underline underline-offset-4"
+                  >
+                    {seriesName}
+                  </Link>
+                  . Change one only if this message needs its own.
+                </>
+              ) : (
+                "Pictures shown instead of the title. Choose one to view or change it."
+              )}
+            </p>
+          </div>
+          <CreateArtworkButton
+            target={target ?? { kind: "item", id: recordingId! }}
+            title={title}
+            hasArtwork={hasAnyArtwork(artwork)}
+            onCreated={() => router.refresh()}
+          />
         </div>
 
-        <CreateArtworkButton
-          target={target ?? { kind: "item", id: recordingId! }}
-          title={title}
-          hasArtwork={hasAnyArtwork(artwork)}
-          onCreated={() => router.refresh()}
-        />
-
-        <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(min(100%,14rem),1fr))] gap-5">
+        <div className="grid min-w-0 grid-cols-3 gap-3">
           {ARTWORK_CROPS.map((crop) => (
             <ArtworkField
               key={crop}

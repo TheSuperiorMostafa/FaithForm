@@ -169,10 +169,14 @@ export const FEATURES: FeatureDefinition[] = [
     label: "Transcripts & Clips",
     description:
       "Sermon transcripts, short clips for Facebook and lessons made from a service or an uploaded video. Uses Live Stream recordings, so Live Stream must be on too.",
-    href: "/dashboard/transcripts",
+    href: "/dashboard/live-streaming/recordings/clips",
     icon: Captions,
-    // Its own Transcripts and Clips sections. Recording pages stay under Live Stream.
-    routes: ["/dashboard/transcripts", "/dashboard/clips"],
+    // Lives inside Live > Recordings: the Clips view is its own route (the
+    // longest match wins over Live Stream). A recording's transcript page is
+    // gated by its own layout and page checks. The old /dashboard/transcripts
+    // and /dashboard/clips addresses only redirect, so they are kept here to be
+    // turned away under the same switch.
+    routes: ["/dashboard/live-streaming/recordings/clips", "/dashboard/transcripts", "/dashboard/clips"],
     defaultEnabled: false,
   },
   {

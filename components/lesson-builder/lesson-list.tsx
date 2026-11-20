@@ -18,7 +18,7 @@ function dateParts(date: string | null): { month: string; day: string } | null {
 
 /** Where a lesson came from, in a few words; nothing for one made here from a passage. */
 function originNote(lesson: SermonListItem, fromRecording: boolean): string | null {
-  if (fromRecording) return "From a recording";
+  if (fromRecording) return "From a past sermon";
   if ((lesson.builder ?? "sermon") === "sermon") return "From a sermon";
   return null;
 }
@@ -39,7 +39,7 @@ export function LessonList({
       <EmptyState
         icon={GraduationCap}
         title="No lessons yet"
-        description="Start a lesson from a Bible passage here. You can also make one from a recorded sermon in Live Streaming → Recordings."
+        description="Make a lesson from a past sermon, or start a new one from Bible passages."
         action={
           <Button size="lg" nativeButton={false} render={<Link href="/dashboard/lesson-builder/new" />}>
             <Plus aria-hidden className="size-5" />

@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, Captions, Clapperboard, Download, RotateCcw, Square, TriangleAlert, Video } from "lucide-react";
+import { ArrowLeft, Captions, Download, RotateCcw, Square, TriangleAlert, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { JobProgress } from "@/components/sermon-media/job-progress";
@@ -11,7 +10,6 @@ import {
   apiRequest,
   isJobActive,
   recordingApi,
-  type LessonSummary,
   type PublicJob,
   type RecordingOverview,
   type SermonMediaState,
@@ -23,29 +21,16 @@ import { formatLength } from "@/components/sermon-media/time";
 import { TranscriptViewer } from "@/components/sermon-media/transcript-viewer";
 import { downloadText, transcriptFilename, transcriptToText } from "@/components/transcripts/export";
 import { transcriptStatus, type TranscriptStatusKind } from "@/components/transcripts/status";
-import {
-  BACK_LABEL,
-  CARD,
-  CLIPS_DESCRIPTION,
-  CLIPS_TITLE,
-  LESSON_DESCRIPTION,
-  LESSON_TITLE,
-  MAKE_DESCRIPTION,
-  MAKE_TITLE,
-} from "@/components/transcripts/transcript-detail-skeleton";
+import { BACK_LABEL } from "@/components/transcripts/transcript-detail-skeleton";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
-import { List, ListRow } from "@/components/ui/list-row";
-import { PageHeader, SectionHeader } from "@/components/ui/page-header";
+import { PageHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { recordingPageHref } from "@/lib/sermon-media/hrefs";
 import { cn } from "@/lib/utils";
 
 const POLL_MS = 5000;
-const CLIPS_HREF = "/dashboard/clips";
-const LIBRARY_HREF = "/dashboard/transcripts";
-const lessonHref = (sermonId: string) => `/dashboard/lesson-builder/${sermonId}`;
-const recordingPageHref = (recordingId: string) => `/dashboard/live-streaming/recordings/${recordingId}`;
 
 export type TranscriptRecording = {
   id: string;
@@ -59,13 +44,15 @@ export type TranscriptRecording = {
   posterUrl: string | null;
 };
 
-type Busy = null | "transcribe" | "stop" | "lesson" | "clips";
+type Busy = null | "transcribe" | "stop";
 
 /**
- * One service's transcript workspace: live progress while FaithForm listens,
- * the full recording, the sermon's start and end, the transcript itself with
- * search, click-to-seek and corrections, and the lesson and clips made from
- * the sermon. Checks back every five seconds only while work is running.
+ * One recording's transcript, under Live > Recordings: live progress while
+ * FaithForm listens, the full recording, the sermon times FaithForm found
+ * (used as they are; staff can move them), and the transcript itself with
+ * search, click-to-seek and corrections. Lessons and clips are made elsewhere
+ * (Lessons, and the recording's More options). Checks back every five seconds
+ * only while work is running.
  */
 export function TranscriptDetail({
   recording,
@@ -85,20 +72,16 @@ export function TranscriptDetail({
   initialSeekSec: number | null;
   autoTranscribe: boolean;
 }) {
-  const router = useRouter();
   const player = useRef<SourcePlayerHandle>(null);
-  const rangeRef = useRef<HTMLDivElement>(null);
   const [state, setState] = useState(initialState);
   const [job, setJob] = useState(initialJob);
-  const [lessons, setLessons] = useState<LessonSummary[]>([]);
-  const [clipCount, setClipCount] = useState<number | null>(null);
+  /** Lessons and clips made from the current sermon times (changing them flags these). */
+  const [dependents, setDependents] = useState(0);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [transcriptLoading, setTranscriptLoading] = useState(initialState.currentTranscriptVersion !== null);
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(initialSeekSec ?? 0);
   const [busy, setBusy] = useState<Busy>(null);
-  const [lessonProblem, setLessonProblem] = useState<string | null>(null);
-  const [clipsNote, setClipsNote] = useState<{ tone: "done" | "problem"; text: string } | null>(null);
   const recordingId = recording.id;
 
   const loadOverview = useCallback(async () => {
@@ -106,8 +89,7 @@ export function TranscriptDetail({
     if (!result.ok) return result.error;
     setState(result.data.state);
     setJob(result.data.job);
-    setLessons(result.data.lessons);
-    setClipCount(result.data.clipCount);
+    setDependents(result.data.lessons.length + result.data.clipCount);
     return null;
   }, [recordingId]);
 
@@ -149,7 +131,7 @@ export function TranscriptDetail({
   const wasActive = useRef(active);
   useEffect(() => {
     if (wasActive.current && !active && job?.status === "succeeded") {
-      toast.success("The transcript is ready. Check the sermon times, then make a lesson or clips.");
+      toast.success("The transcript is ready.");
     }
     wasActive.current = active;
   }, [active, job?.status]);
@@ -238,77 +220,6 @@ export function TranscriptDetail({
     void loadOverview();
   };
 
-  const makeLesson = async (replace = false): Promise<void> => {
-    setBusy("lesson");
-    setLessonProblem(null);
-    const result = await apiRequest<{ sermonId: string }>(
-      `${recordingApi(recordingId)}/lesson`,
-      { method: "POST", body: replace ? { replace: true } : {} },
-      "We couldn't make the lesson. Your recording and transcript are safe; please try again.",
-    );
-    if (result.ok) {
-      toast.success("Your lesson is ready. Opening it now.");
-      router.push(lessonHref(result.data.sermonId));
-      return;
-    }
-    setBusy(null);
-    if (result.status === 409 && result.code === "draft_edited") {
-      const ok = await confirmAction({
-        title: "Replace your edited lesson?",
-        description: "Someone edited the lesson made from this sermon. Making it again replaces those changes.",
-        confirmLabel: "Replace lesson",
-        destructive: true,
-      });
-      if (ok) await makeLesson(true);
-      return;
-    }
-    if (result.status === 422 && result.code === "insufficient_source") {
-      setLessonProblem(
-        `${result.error} Check that the sermon times cover the whole message, or correct any unclear lines in the transcript, then try again.`,
-      );
-      return;
-    }
-    if (result.status === 409 && result.code === "range_required") {
-      setLessonProblem("Confirm where the sermon starts and ends first, then make the lesson.");
-      rangeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-      void loadOverview();
-      return;
-    }
-    setLessonProblem(result.error);
-  };
-
-  const makeClips = async () => {
-    setBusy("clips");
-    setClipsNote(null);
-    const result = await apiRequest<{ made: number; autoConfirmed?: boolean }>(
-      `${recordingApi(recordingId)}/clips`,
-      { method: "POST", body: { action: "make" } },
-      "We couldn't make clips. Please try again.",
-    );
-    setBusy(null);
-    if (!result.ok) {
-      if (result.status === 409 && result.code === "range_required") {
-        setClipsNote({ tone: "problem", text: "We weren't sure where the sermon starts and ends. Set the sermon times, then make clips." });
-        rangeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
-      } else {
-        setClipsNote({ tone: "problem", text: result.error });
-      }
-      return;
-    }
-    const made = result.data.made;
-    if (made > 0) {
-      const text = `${made} clip${made === 1 ? " is" : "s are"} being made — they'll appear in Clips for approval.`;
-      toast.success(text, { action: { label: "Open Clips", onClick: () => router.push(CLIPS_HREF) } });
-      setClipsNote({ tone: "done", text });
-    } else {
-      setClipsNote({
-        tone: "problem",
-        text: "We didn't find clear moments for clips in this sermon. Check the sermon times, or try again after correcting the transcript.",
-      });
-    }
-    void loadOverview();
-  };
-
   const download = () => {
     if (!transcript) return;
     const text = transcriptToText({
@@ -320,26 +231,22 @@ export function TranscriptDetail({
     downloadText(transcriptFilename(recording.title), text);
   };
 
-  const lessonDisabledReason = !hasTranscript
-    ? "You can make a lesson once the transcript is ready."
-    : !confirmed
-      ? "Confirm the sermon times above first."
-      : null;
-  const clipsDisabledReason = !hasTranscript ? "You can make clips once the transcript is ready." : null;
   const length = recording.durationSec ?? transcript?.durationSec ?? null;
 
   return (
     <div className="flex w-full flex-col gap-8">
       <Link
-        href={LIBRARY_HREF}
+        href={recordingPageHref(recordingId)}
         className="inline-flex min-h-11 w-fit items-center gap-2 text-[15px] font-medium text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden />
         {BACK_LABEL}
       </Link>
 
+      {/* The Live layout owns the page's h1. */}
       <PageHeader
-        title={recording.title}
+        as="h2"
+        title={`Transcript: ${recording.title}`}
         description={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>{recording.dateLabel}</span>
@@ -392,14 +299,13 @@ export function TranscriptDetail({
               {recording.status === "processing" ? "The video shows here once it's ready." : "No video to play."}
             </div>
           )}
-          <div ref={rangeRef} className="scroll-mt-24">
-            <SermonRangeCard
+          <SermonRangeCard
               recordingId={recordingId}
               state={state}
               transcriptReady={hasTranscript}
               durationSec={transcript?.durationSec ?? recording.durationSec}
               currentUserId={currentUserId}
-              dependents={lessons.length + (clipCount ?? 0)}
+              dependents={dependents}
               canEdit
               getCurrentTime={getCurrentTime}
               onSeek={seek}
@@ -410,7 +316,6 @@ export function TranscriptDetail({
               }}
               onReload={() => void loadOverview()}
             />
-          </div>
         </div>
 
         <TranscriptViewer
@@ -430,114 +335,6 @@ export function TranscriptDetail({
           }}
         />
       </div>
-
-      <section aria-labelledby="make-heading" className="flex flex-col gap-4">
-        <SectionHeader id="make-heading" title={MAKE_TITLE} description={MAKE_DESCRIPTION} />
-        <div className="grid gap-6 md:grid-cols-2 md:items-start">
-          <div className={CARD}>
-            <div className="space-y-1">
-              <h3 className="font-heading text-lg font-semibold">{LESSON_TITLE}</h3>
-              <p className="text-[15px] text-muted-foreground">{LESSON_DESCRIPTION}</p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button
-                size="lg"
-                className="w-fit"
-                onClick={() => void makeLesson()}
-                disabled={Boolean(lessonDisabledReason) || busy !== null}
-                aria-describedby={lessonDisabledReason ? "lesson-disabled-reason" : undefined}
-              >
-                <BookOpen aria-hidden />
-                {busy === "lesson" ? "Writing the lesson…" : lessons.length > 0 ? "Make the lesson again" : "Make a lesson"}
-              </Button>
-              {lessonDisabledReason ? (
-                <p id="lesson-disabled-reason" className="text-sm text-muted-foreground">
-                  {lessonDisabledReason}
-                </p>
-              ) : busy === "lesson" ? (
-                <p className="text-sm text-muted-foreground" aria-live="polite">
-                  This can take a minute. Please keep this page open.
-                </p>
-              ) : null}
-              {lessonProblem ? (
-                <p role="alert" className="rounded-xl bg-destructive/[0.06] px-4 py-3 text-[15px]">
-                  {lessonProblem}
-                </p>
-              ) : null}
-            </div>
-            {lessons.length > 0 ? (
-              <List label="Lessons made from this sermon" className="shadow-none">
-                {lessons.map((lesson) => (
-                  <ListRow
-                    key={lesson.sermonId}
-                    compact
-                    href={lessonHref(lesson.sermonId)}
-                    title={lesson.title || "Untitled lesson"}
-                    subtitle={
-                      lesson.needsReview || lesson.stale
-                        ? (lesson.reviewReason ?? "The sermon times or transcript changed after this lesson was made.")
-                        : lesson.status === "published"
-                          ? "Shared"
-                          : "Draft"
-                    }
-                    status={lesson.needsReview || lesson.stale ? <StatusBadge tone="attention">Needs review</StatusBadge> : null}
-                  />
-                ))}
-              </List>
-            ) : null}
-          </div>
-
-          <div className={CARD}>
-            <div className="space-y-1">
-              <h3 className="font-heading text-lg font-semibold">{CLIPS_TITLE}</h3>
-              <p className="text-[15px] text-muted-foreground">{CLIPS_DESCRIPTION}</p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <Button
-                size="lg"
-                variant="outline"
-                className="w-fit"
-                onClick={() => void makeClips()}
-                disabled={Boolean(clipsDisabledReason) || busy !== null}
-                aria-describedby={clipsDisabledReason ? "clips-disabled-reason" : undefined}
-              >
-                <Clapperboard aria-hidden />
-                {busy === "clips" ? "Finding moments…" : "Make clips"}
-              </Button>
-              {clipsDisabledReason ? (
-                <p id="clips-disabled-reason" className="text-sm text-muted-foreground">
-                  {clipsDisabledReason}
-                </p>
-              ) : null}
-              {clipsNote ? (
-                <p
-                  role={clipsNote.tone === "problem" ? "alert" : "status"}
-                  className={cn(
-                    "rounded-xl px-4 py-3 text-[15px]",
-                    clipsNote.tone === "problem" ? "bg-destructive/[0.06]" : "bg-emerald-500/[0.08]",
-                  )}
-                >
-                  {clipsNote.text}{" "}
-                  {clipsNote.tone === "done" ? (
-                    <Link href={CLIPS_HREF} className="font-semibold text-primary underline-offset-4 hover:underline dark:text-accent">
-                      Open Clips
-                    </Link>
-                  ) : null}
-                </p>
-              ) : null}
-            </div>
-            {clipCount ? (
-              <Link
-                href={CLIPS_HREF}
-                className="inline-flex min-h-11 w-fit items-center gap-2 rounded-[10px] text-[15px] font-semibold text-primary underline-offset-4 hover:underline dark:text-accent"
-              >
-                <Clapperboard aria-hidden className="size-4" />
-                {clipCount} clip{clipCount === 1 ? "" : "s"} from this sermon — open Clips
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      </section>
 
       {hasTranscript && !active ? (
         <AdvancedSection title="More transcript options">
@@ -678,7 +475,7 @@ function StatusBanner({
           <p className="text-[15px] text-muted-foreground">
             {failed
               ? `${job?.error ?? "Something went wrong while listening to the service."} Nothing was lost — try again.`
-              : "FaithForm writes out every word, finds the sermon, and gets it ready for a lesson and clips. It usually takes a few minutes."}
+              : "FaithForm writes out every word and finds the sermon. It usually takes a few minutes."}
           </p>
         </div>
       </div>

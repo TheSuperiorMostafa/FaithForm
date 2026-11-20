@@ -1,7 +1,12 @@
-import { Image as ImageIcon, Smartphone } from "lucide-react";
+import { Download, FileDown, Image as ImageIcon, Smartphone } from "lucide-react";
 
+import {
+  APP_QR_CARD_DESCRIPTION,
+  APP_QR_CARD_TITLE,
+} from "@/components/church-app/app-qr-copy";
 import { ChurchAppSettings } from "@/components/member-app/church-app-settings";
 import { BrandColorsSkeleton } from "@/components/settings/brand-colors-skeleton";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
@@ -127,6 +132,32 @@ function AccessSkeleton() {
           </Card>
         ))}
       </div>
+      <Card className="flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <div className="space-y-1.5">
+            <h3 className="font-heading text-lg font-bold text-foreground">{APP_QR_CARD_TITLE}</h3>
+            <p className="text-[15px] leading-relaxed text-muted-foreground">{APP_QR_CARD_DESCRIPTION}</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <Button type="button" tabIndex={-1}>
+              <FileDown aria-hidden />
+              Download flyer (PDF)
+            </Button>
+            <Button type="button" variant="outline" tabIndex={-1}>
+              <Download aria-hidden />
+              Download QR code
+            </Button>
+            <Button type="button" variant="ghost" tabIndex={-1}>
+              <Download aria-hidden />
+              QR code as SVG
+            </Button>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-center gap-2 self-center">
+          <Skeleton className="aspect-[8.5/11] w-[176px] rounded-lg" />
+          <p className="text-sm text-muted-foreground">Printed in your app colors</p>
+        </div>
+      </Card>
     </section>
   );
 }

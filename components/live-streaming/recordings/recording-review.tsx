@@ -67,6 +67,8 @@ type Props = {
   timeZone: string;
   stats: { live: number; replay: number } | null;
   artworkSlot?: React.ReactNode;
+  /** Transcript and clips actions, shown at the end of More options. */
+  mediaSlot?: React.ReactNode;
   websiteSermonsUrl?: string | null;
   /** Speakers and topics used on this church's other recordings. */
   tagSuggestions?: { speakers: string[]; topics: string[] };
@@ -90,7 +92,8 @@ function currentAudience(value: Audience): Audience {
  * button says exactly what it does — "Publish to the app". The website and
  * the app are plain checkboxes, with the artwork right under them. Anything
  * on the website is listed there. Everything else (audience, speaker,
- * scripture, topics) is folded under "More options", and deleting sits in a
+ * scripture, topics, and the transcript and clips) is folded under "More
+ * options", and deleting sits in a
  * quiet section at the very bottom.
  */
 export function RecordingReview({
@@ -104,6 +107,7 @@ export function RecordingReview({
   timeZone,
   stats,
   artworkSlot,
+  mediaSlot,
   websiteSermonsUrl,
   tagSuggestions,
 }: Props) {
@@ -454,8 +458,12 @@ export function RecordingReview({
         />
       ) : null}
 
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="flex min-w-0 flex-col gap-6">
+      {/* On wide screens the rarely-needed "More options" sit under the video,
+          so the right side stays a short form that ends in Publish; on phones
+          they follow the publish card. Every field is React state, so moving
+          them changes nothing about what Publish and Save send. */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
           {playback && playerSrc ? (
             <RecordingPlayer
               key={playerSrc}
@@ -524,12 +532,13 @@ export function RecordingReview({
           ) : null}
 
           {canEdit && thumbnails.length > 0 ? (
-            <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
+            <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-card dark:shadow-none">
               <div>
                 <h3 className="font-heading text-lg font-semibold">Cover picture</h3>
                 <p className="text-[15px] text-muted-foreground">Chosen automatically. Pick another if you like.</p>
               </div>
-              <div role="radiogroup" aria-label="Cover picture" className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {/* Small frames in a tight row, so choosing a cover never means scrolling. */}
+              <div role="radiogroup" aria-label="Cover picture" className="flex flex-wrap gap-2">
                 {thumbnails.map((choice) => (
                   <button
                     key={choice.url}
@@ -539,14 +548,14 @@ export function RecordingReview({
                     aria-label={choice.label}
                     onClick={() => setPoster(choice.url)}
                     className={cn(
-                      "relative aspect-video overflow-hidden rounded-lg border-2 bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "relative aspect-video h-16 shrink-0 overflow-hidden rounded-lg border-2 bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-20",
                       poster === choice.url ? "border-accent" : "border-transparent",
                     )}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={choice.url} alt="" className="size-full object-cover" loading="lazy" />
                     {poster === choice.url ? (
-                      <CheckCircle2 className="absolute right-1 top-1 size-5 rounded-full bg-white text-accent" aria-hidden />
+                      <CheckCircle2 className="absolute right-1 top-1 size-4 rounded-full bg-white text-accent" aria-hidden />
                     ) : null}
                   </button>
                 ))}
@@ -558,7 +567,7 @@ export function RecordingReview({
           ) : null}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-6">
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
           <section
             aria-labelledby="publish-heading"
             className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none"
@@ -649,37 +658,6 @@ export function RecordingReview({
 
             {artworkSlot}
 
-            <AdvancedSection
-              title="More options"
-              description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}
-            >
-              <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
-                <legend className="sr-only">More options</legend>
-                {appEnabled ? (
-                  <>
-                    <Field id="rec-audience" label="Who can watch it in the app">
-                      <Select
-                        id="rec-audience"
-                        value={audience}
-                        onChange={(event) => setAudience(event.target.value as Audience)}
-                      >
-                        <option value="public">Everyone</option>
-                        <option value="followers">People who follow your church</option>
-                      </Select>
-                    </Field>
-                    <Check
-                      checked={notify}
-                      onChange={setNotify}
-                      label="Let members know it's available"
-                      hint="Sends one notification in the app when it's first published."
-                    />
-                  </>
-                ) : null}
-                <RecordingExtraFields speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription}
-                  chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics}
-                  speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
-              </fieldset>
-            </AdvancedSection>
 
             {isAdmin ? (
               <div className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-col gap-3 rounded-b-2xl border-t border-border bg-card px-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5">
@@ -746,6 +724,43 @@ export function RecordingReview({
             </p>
           ) : null}
         </div>
+
+        <AdvancedSection
+          className="min-w-0 lg:col-start-1 lg:row-start-2"
+          title="More options"
+          description={
+            (appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture") +
+            (mediaSlot ? ", transcript and clips" : "")
+          }
+        >
+          <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
+            <legend className="sr-only">More options</legend>
+            {appEnabled ? (
+              <>
+                <Field id="rec-audience" label="Who can watch it in the app">
+                  <Select
+                    id="rec-audience"
+                    value={audience}
+                    onChange={(event) => setAudience(event.target.value as Audience)}
+                  >
+                    <option value="public">Everyone</option>
+                    <option value="followers">People who follow your church</option>
+                  </Select>
+                </Field>
+                <Check
+                  checked={notify}
+                  onChange={setNotify}
+                  label="Let members know it's available"
+                  hint="Sends one notification in the app when it's first published."
+                />
+              </>
+            ) : null}
+            <RecordingExtraFields speakers={speakers} onSpeakersChange={setSpeakers} description={description} onDescriptionChange={setDescription}
+              chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics}
+              speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
+          </fieldset>
+          {mediaSlot}
+        </AdvancedSection>
       </div>
 
       {isAdmin ? (

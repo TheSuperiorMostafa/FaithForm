@@ -30,6 +30,12 @@ export type PushMessage = {
   collapseKey: string;
   correlationId: string;
   topic?: "announcements" | "events" | "groups" | "checkin";
+  /**
+   * Time-critical for the person receiving it (a child's room asking for a
+   * guardian). Delivered as a time-sensitive iOS alert and a max-priority
+   * Android notification. Never set for broadcasts.
+   */
+  urgent?: boolean;
 };
 
 export interface PushAdapter {
@@ -137,6 +143,9 @@ export function buildApnsPayload(message: PushMessage): Record<string, unknown> 
       sound: "default",
       "thread-id": message.collapseKey,
       "mutable-content": 1,
+      // Breaks through Focus and scheduled summaries when the app holds the
+      // Time Sensitive entitlement; without it iOS treats it as a normal alert.
+      ...(message.urgent ? { "interruption-level": "time-sensitive", "relevance-score": 1 } : {}),
     },
     faithform: { deepLink: message.deepLink, correlationId: message.correlationId },
   };
@@ -154,7 +163,14 @@ export function buildFcmPayload(
       android: {
         collapse_key: message.collapseKey,
         priority: "HIGH",
-        notification: { channel_id: `faithform_${message.topic ?? "announcements"}` },
+        notification: {
+          channel_id: `faithform_${message.topic ?? "announcements"}`,
+          // Shown on the lock screen without its text, like the in-app copy.
+          visibility: "PRIVATE",
+          ...(message.urgent
+            ? { notification_priority: "PRIORITY_MAX", default_sound: true, default_vibrate_timings: true }
+            : {}),
+        },
       },
     },
   };
@@ -305,6 +321,9 @@ export class ApnsAdapter implements PushAdapter {
         headers: {
           "apns-topic": envValue("APNS_TOPIC")!,
           "apns-push-type": "alert",
+          // Immediate delivery. 10 is the default for alerts; stated so it
+          // can never be lowered by an APNs default change.
+          "apns-priority": "10",
           "apns-collapse-id": message.collapseKey.slice(0, 64),
           authorization: `bearer ${authorization.token}`,
         },

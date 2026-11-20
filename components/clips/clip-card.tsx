@@ -19,6 +19,7 @@ import {
   type QueueItem,
 } from "@/components/clips/format";
 import { cn } from "@/lib/utils";
+import { clipHref } from "@/lib/sermon-media/hrefs";
 
 export type ClipCardActions = {
   approve: (item: QueueItem, caption: string, postNow: boolean) => Promise<boolean>;
@@ -85,7 +86,7 @@ export function ClipCard({
     confirmed,
   });
   const ready = render?.status === "ready";
-  const editHref = `/dashboard/clips/${item.id}`;
+  const editHref = clipHref(item.id);
 
   const saveCaption = async () => {
     if (caption === savedCaption) return;

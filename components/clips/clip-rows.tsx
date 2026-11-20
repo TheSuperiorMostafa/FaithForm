@@ -10,13 +10,14 @@ import { CLIP_ROW_LIST } from "@/components/clips/clips-skeleton";
 import { firstFrame, useStableUrl } from "@/components/clips/clip-media";
 import { clipPlace, formatPostTime, postView, type QueueItem } from "@/components/clips/format";
 import { cn } from "@/lib/utils";
+import { clipHref } from "@/lib/sermon-media/hrefs";
 
 /** A small still of the final video that opens the clip. */
 function Thumb({ item }: { item: QueueItem }) {
   const src = useStableUrl(item.render?.id, item.render?.status === "ready" ? item.render.previewUrl : null);
   return (
     <Link
-      href={`/dashboard/clips/${item.id}`}
+      href={clipHref(item.id)}
       aria-label={`Open the clip from ${item.recordingTitle}`}
       className="relative block aspect-[9/16] w-16 shrink-0 overflow-hidden rounded-xl bg-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >

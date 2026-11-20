@@ -191,6 +191,25 @@ export function BroadcastControlCenter({
   const phase =
     overview.phase === "post_live" && dismissedPostLive === overview.recording?.id ? "idle" : overview.phase;
 
+  // The service can end without anyone pressing End service here: the
+  // streaming software stopped and its video never came back, or someone
+  // ended it from another computer. Say so, rather than silently swapping the
+  // live screen for "Service ended".
+  const endedHere = useRef<string | null>(null);
+  const liveSessionId = phase === "live" ? (overview.session?.id ?? null) : null;
+  const lastLive = useRef<{ sessionId: string | null; autoEnd: boolean }>({ sessionId: liveSessionId, autoEnd: false });
+  useEffect(() => {
+    const was = lastLive.current;
+    lastLive.current = { sessionId: liveSessionId, autoEnd: Boolean(overview.autoEnd) };
+    if (!was.sessionId || liveSessionId || endedHere.current === was.sessionId) return;
+    if (phase !== "post_live" && phase !== "idle") return;
+    toast.info(
+      was.autoEnd
+        ? "Your streaming software stopped, so FaithForm ended the service. Your recording is being prepared."
+        : "The service has ended. Your recording is being prepared.",
+    );
+  }, [phase, liveSessionId, overview.autoEnd]);
+
   // When the recording finishes preparing, the server-rendered "ready to
   // publish" card needs to learn about it too.
   const recordingPhase = overview.recording?.phase.phase ?? null;
@@ -230,9 +249,13 @@ export function BroadcastControlCenter({
   const endLive = () =>
     startTransition(async () => {
       const wasWaiting = phase === "waiting_for_video";
+      // This screen announces its own End service below; the "it ended by
+      // itself" notice is only for an end that happened somewhere else.
+      endedHere.current = overview.session?.id ?? null;
       const result = await endLiveBroadcastAction();
       setConfirmEnd(false);
       if (!result.ok) {
+        endedHere.current = null;
         toast.error(result.error ?? "We couldn't end the livestream. Please try again.");
         await refresh();
         return;
@@ -750,20 +773,7 @@ function LiveView({
       </div>
 
       <div className="flex flex-col gap-5">
-        {lostVideo ? (
-          <div
-            className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10"
-            role="alert"
-          >
-            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
-            <div className="text-[15px]">
-              <p className="font-semibold">The video signal dropped.</p>
-              <p className="text-muted-foreground">
-                FaithForm is waiting for your streaming software to reconnect. You&apos;re still live.
-              </p>
-            </div>
-          </div>
-        ) : null}
+        {lostVideo ? <VideoStoppedNotice autoEnd={overview.autoEnd} /> : null}
 
         <div className={cn("grid gap-4", isAdmin && "sm:grid-cols-[minmax(0,1fr)_minmax(0,18rem)] sm:items-center")}>
           <RecordingCard indicator={overview.recordingIndicator} />
@@ -788,6 +798,48 @@ function LiveView({
             <StreamHealth overview={overview} appEnabled={appEnabled} />
           </Disclosure>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Live, but no video. Pressing Stop Streaming in OBS lands here first: the
+ * service ends by itself once the grace window passes, the same as End
+ * service. A dropped connection that comes back in time keeps it going.
+ */
+function VideoStoppedNotice({ autoEnd }: { autoEnd: BroadcastOverview["autoEnd"] }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remaining = autoEnd ? Math.max(0, Math.ceil((Date.parse(autoEnd.endsAt) - now) / 1000)) : null;
+
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-500/10">
+      <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
+      <div className="flex flex-col gap-1 text-[15px]">
+        {/* Only the headline is announced; a ticking countdown would be read out every second. */}
+        <p className="font-semibold" role="alert">
+          {autoEnd?.reason === "stopped" ? "Your streaming software stopped sending video." : "We're not receiving your video."}
+        </p>
+        {remaining === null ? (
+          <p className="text-muted-foreground">
+            FaithForm is waiting for your streaming software to reconnect. You&apos;re still live.
+          </p>
+        ) : remaining > 0 ? (
+          <p className="text-muted-foreground">
+            If it doesn&apos;t come back, FaithForm ends the service in{" "}
+            <span className="font-semibold tabular-nums text-foreground">{formatClock(remaining)}</span> and saves the
+            recording. To keep going, press Start Streaming again.
+          </p>
+        ) : (
+          <p className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden />
+            Ending the service and saving the recording…
+          </p>
+        )}
       </div>
     </div>
   );

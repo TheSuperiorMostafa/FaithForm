@@ -62,7 +62,7 @@ export type SermonMediaState = {
     by: string | null;
     at: string;
     transcriptVersion: number | null;
-    /** FaithForm confirmed it by itself; staff should still check it. */
+    /** FaithForm chose it by itself (staff can still move it). */
     automatic?: boolean;
   } | null;
   inputVersion: number;
@@ -83,6 +83,8 @@ export type RecordingOverview = {
   canPublish: boolean;
   lessons: LessonSummary[];
   clipCount: number;
+  /** Clips will be made as soon as the running transcription finishes. */
+  clipsQueued?: boolean;
 };
 
 export type SegmentFlag = "uncertain" | "noise" | "music" | "overlap_merged" | "edited";

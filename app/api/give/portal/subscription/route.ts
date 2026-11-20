@@ -9,6 +9,7 @@ import {
   resumeSubscription,
   updateSubscriptionAmount,
 } from "@/lib/stripe/giving";
+import { mirrorSubscriptionAction } from "@/lib/giving/subscription-mirror";
 
 const bodySchema = z.object({
   slug: z.string().min(1),
@@ -82,25 +83,35 @@ export async function POST(request: Request) {
   const fund = Array.isArray(fundRaw) ? fundRaw[0] : fundRaw;
   const fundName = fund?.name ?? "General";
 
+  if (parsed.data.action === "update_amount" && !parsed.data.newAmountCents) {
+    return NextResponse.json({ error: "Amount required" }, { status: 400 });
+  }
+
   try {
-    if (parsed.data.action === "pause") {
-      await pauseSubscription(stripeAccountId, stripeSubId);
-    } else if (parsed.data.action === "resume") {
-      await resumeSubscription(stripeAccountId, stripeSubId);
-    } else if (parsed.data.action === "cancel") {
-      await cancelSubscription(stripeAccountId, stripeSubId);
-    } else if (parsed.data.action === "update_amount") {
-      if (!parsed.data.newAmountCents) {
-        return NextResponse.json({ error: "Amount required" }, { status: 400 });
-      }
-      await updateSubscriptionAmount(
-        stripeAccountId,
-        stripeSubId,
-        parsed.data.newAmountCents,
-        fundName,
-      );
-    }
-    return NextResponse.json({ ok: true });
+    const { action, newAmountCents } = parsed.data;
+    const subscription =
+      action === "pause"
+        ? await pauseSubscription(stripeAccountId, stripeSubId)
+        : action === "resume"
+          ? await resumeSubscription(stripeAccountId, stripeSubId)
+          : action === "cancel"
+            ? await cancelSubscription(stripeAccountId, stripeSubId)
+            : await updateSubscriptionAmount(
+                stripeAccountId,
+                stripeSubId,
+                newAmountCents as number,
+                fundName,
+              );
+    // Save the result now so the portal updates without a refresh; the
+    // webhook reconciles the rest of the row when it arrives.
+    await mirrorSubscriptionAction({
+      churchId: session.churchId,
+      stripeSubscriptionId: stripeSubId,
+      action,
+      subscription,
+      newAmountCents,
+    });
+    return NextResponse.json({ ok: true, status: subscription.status });
   } catch {
     return NextResponse.json({ error: "Action failed" }, { status: 500 });
   }

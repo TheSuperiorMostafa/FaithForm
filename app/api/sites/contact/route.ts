@@ -16,6 +16,7 @@ import { getContactTargetBySlug } from "@/lib/sites/queries";
 import { canPreviewDraftSite } from "@/lib/sites/preview-access";
 import { churchSlugForHost, isPlatformSiteHost } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { tryQueueStaffNotification } from "@/lib/notifications/staff";
 
 /**
  * Public endpoint for the Visit-section contact form.
@@ -131,6 +132,17 @@ export async function POST(request: NextRequest) {
       { error: "We could not send that right now. Please try again shortly." },
       { status: 500 },
     );
+  }
+
+  // Staff who chose "Website messages" in their notifications get an email or
+  // text. It only says a message arrived; the visitor's details stay inside.
+  if (inserted?.id) {
+    await tryQueueStaffNotification({
+      churchId: target.churchId,
+      event: "website_inbox",
+      eventKey: inserted.id as string,
+      href: "/dashboard/website/inbox",
+    });
   }
 
   // The Website's emails are switched off in the control center. The message

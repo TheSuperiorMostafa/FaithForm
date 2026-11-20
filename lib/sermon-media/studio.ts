@@ -13,17 +13,19 @@ import {
   type ClipRow,
   type RenderRow,
 } from "@/lib/sermon-media/clips";
-import { logSermonMedia } from "@/lib/sermon-media/jobs";
+import { enqueueTranscription, logSermonMedia, type MediaJobRow } from "@/lib/sermon-media/jobs";
 import { publishReel } from "@/lib/sermon-media/reel-runtime";
 import { nextPostSlots } from "@/lib/sermon-media/schedule";
-import { getSermonMediaState, getTranscript } from "@/lib/sermon-media/store";
+import { automaticSermonRange } from "@/lib/sermon-media/sermon-range";
+import { getLatestJob, getSermonMediaState, getTranscript, type SermonMediaState } from "@/lib/sermon-media/store";
+import type { Transcript } from "@/lib/sermon-media/transcript";
 
 /**
  * The Transcripts & Clips studio: what happens after each service without
  * anyone asking, and how approved clips reach Facebook.
  *
- *   transcript ready
- *     → sermon range confirmed automatically when the evidence is strong
+ *   transcript ready (made first, by itself, when someone asks for clips)
+ *     → the detected sermon range is used directly (or the whole video)
  *     → the best few clips found, captioned, cropped 9:16 and rendered
  *     → waiting in Clips for one-tap approval (someone watches each one)
  *     → approved clips post on the church's schedule
@@ -32,7 +34,6 @@ import { getSermonMediaState, getTranscript } from "@/lib/sermon-media/store";
  * after approval withdraws it. Every step is idempotent and safe to repeat.
  */
 
-export const AUTO_CONFIRM_MIN_CONFIDENCE = 0.8;
 export { draftCaption };
 
 type FacebookStatus = { connected: boolean; pageId: string | null; pageName: string | null; needsReconnect: boolean };
@@ -43,8 +44,45 @@ async function facebookStatus(churchId: string, db: SupabaseClient): Promise<Fac
 }
 
 /**
+ * Uses FaithForm's own sermon range when nobody has set one: the detected
+ * range, or the whole recording when detection found nothing. There is no
+ * confirmation step; staff can still move it on the transcript page.
+ */
+export async function ensureSermonRange(
+  db: SupabaseClient,
+  churchId: string,
+  recordingId: string,
+  state: SermonMediaState,
+  transcript: Transcript,
+): Promise<{ state: SermonMediaState; autoConfirmed: boolean }> {
+  if (state.confirmed) return { state, autoConfirmed: false };
+  const range = automaticSermonRange({
+    suggestion: state.suggestion,
+    durationSec: transcript.durationSec,
+    segments: transcript.segments,
+  });
+  if (!range) return { state, autoConfirmed: false };
+  const { data: version } = await db.rpc("confirm_sermon_range", {
+    p_recording_id: recordingId,
+    p_church_id: churchId,
+    p_start_sec: range.startSec,
+    p_end_sec: range.endSec,
+    p_user_id: null,
+    p_expected_input_version: state.inputVersion,
+  });
+  if (version === null || version === undefined) {
+    // Someone set it at the same moment: use theirs.
+    return { state: await getSermonMediaState(db, churchId, recordingId), autoConfirmed: false };
+  }
+  await db.from("recording_sermon_media").update({ confirmed_automatically: true }).eq("recording_id", recordingId);
+  logSermonMedia("range_auto_confirmed", { recordingId, confidence: state.suggestion.confidence, whole: range.whole });
+  return { state: await getSermonMediaState(db, churchId, recordingId), autoConfirmed: true };
+}
+
+/**
  * Runs the automatic steps for one recording. `manual` is a person pressing
- * "Make clips": it still needs a confirmed (or confidently suggested) range.
+ * "Make clips" (or having pressed it before the transcript existed): clips are
+ * made even when the church turned automatic clips off.
  */
 export async function runPipelineForRecording(
   db: SupabaseClient,
@@ -56,34 +94,12 @@ export async function runPipelineForRecording(
   const { data: row } = await db.from("sermon_media_settings").select("*").eq("church_id", churchId).maybeSingle();
   const settings = settingsFromRow((row as Record<string, unknown> | null) ?? null);
 
-  let state = await getSermonMediaState(db, churchId, recordingId);
   const transcript = await getTranscript(db, churchId, recordingId);
   if (!transcript) return { status: "no_transcript", clips: 0, autoConfirmed: false };
-
-  let autoConfirmed = false;
-  const confident =
-    state.suggestion.status === "suggested" &&
-    (state.suggestion.confidence ?? 0) >= AUTO_CONFIRM_MIN_CONFIDENCE &&
-    state.suggestion.startSec !== null &&
-    state.suggestion.endSec !== null &&
-    state.suggestion.forVersion === state.currentTranscriptVersion;
-  if (!state.confirmed && confident && (settings.autoConfirmRange || options.manual)) {
-    const { data: version } = await db.rpc("confirm_sermon_range", {
-      p_recording_id: recordingId,
-      p_church_id: churchId,
-      p_start_sec: state.suggestion.startSec,
-      p_end_sec: state.suggestion.endSec,
-      p_user_id: null,
-      p_expected_input_version: state.inputVersion,
-    });
-    if (version !== null && version !== undefined) {
-      await db.from("recording_sermon_media").update({ confirmed_automatically: true }).eq("recording_id", recordingId);
-      autoConfirmed = true;
-      logSermonMedia("range_auto_confirmed", { recordingId, confidence: state.suggestion.confidence });
-      state = await getSermonMediaState(db, churchId, recordingId);
-    }
-  }
+  const ensured = await ensureSermonRange(db, churchId, recordingId, await getSermonMediaState(db, churchId, recordingId), transcript);
+  const { state, autoConfirmed } = ensured;
   if (!state.confirmed) {
+    // Only a recording with no usable length gets here.
     await markPipeline(db, recordingId, state.inputVersion);
     return { status: "needs_range", clips: 0, autoConfirmed };
   }
@@ -138,7 +154,11 @@ export async function runAutoPipelines(db: SupabaseClient, limit = 5): Promise<{
   let ran = 0;
   for (const row of data ?? []) {
     try {
-      await runPipelineForRecording(db, row.church_id as string, row.recording_id as string);
+      // Someone pressed "Make clips" before there was a transcript.
+      const job = await getLatestJob(db, row.church_id as string, row.recording_id as string, "transcribe");
+      await runPipelineForRecording(db, row.church_id as string, row.recording_id as string, {
+        manual: job?.params?.[MAKE_CLIPS_PARAM] === true,
+      });
       ran += 1;
     } catch (error) {
       logSermonMedia("pipeline_failed", { recordingId: row.recording_id, error: error instanceof Error ? error.message.slice(0, 160) : "unknown" });
@@ -146,6 +166,70 @@ export async function runAutoPipelines(db: SupabaseClient, limit = 5): Promise<{
     }
   }
   return { ran };
+}
+
+export const MAKE_CLIPS_PARAM = "make_clips";
+const LIVE_JOB = ["queued", "dispatched", "running"];
+
+/**
+ * "Make clips" for one recording, from the video alone. With a transcript,
+ * clips are found and rendered now. Without one, FaithForm transcribes first
+ * (or keeps the transcription already running) and remembers the request on
+ * that job, so the clips are made as soon as the words are in. Nobody has to
+ * make or check a transcript first.
+ */
+export async function requestClips(
+  db: SupabaseClient,
+  input: { churchId: string; recordingId: string; userId: string; language: string },
+): Promise<
+  | { status: "made"; clips: number; autoConfirmed: boolean }
+  | { status: "transcribing"; job: MediaJobRow }
+  | { status: "needs_range" | "off" }
+> {
+  const { churchId, recordingId } = input;
+  if (await getTranscript(db, churchId, recordingId)) {
+    const result = await runPipelineForRecording(db, churchId, recordingId, { manual: true });
+    if (result.status === "done") return { status: "made", clips: result.clips, autoConfirmed: result.autoConfirmed };
+    if (result.status === "needs_range") return { status: "needs_range" };
+    if (result.status === "off") return { status: "off" };
+  }
+
+  const previous = await getLatestJob(db, churchId, recordingId, "transcribe");
+  let job = previous && LIVE_JOB.includes(previous.status) ? previous : null;
+  if (!job) {
+    const { data: rec } = await db
+      .from("stream_recordings")
+      .select("mobile_rendition_revision")
+      .eq("id", recordingId)
+      .eq("church_id", churchId)
+      .single();
+    const enqueued = await enqueueTranscription(
+      {
+        churchId,
+        recordingId,
+        revision: Number(rec?.mobile_rendition_revision ?? 0),
+        language: input.language,
+        source: previous ? "retry" : "manual",
+        requestedBy: input.userId,
+        force: true,
+      },
+      db,
+    );
+    job = enqueued.job;
+  }
+  if (!job) throw new Error("Could not queue the transcription for clips.");
+  if (job.params?.[MAKE_CLIPS_PARAM] !== true) {
+    const params = { ...(job.params ?? {}), [MAKE_CLIPS_PARAM]: true };
+    await db.from("media_jobs").update({ params }).eq("id", job.id).eq("church_id", churchId);
+    job = { ...job, params };
+  }
+  logSermonMedia("clips_requested_before_transcript", { recordingId, jobId: job.id });
+  return { status: "transcribing", job };
+}
+
+/** Whether a running transcription will go on to make clips. */
+export function clipsQueuedOn(job: Pick<MediaJobRow, "status" | "params"> | null): boolean {
+  return Boolean(job && LIVE_JOB.includes(job.status) && job.params?.[MAKE_CLIPS_PARAM] === true);
 }
 
 /**

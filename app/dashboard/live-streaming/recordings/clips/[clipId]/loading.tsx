@@ -10,14 +10,14 @@ import { SkeletonContainer } from "@/components/ui/skeleton";
  * cards (left) beside the Facebook text, save, final video and approval cards
  * (right). Labels are real text; only the clip's data shimmers.
  */
-export default function ClipLoading() {
+export default function RecordingClipLoading() {
   return (
     <SkeletonContainer label="clip" className="flex w-full flex-col gap-8">
       <span className="inline-flex min-h-11 w-fit items-center gap-2 text-[15px] font-medium text-muted-foreground">
         <ArrowLeft className="size-4" aria-hidden />
         Back to Clips
       </span>
-      <PageHeader title={CLIP_EDITOR_TITLE} description={CLIP_EDITOR_DESCRIPTION} />
+      <PageHeader as="h2" title={CLIP_EDITOR_TITLE} description={CLIP_EDITOR_DESCRIPTION} />
       <ClipEditorBodySkeleton standalone={false} />
     </SkeletonContainer>
   );

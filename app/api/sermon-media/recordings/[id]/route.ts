@@ -1,6 +1,7 @@
 import { requireRecordingAccess } from "@/lib/sermon-media/access";
 import { ok } from "@/lib/sermon-media/http";
 import { getLatestJob, getSermonMediaState, publicJob } from "@/lib/sermon-media/store";
+import { clipsQueuedOn } from "@/lib/sermon-media/studio";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -44,5 +45,7 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
       };
     }),
     clipCount: clips.data?.length ?? 0,
+    // "Make clips" was pressed before the transcript existed: clips follow it.
+    clipsQueued: clipsQueuedOn(job),
   });
 }

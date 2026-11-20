@@ -13,6 +13,7 @@ import {
   pauseSubscription,
   resumeSubscription,
 } from "@/lib/stripe/giving";
+import { mirrorSubscriptionAction } from "@/lib/giving/subscription-mirror";
 
 const bodySchema = z.object({
   action: z.enum(["pause", "resume", "cancel"]),
@@ -61,13 +62,18 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   try {
-    if (parsed.data.action === "pause") {
-      await pauseSubscription(sub.stripeAccountId, sub.stripeSubscriptionId);
-    } else if (parsed.data.action === "resume") {
-      await resumeSubscription(sub.stripeAccountId, sub.stripeSubscriptionId);
-    } else {
-      await cancelSubscription(sub.stripeAccountId, sub.stripeSubscriptionId);
-    }
+    const subscription =
+      parsed.data.action === "pause"
+        ? await pauseSubscription(sub.stripeAccountId, sub.stripeSubscriptionId)
+        : parsed.data.action === "resume"
+          ? await resumeSubscription(sub.stripeAccountId, sub.stripeSubscriptionId)
+          : await cancelSubscription(sub.stripeAccountId, sub.stripeSubscriptionId);
+    await mirrorSubscriptionAction({
+      churchId: auth.churchId,
+      stripeSubscriptionId: sub.stripeSubscriptionId,
+      action: parsed.data.action,
+      subscription,
+    });
 
     await logAdminAction({
       churchId: auth.churchId,

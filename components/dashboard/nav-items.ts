@@ -1,8 +1,6 @@
 import {
   Baby,
   BookOpen,
-  Captions,
-  Clapperboard,
   CircleHelp,
   ClipboardCheck,
   Globe,
@@ -146,24 +144,6 @@ export const navItems: NavItem[] = [
     group: "weekly",
   },
   {
-    // Every service and uploaded video, transcribed with live progress.
-    label: "Transcripts",
-    shortLabel: "Transcripts",
-    href: "/dashboard/transcripts",
-    icon: Captions,
-    features: ["sermon_media"],
-    group: "weekly",
-  },
-  {
-    // Clips made from sermons: approve in one tap, they post on schedule.
-    label: "Clips",
-    shortLabel: "Clips",
-    href: "/dashboard/clips",
-    icon: Clapperboard,
-    features: ["sermon_media"],
-    group: "weekly",
-  },
-  {
     // A pastor wants to read what the phone did, not tune what it is:
     // assistant configuration lives in the FaithForm control center.
     label: "Phone Calls",
@@ -190,6 +170,8 @@ export const navItems: NavItem[] = [
     group: "online",
   },
   {
+    // Transcripts and clips live under Recordings here (each recording's
+    // More options, and the Clips view beside the recording filters).
     label: "Live",
     shortLabel: "Live",
     href: "/dashboard/live-streaming",

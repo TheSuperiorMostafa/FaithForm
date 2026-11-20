@@ -67,7 +67,8 @@ fun NotificationHost(container: AppContainer, churchSlug: String?, onClose: () -
             FaithFormOutlinedButton(onClick = ::settings, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.notification_settings_hint)) }
             Text("For pop-up alerts, turn on your phone’s pop-up setting for each notification category. Your current sound and mute choices are kept.", style = MaterialTheme.typography.bodySmall)
             listOf("Church announcements" to NotificationChannels.ANNOUNCEMENTS,
-                "Church events and live services" to NotificationChannels.EVENTS, "Group messages" to NotificationChannels.GROUPS).forEach { (label, channel) ->
+                "Church events and live services" to NotificationChannels.EVENTS, "Group messages" to NotificationChannels.GROUPS,
+                "Kids check-in alerts" to NotificationChannels.CHECKIN).forEach { (label, channel) ->
                 FaithFormOutlinedButton(onClick = {
                     context.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)

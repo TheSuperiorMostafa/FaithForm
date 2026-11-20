@@ -9,17 +9,14 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipCard, type ClipCardActions } from "@/components/clips/clip-card";
 import { PostedList, ScheduledList } from "@/components/clips/clip-rows";
-import { CLIP_GRID, ClipsViewLoading, TabCountSkeleton } from "@/components/clips/clips-skeleton";
+import { CLIP_GRID, ClipsHeaderRow, ClipsViewLoading, TabCountSkeleton } from "@/components/clips/clips-skeleton";
 import { MakeClipsDialog } from "@/components/clips/make-clips-dialog";
 import { ScheduleDialog } from "@/components/clips/schedule-dialog";
 import {
-  CLIPS_DESCRIPTION,
   CLIPS_EMPTY_REVIEW,
-  CLIPS_TITLE,
   CLIPS_VIEW_LABELS,
   CLIPS_VIEWS,
   facebookReady,
@@ -32,6 +29,7 @@ import {
   type QueueResponse,
 } from "@/components/clips/format";
 import { integrationConnectHref } from "@/lib/integrations/connect-href";
+import { CLIPS_HREF } from "@/lib/sermon-media/hrefs";
 import { undoToast } from "@/lib/ui/undo-toast";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +43,8 @@ function isView(value: string | null | undefined): value is ClipsView {
 }
 
 /**
- * The Clips section. FaithForm prepares clips after each service; an
+ * The Clips view under Live > Recordings. FaithForm prepares clips after each
+ * service (or when someone presses Make clips on a recording); an
  * administrator watches each final video and approves it with one tap; it
  * posts to Facebook on the church's schedule.
  */
@@ -273,8 +272,12 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
     void load("posted");
   };
 
-  const onMade = (made: number, title: string) => {
-    if (made > 0) {
+  const onMade = (made: number, title: string, transcribing: boolean) => {
+    if (transcribing) {
+      toast.success(
+        `Making clips from ${title}. FaithForm writes out the service first, so they'll be in Ready to review in a few minutes.`,
+      );
+    } else if (made > 0) {
       toast.success(
         `Making ${made} clip${made === 1 ? "" : "s"} from ${title}. They're in Ready to review now, and each video is ready to watch in a few minutes.`,
       );
@@ -286,7 +289,7 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
   };
 
   const fbProblem = counts !== null && !facebookReady(facebook);
-  const connectHref = integrationConnectHref("facebook", "/dashboard/clips");
+  const connectHref = integrationConnectHref("facebook", CLIPS_HREF);
 
   const emptyFor: Record<ClipsView, { title: string; description: string }> = {
     review: { title: "No clips waiting", description: CLIPS_EMPTY_REVIEW },
@@ -299,19 +302,16 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
   };
 
   return (
-    <div className="flex w-full flex-col gap-8">
-      <PageHeader
-        title={CLIPS_TITLE}
-        description={CLIPS_DESCRIPTION}
-        icon={Clapperboard}
+    <div className="flex w-full flex-col gap-6">
+      <ClipsHeaderRow
         secondary={
-          <Button type="button" size="lg" variant="outline" onClick={() => setScheduleOpen(true)}>
+          <Button type="button" variant="outline" onClick={() => setScheduleOpen(true)}>
             <CalendarDays aria-hidden />
             Posting schedule
           </Button>
         }
         action={
-          <Button type="button" size="lg" onClick={() => setMakeOpen(true)}>
+          <Button type="button" onClick={() => setMakeOpen(true)}>
             <Sparkles aria-hidden />
             Make clips
           </Button>

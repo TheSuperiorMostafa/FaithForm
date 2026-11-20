@@ -119,7 +119,7 @@ struct CheckInTabView: View {
             VStack(spacing: 0) {
                 if isStale { OfflineBanner(message: L.offlineCached) }
                 ScrollView {
-                    HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug).id(features.churchSlug)
+                    HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug, push: dependencies.push).id(features.churchSlug)
                         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                     AutomaticCheckInSection(
                         model: attendance,
@@ -170,7 +170,7 @@ struct CheckInTabView: View {
                     root.select(.home)
                 },
                 footer: showsAutomaticCheckIn ? AnyView(automaticCheckInSection) : nil,
-                headerContent: AnyView(HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug).id(features.churchSlug))
+                headerContent: AnyView(HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug, push: dependencies.push).id(features.churchSlug))
             )
         }
         // A scanned code is handled by the coordinator on the camera's own
@@ -258,10 +258,22 @@ struct HouseholdPickupSection: View {
     @Environment(\.scenePhase) private var scenePhase
     let api: APIClient
     let churchSlug: String
+    /// When given, a guardian without notifications is offered them here, where
+    /// a room's "please come" otherwise only shows while the app is open.
+    var push: PushLifecycleModel? = nil
     @State private var pickup = HouseholdPickupModel()
     @State private var refreshID = 0
 
     var body: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+            card
+            if let push, pickup.data?.households.isEmpty == false {
+                GuardianAlertsPrompt(push: push)
+            }
+        }
+    }
+
+    private var card: some View {
         HouseholdPickupCard(data: pickup.data, isLoading: pickup.isLoading, errorMessage: pickup.errorMessage) {
             refreshID &+= 1
         }
@@ -283,6 +295,52 @@ struct HouseholdPickupSection: View {
             if phase != .active { pickup.clear() }
         }
         .onDisappear { pickup.clear() }
+    }
+}
+
+/// A room's alert reaches a guardian with FaithForm closed only as a push, and
+/// a push needs this iPhone's permission. Education is the text, the prompt is
+/// behind the one button — the same order as Account › Notifications. RootView
+/// re-synchronizes on every return to the app, so a change made in Settings
+/// shows up here without its own refresh.
+struct GuardianAlertsPrompt: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.openURL) private var openURL
+    let push: PushLifecycleModel
+
+    var body: some View {
+        if push.status == .notDetermined || NotificationPrompting.shouldDirectToSettings(push.status) {
+            GroupPanelView("Kids check-in alerts") {
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    Text(push.status == .notDetermined
+                        ? "Get an alert on this iPhone when your child’s room needs you, even when FaithForm is closed."
+                        : "Notifications are off for FaithForm, so a room can’t reach you when the app is closed. Turn them on in Settings.")
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if push.status == .notDetermined {
+                        Button("Turn on alerts") {
+                            Task {
+                                await push.beginEducation()
+                                await push.confirmEnable()
+                            }
+                        }
+                        .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                    } else {
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+                        }
+                        .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                    }
+                    if let error = push.registrationError {
+                        Text(error)
+                            .font(theme.font(FaithFormTokens.Text.caption))
+                            .foregroundStyle(theme.palette.destructive)
+                    }
+                }
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
 }
 

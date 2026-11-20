@@ -781,7 +781,7 @@ export async function setSubmissionStatus(
   if (error) return fail(toUserError(error, "That message could not be updated."));
 
   revalidatePath("/dashboard/website/inbox");
-  revalidatePath("/dashboard/website");
+  revalidatePath("/dashboard/website", "layout");
   return ok;
 }
 

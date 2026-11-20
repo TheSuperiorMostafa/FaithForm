@@ -10,12 +10,12 @@ import {
   groundedLessonProblem,
   groundLesson,
   lessonSourceProblem,
+  lessonSourceRange,
   recordingLessonPrompt,
   recordingLessonSchema,
   recordingLessonSystemPrompt,
 } from "@/lib/sermon-media/lesson";
 import { getSermonMediaState, getTranscript } from "@/lib/sermon-media/store";
-import { segmentsInRange } from "@/lib/sermon-media/transcript";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,8 @@ const bodySchema = z
   .nullable();
 
 /**
- * Open or create a lesson from the confirmed sermon, through the existing
+ * Open or create a lesson from the sermon (confirmed, detected or the whole
+ * transcript; see lessonSourceRange), through the existing
  * lesson builder (kind "simple": same editor, print view and PDF).
  */
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -53,7 +54,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       getTranscript(db, auth.churchId, id),
     ]);
     if (!transcript) return fail(409, "The transcript isn't ready yet.");
-    if (!state.confirmed) return fail(409, "Confirm where the sermon starts and ends first.", { code: "range_required" });
+    // No confirmation step: the confirmed range, else the detected one, else the whole transcript.
+    const range = lessonSourceRange(state, transcript);
 
     // Which lesson: the one asked for, or the latest draft from this recording.
     const { data: sources } = await db
@@ -85,7 +87,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
     }
 
-    const rangeSegments = segmentsInRange(transcript.segments, state.confirmed.startSec, state.confirmed.endSec);
+    const rangeSegments = range.segments;
     const sourceProblem = lessonSourceProblem(rangeSegments);
     if (sourceProblem) return fail(422, sourceProblem, { code: "insufficient_source" });
 
@@ -114,7 +116,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           topic: lesson.outline.title,
           scripture_refs: lesson.scriptureRefs,
           audience: "General congregation",
-          duration_min: Math.max(1, Math.round((state.confirmed.endSec - state.confirmed.startSec) / 60)),
+          duration_min: Math.max(1, Math.round((range.endSec - range.startSec) / 60)),
           kind: "simple",
           builder: "lesson",
           translation: settings?.default_translation ?? null,
@@ -134,8 +136,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       recording_id: id,
       input_version: state.inputVersion,
       transcript_version: transcript.version,
-      range_start_sec: state.confirmed.startSec,
-      range_end_sec: state.confirmed.endSec,
+      range_start_sec: range.startSec,
+      range_end_sec: range.endSec,
       evidence: lesson.evidence,
       generated_by: auth.userId,
       generated_at: new Date().toISOString(),
