@@ -6,11 +6,13 @@ import { FEATURES, featureDefaultEnabled, featureKeyForPath, getFeature } from "
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-test("Transcripts & Clips is a church feature that ships off; every other feature still ships on", () => {
+test("Transcripts & Clips and Service Plans ship off; every other feature still ships on", () => {
   const feature = getFeature("sermon_media");
   assert.equal(feature.label, "Transcripts & Clips");
   assert.equal(featureDefaultEnabled("sermon_media"), false);
-  for (const other of FEATURES.filter(f => f.key !== "sermon_media")) {
+  // Service Plans ships off until it has passed in dev and with one founding church.
+  assert.equal(featureDefaultEnabled("service_plans"), false);
+  for (const other of FEATURES.filter(f => f.key !== "sermon_media" && f.key !== "service_plans")) {
     assert.equal(featureDefaultEnabled(other.key), true, other.key);
   }
   // Recording pages stay under Live Stream; only the Clips view under Recordings is its own.

@@ -95,6 +95,7 @@
     "@ai-sdk/anthropic": "^3.0.79",
     "@ai-sdk/openai": "^3.0.65",
     "@base-ui/react": "^1.5.0",
+    "@fontsource/montserrat": "5.2.8",
     "@google/genai": "^2.10.0",
     "@react-pdf/renderer": "^4.3.0",
     "@stripe/react-stripe-js": "^6.4.0",

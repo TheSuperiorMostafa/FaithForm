@@ -1,0 +1,201 @@
+import "server-only";
+
+import { createHash, createHmac } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { Resend } from "resend";
+import { renderEmail } from "@/lib/email/layout";
+import { resolveFromAddress } from "@/lib/email/sender";
+import { getPlan } from "@/lib/service-plans/queries";
+import { formatPlanDate } from "@/lib/service-plans/timing";
+import { NOTE_CATEGORIES, type NoteCategory, type Plan, type SharePreset } from "@/lib/service-plans/types";
+import { presetDefaults, type PlanViewOptions } from "@/lib/service-plans/view";
+import { absoluteAppPath } from "@/lib/site-url";
+import { sendSms } from "@/lib/sms/send-sms";
+import type { ChurchSmsSender } from "@/lib/sms/church-sender";
+
+/**
+ * Share links.
+ *
+ * A link's token is 32 bytes derived with HMAC-SHA256 from a server-only key
+ * and the share row's random id. Only SHA-256(token) is stored, so the
+ * database never holds a working link, and Re-send can send the *same* link
+ * again instead of breaking the one already in someone's inbox. Revoking sets
+ * `revoked_at`; expiry is `expires_at`. Without the server key no one can
+ * produce a token, and a leaked database cannot be turned into links.
+ */
+
+function shareKey(): Buffer {
+  const explicit = process.env.SERVICE_PLAN_SHARE_SECRET;
+  if (explicit && explicit.length >= 32) return Buffer.from(explicit);
+  const base = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!base) throw new Error("Share links need SERVICE_PLAN_SHARE_SECRET or the Supabase secret key.");
+  // A separate key for this purpose, so the database key itself is never the
+  // HMAC key.
+  return createHmac("sha256", base).update("faithform:service-plan-share:v1").digest();
+}
+
+export function tokenForShare(shareId: string): string {
+  return createHmac("sha256", shareKey()).update(`service-plan-share|${shareId}`).digest("base64url");
+}
+
+export function hashToken(token: string): Buffer {
+  return createHash("sha256").update(token, "utf8").digest();
+}
+
+/** Postgres bytea literal for PostgREST filters and inserts. */
+export function byteaHex(buffer: Buffer): string {
+  return `\\x${buffer.toString("hex")}`;
+}
+
+export function shareUrl(token: string): string {
+  return absoluteAppPath(`/plan/${token}`);
+}
+
+export const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
+export type ShareRow = {
+  id: string;
+  church_id: string;
+  plan_id: string;
+  audience: "team" | "person" | "link";
+  team_id: string | null;
+  person_id: string | null;
+  preset: SharePreset;
+  categories: NoteCategory[];
+  channels: string[];
+  version_sent: number;
+  expires_at: string;
+  revoked_at: string | null;
+  first_viewed_at: string | null;
+};
+
+/**
+ * Finds a live share by its token, with the service role. Returns null for
+ * anything that should look like "no such link": unknown, revoked, expired.
+ */
+export async function findShareByToken(admin: SupabaseClient, token: string): Promise<ShareRow | null> {
+  if (!TOKEN_PATTERN.test(token)) return null;
+  const { data, error } = await admin
+    .from("plan_shares")
+    .select(
+      "id, church_id, plan_id, audience, team_id, person_id, preset, categories, channels, version_sent, expires_at, revoked_at, first_viewed_at",
+    )
+    .eq("token_hash", byteaHex(hashToken(token)))
+    .maybeSingle();
+  if (error) {
+    console.error("service-plans share lookup:", error.message);
+    return null;
+  }
+  if (!data) return null;
+  const row = data as ShareRow;
+  // Constant-shape checks after the indexed lookup: a token whose hash
+  // matched is the right token; expiry and revocation decide the rest.
+  if (row.revoked_at || Date.parse(row.expires_at) <= Date.now()) return null;
+  return row;
+}
+
+/** What a share shows, as view options. Categories are clamped to the known set. */
+export function shareViewOptions(share: Pick<ShareRow, "preset" | "categories" | "person_id">): PlanViewOptions {
+  const base = presetDefaults(share.preset);
+  const categories = share.categories.filter((c): c is NoteCategory => (NOTE_CATEGORIES as readonly string[]).includes(c));
+  return {
+    ...base,
+    categories: share.preset === "order" ? [] : categories,
+    personId: share.person_id,
+    timeId: null,
+  };
+}
+
+export async function loadSharedPlan(admin: SupabaseClient, share: ShareRow): Promise<Plan | null> {
+  return getPlan(admin, share.church_id, share.plan_id);
+}
+
+export async function recordView(admin: SupabaseClient, share: ShareRow): Promise<void> {
+  const now = new Date().toISOString();
+  const patch: Record<string, string> = { last_viewed_at: now };
+  if (!share.first_viewed_at) patch.first_viewed_at = now;
+  await admin.from("plan_shares").update(patch).eq("id", share.id).eq("church_id", share.church_id);
+}
+
+// ---------------------------------------------------------------------------
+// Delivery
+// ---------------------------------------------------------------------------
+
+export type Delivery = "sent" | "no_email" | "no_phone" | "no_sender" | "emails_off" | "failed";
+
+export async function emailShareLink(input: {
+  to: string;
+  personName: string;
+  churchName: string;
+  plan: Pick<Plan, "date" | "title" | "serviceTypeName">;
+  url: string;
+  expiresAt: string;
+  updated: boolean;
+  message: string | null;
+}): Promise<Delivery> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.log(`[FaithForm] Service plan link (no RESEND_API_KEY): not sent`);
+    return "failed";
+  }
+  const when = input.plan.date ? formatPlanDate(input.plan.date) : "the service";
+  const subject = input.updated
+    ? `Updated: ${input.plan.serviceTypeName} plan for ${when}`
+    : `${input.plan.serviceTypeName} plan for ${when}`;
+  const content = renderEmail({
+    title: subject,
+    preheader: input.updated ? "The plan changed since you last saw it." : `Your plan for ${when}.`,
+    heading: subject,
+    blocks: [
+      { kind: "paragraph", text: `Hi ${input.personName.split(" ")[0] || "there"},` },
+      {
+        kind: "paragraph",
+        text: input.updated
+          ? `${input.churchName} updated the plan for ${when}. Your link always shows the latest version.`
+          : `${input.churchName} shared the plan for ${when} with you.`,
+      },
+      ...(input.message ? [{ kind: "quote" as const, text: input.message }] : []),
+      { kind: "button", label: "Open the plan", url: input.url },
+      {
+        kind: "muted",
+        text: `This link is only for you and works until ${new Date(input.expiresAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}. If the button does not work, paste this into your browser: ${input.url}`,
+      },
+    ],
+    permissionNote: `You are getting this because ${input.churchName} added you to a service team.`,
+  });
+  try {
+    const { error } = await new Resend(apiKey).emails.send({
+      from: `${input.churchName} via FaithForm <${resolveFromAddress()}>`,
+      to: input.to,
+      subject,
+      html: content.html,
+      text: content.text,
+    });
+    if (error) {
+      console.error("[FaithForm] Resend error (service plan share):", error.message);
+      return "failed";
+    }
+    return "sent";
+  } catch (e) {
+    console.error("[FaithForm] service plan share email:", e instanceof Error ? e.message : e);
+    return "failed";
+  }
+}
+
+export async function textShareLink(input: {
+  sender: ChurchSmsSender | null;
+  phone: string | null;
+  churchName: string;
+  plan: Pick<Plan, "date" | "serviceTypeName">;
+  url: string;
+  updated: boolean;
+}): Promise<Delivery> {
+  if (!input.phone) return "no_phone";
+  if (!input.sender) return "no_sender";
+  const when = input.plan.date ? formatPlanDate(input.plan.date, "short") : "the service";
+  const body = input.updated
+    ? `${input.churchName}: the ${input.plan.serviceTypeName} plan for ${when} changed. ${input.url}`
+    : `${input.churchName}: here is the ${input.plan.serviceTypeName} plan for ${when}. ${input.url}`;
+  const result = await sendSms(input.sender, input.phone, body);
+  return result.ok ? "sent" : "failed";
+}

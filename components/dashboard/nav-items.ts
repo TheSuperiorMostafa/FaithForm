@@ -7,6 +7,7 @@ import {
   GraduationCap,
   HandHeart,
   House,
+  ListOrdered,
   Megaphone,
   Phone,
   Settings,
@@ -123,6 +124,15 @@ export const navItems: NavItem[] = [
     href: "/dashboard/announcements",
     icon: Megaphone,
     features: ["announcements"],
+    group: "weekly",
+  },
+  {
+    // The order of service for each Sunday, between who came and what is said.
+    label: "Plans",
+    shortLabel: "Plans",
+    href: "/dashboard/plans",
+    icon: ListOrdered,
+    features: ["service_plans"],
     group: "weekly",
   },
   {

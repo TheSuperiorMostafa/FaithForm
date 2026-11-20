@@ -105,6 +105,7 @@ try {
       "tests/database/people-membership-status.test.ts",
       "tests/database/stream-start-claim.test.ts",
       "tests/database/operations-alerts.test.ts",
+      "tests/database/service-plans.test.ts",
     ],
     {
       stdio: "inherit",

@@ -2,6 +2,7 @@ import {
   Baby as BabyIcon,
   BookOpen,
   Captions,
+  ListOrdered,
   Contact,
   FolderOpen,
   Globe,
@@ -44,6 +45,7 @@ export const FEATURE_KEYS = [
   "website",
   "member_app",
   "groups",
+  "service_plans",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -146,6 +148,18 @@ export const FEATURES: FeatureDefinition[] = [
     icon: Megaphone,
     routes: ["/dashboard/announcements"],
     emails: "The weekly announcement email",
+  },
+  {
+    key: "service_plans",
+    label: "Service Plans",
+    description:
+      "The order of service for each date: items with running times, who leads them, notes for each team, a song library, printing, and read-only links for teams.",
+    href: "/dashboard/plans",
+    icon: ListOrdered,
+    routes: ["/dashboard/plans"],
+    emails: "Service plan links shared with teams",
+    // Ships off: on for the dev environment and one founding church first.
+    defaultEnabled: false,
   },
   {
     key: "sermon_builder",

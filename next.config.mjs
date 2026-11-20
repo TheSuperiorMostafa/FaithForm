@@ -12,6 +12,12 @@ const safariBlockingMetadata = /^(?!.*(?:Chrome|Chromium|CriOS|Edg(?:e|A|iOS)?|O
 
 const nextConfig = {
   htmlLimitedBots: new RegExp(`${defaultBlockingMetadata.source}|${safariBlockingMetadata.source}`, "i"),
+  // Service plan PDFs read their embedded Montserrat files from disk at run
+  // time, which file tracing cannot see; ship them with both PDF routes.
+  outputFileTracingIncludes: {
+    "/api/dashboard/plans/[planId]/pdf": ["./public/fonts/montserrat/**"],
+    "/plan/[token]/pdf": ["./public/fonts/montserrat/**"],
+  },
   experimental: {
     serverActions: {
       // Next defaults this to 1MB, which is smaller than any photo a phone

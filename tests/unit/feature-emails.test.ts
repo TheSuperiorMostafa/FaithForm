@@ -16,7 +16,8 @@ test("only the features that send a church's email get an Emails switch", () => 
   const withEmails = FEATURES.filter((feature) => feature.emails)
     .map((feature) => feature.key)
     .sort();
-  assert.deepEqual(withEmails, ["announcements", "giving", "website"]);
+  assert.deepEqual(withEmails, ["announcements", "giving", "service_plans", "website"]);
+  assert.equal(getFeature("service_plans").emails, "Service plan links shared with teams");
 
   assert.equal(
     getFeature("giving").emails,
