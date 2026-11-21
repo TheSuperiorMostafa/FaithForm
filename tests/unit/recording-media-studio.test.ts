@@ -35,9 +35,11 @@ test("old Transcripts and Clips URLs redirect, and every new route has a loading
   }
 });
 
-test("the recording's More options holds the transcript and clips actions", () => {
+test("the transcript and clips card sits under More options, not inside it", () => {
   const review = read("components/live-streaming/recordings/recording-review.tsx");
-  assert.match(review, /\{mediaSlot\}\s*<\/AdvancedSection>/);
+  assert.match(review, /<\/AdvancedSection>\s*\{mediaSlot\}/);
+  assert.doesNotMatch(review, /\{mediaSlot\}\s*<\/AdvancedSection>/);
+  assert.doesNotMatch(review, /View Sermons page/);
   assert.match(read("app/dashboard/live-streaming/recordings/[id]/page.tsx"), /mediaSlot=\{showSermonMedia \? <RecordingMediaActions/);
 });
 

@@ -18,38 +18,112 @@ import type { DiscussionQuestion, SermonOutline } from "@/types/sermon";
  * existing editor, print view and PDF are unchanged.
  */
 
-const ids = z.array(z.string().regex(/^s\d{1,7}$/)).max(40);
+/**
+ * Limits for a lesson draft. They are applied by `fitLessonDraft` after the
+ * model answers, not in `recordingLessonSchema`: the Anthropic provider does
+ * not send maxItems / maxLength / pattern to the model (it turns them into
+ * description hints), while the AI SDK still validates the reply against the
+ * Zod schema. A long sermon whose point cited 41 segments, or a 9th question,
+ * failed the whole lesson with "response did not match schema".
+ */
+export const LESSON_DRAFT_LIMITS = {
+  title: 140,
+  text: 2500,
+  ref: 60,
+  quote: 400,
+  question: 400,
+  evidence: 40,
+  points: 8,
+  pointScripture: 4,
+  mainScripture: 4,
+  quotes: 10,
+  questions: 8,
+} as const;
+
+// Shape only. Limits and id format are enforced by fitLessonDraft/groundLesson.
+const ids = z.array(z.string());
 
 export const recordingLessonSchema = z.object({
-  title: z.string().max(140),
-  intro: z.object({ text: z.string().max(2500), evidence: ids }),
-  points: z
-    .array(
-      z.object({
-        title: z.string().max(140),
-        summary: z.string().max(2500),
-        evidence: ids,
-        scripture: z.array(z.object({ ref: z.string().max(60), evidence: ids })).max(4),
-      }),
-    )
-    .max(8),
-  application: z.object({ text: z.string().max(2500), evidence: ids }),
-  closing: z.object({ text: z.string().max(2500), evidence: ids }),
-  main_scripture: z.array(z.object({ ref: z.string().max(60), evidence: ids })).max(4),
-  quotes: z.array(z.object({ text: z.string().max(400), evidence: ids })).max(10),
-  questions: z
-    .array(
-      z.object({
-        category: z.enum(["warmup", "observation", "interpretation", "application"]),
-        question: z.string().max(400),
-        evidence: ids,
-      }),
-    )
-    .max(8),
+  title: z.string(),
+  intro: z.object({ text: z.string(), evidence: ids }),
+  points: z.array(
+    z.object({
+      title: z.string(),
+      summary: z.string(),
+      evidence: ids,
+      scripture: z.array(z.object({ ref: z.string(), evidence: ids })),
+    }),
+  ),
+  application: z.object({ text: z.string(), evidence: ids }),
+  closing: z.object({ text: z.string(), evidence: ids }),
+  main_scripture: z.array(z.object({ ref: z.string(), evidence: ids })),
+  quotes: z.array(z.object({ text: z.string(), evidence: ids })),
+  questions: z.array(
+    z.object({
+      category: z.enum(["warmup", "observation", "interpretation", "application"]),
+      question: z.string(),
+      evidence: ids,
+    }),
+  ),
   insufficient: z.boolean(),
 });
 
 export type RecordingLessonDraft = z.infer<typeof recordingLessonSchema>;
+
+const SEGMENT_ID = /s\d{1,7}/;
+
+/** Segment ids as cited ("s000123", "[s000123 4:05]" → "s000123"), unique, capped. */
+function fitEvidence(evidence: string[]): string[] {
+  const found = evidence.map((id) => id.match(SEGMENT_ID)?.[0]).filter((id): id is string => Boolean(id));
+  return [...new Set(found)].slice(0, LESSON_DRAFT_LIMITS.evidence);
+}
+
+/** Shortens over-long prose at a sentence or word end instead of failing the lesson. */
+function clip(text: string, max: number): string {
+  const trimmed = text.trim();
+  if (trimmed.length <= max) return trimmed;
+  const cut = trimmed.slice(0, max - 1);
+  const sentence = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
+  if (sentence >= max * 0.6) return cut.slice(0, sentence + 1);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > 0 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/**
+ * Brings a model draft within LESSON_DRAFT_LIMITS: extra items are left out,
+ * long prose is shortened, citations are reduced to segment ids. A quotation
+ * longer than the limit is left out rather than cut, since it must stay word
+ * for word. groundLesson applies this first.
+ */
+export function fitLessonDraft(draft: RecordingLessonDraft): RecordingLessonDraft {
+  const L = LESSON_DRAFT_LIMITS;
+  const section = (part: { text: string; evidence: string[] }) => ({ text: clip(part.text, L.text), evidence: fitEvidence(part.evidence) });
+  const refs = (list: Array<{ ref: string; evidence: string[] }>, max: number) =>
+    list.slice(0, max).map((ref) => ({ ref: ref.ref.trim().slice(0, L.ref), evidence: fitEvidence(ref.evidence) }));
+  return {
+    title: clip(draft.title, L.title),
+    intro: section(draft.intro),
+    points: draft.points.slice(0, L.points).map((point) => ({
+      title: clip(point.title, L.title),
+      summary: clip(point.summary, L.text),
+      evidence: fitEvidence(point.evidence),
+      scripture: refs(point.scripture, L.pointScripture),
+    })),
+    application: section(draft.application),
+    closing: section(draft.closing),
+    main_scripture: refs(draft.main_scripture, L.mainScripture),
+    quotes: draft.quotes
+      .filter((quote) => quote.text.trim().length <= L.quote)
+      .slice(0, L.quotes)
+      .map((quote) => ({ text: quote.text.trim(), evidence: fitEvidence(quote.evidence) })),
+    questions: draft.questions.slice(0, L.questions).map((question) => ({
+      category: question.category,
+      question: clip(question.question, L.question),
+      evidence: fitEvidence(question.evidence),
+    })),
+    insufficient: draft.insufficient,
+  };
+}
 
 export const MIN_SERMON_WORDS = 400;
 
@@ -59,8 +133,9 @@ export function recordingLessonSystemPrompt(context: { denomination?: string | n
 Rules — follow all of them:
 - Use only what the pastor said in the transcript. Preserve the pastor's main ideas, their order, examples, application and meaning. Do not add points, stories, illustrations, quotations, statistics or Scripture the pastor did not say.
 - Write in plain language, in the pastor's voice where natural, as summaries — not a verbatim copy.
-- Every section, point, quotation, Scripture reference and question must cite the transcript segment ids (like "s000123") it comes from in "evidence". If you cannot cite it, leave it out.
-- Use as many points as the sermon actually has (often 2–5). Never pad. Each point is a teaching point the pastor made, in order.
+- Every section, point, quotation, Scripture reference and question must cite the transcript segment ids (like "s000123") it comes from in "evidence". Cite only the few segments that show it best (at most 8), not every segment it spans. If you cannot cite it, leave it out.
+- Use as many points as the sermon actually has (often 2–5, at most 8). Never pad. Each point is a teaching point the pastor made, in order.
+- Keep it short enough to read aloud in a small group: titles under 15 words, each summary or section under 150 words, at most 4 references per point, 4 main passages, 10 quotations and 8 questions.
 - "intro", "application" and "closing" summarize what the pastor said for those parts. If the pastor gave no application or closing, return an empty "text" and empty "evidence".
 - "main_scripture" is the main passage(s) read or preached; "points[].scripture" are references the pastor cited for that point. Write references as "Book Chapter:Verse-Verse" exactly as said; only include a reference the pastor actually named.
 - "quotes" are short, exact quotations of memorable sentences, copied word for word from the cited segments.
@@ -188,7 +263,8 @@ const spokenNumbers = (text: string) => text.replace(/\b[a-z]+\b/g, (word) => NU
  * the sermon range — anything else (the worship set, announcements, a
  * fabricated id) is not evidence.
  */
-export function groundLesson(draft: RecordingLessonDraft, rangeSegments: TranscriptSegment[]): GroundedLesson {
+export function groundLesson(modelDraft: RecordingLessonDraft, rangeSegments: TranscriptSegment[]): GroundedLesson {
+  const draft = fitLessonDraft(modelDraft);
   const byId = new Map(rangeSegments.map((segment) => [segment.id, segment]));
   const valid = (evidence: string[]) => [...new Set(evidence.filter((id) => byId.has(id)))];
   const spoken = (evidence: string[]) => normalize(evidence.map((id) => byId.get(id)?.text ?? "").join(" "));

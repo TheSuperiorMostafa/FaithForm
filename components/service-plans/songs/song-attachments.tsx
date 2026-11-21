@@ -40,6 +40,11 @@ const KIND_LABELS: Record<SongAttachment["kind"], string> = {
   file: "File",
 };
 
+const GENERATED_LABELS: Record<NonNullable<SongAttachment["generated"]>, string> = {
+  lyrics: "Made from the lyrics · updated when you save",
+  chart: "Made from the chord chart · updated when you save",
+};
+
 export function SongAttachments({
   arrangementId,
   initial,
@@ -48,6 +53,12 @@ export function SongAttachments({
   initial: SongAttachment[];
 }) {
   const [files, setFiles] = useState(initial);
+  // After a save refreshes the page (new or replaced PDFs), show the server's list.
+  const [shown, setShown] = useState(initial);
+  if (initial !== shown) {
+    setShown(initial);
+    setFiles(initial);
+  }
   const [uploading, setUploading] = useState(false);
   const [url, setUrl] = useState("");
   const [label, setLabel] = useState("");
@@ -111,7 +122,11 @@ export function SongAttachments({
   const remove = async (file: SongAttachment) => {
     const ok = await confirmAction({
       title: `Delete “${file.name}”?`,
-      description: file.isFile ? "The file is deleted for good." : "The link is removed from this arrangement.",
+      description: file.generated
+        ? "The PDF is deleted. Saving the arrangement makes it again."
+        : file.isFile
+          ? "The file is deleted for good."
+          : "The link is removed from this arrangement.",
       confirmLabel: file.isFile ? "Delete file" : "Remove link",
       destructive: true,
     });
@@ -169,7 +184,10 @@ export function SongAttachments({
           />
         </label>
       </div>
-      <p className="text-sm text-muted-foreground">Chord chart PDFs, lead sheets and rehearsal tracks, up to 20 MB each.</p>
+      <p className="text-sm text-muted-foreground">
+        Chord chart PDFs, lead sheets and rehearsal tracks, up to 20 MB each. Saving the arrangement also makes a lyrics
+        PDF and a chord chart PDF here.
+      </p>
 
       {files.length > 0 ? (
         <ul className="divide-y divide-border rounded-2xl border border-border">
@@ -180,7 +198,9 @@ export function SongAttachments({
                 <Icon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-semibold text-foreground">{file.name}</p>
-                  <p className="text-sm text-muted-foreground">{KIND_LABELS[file.kind]}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {file.generated ? GENERATED_LABELS[file.generated] : KIND_LABELS[file.kind]}
+                  </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {file.url ? (

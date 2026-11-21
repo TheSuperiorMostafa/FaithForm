@@ -4,8 +4,10 @@ import { cn } from "@/lib/utils";
 import type { HeroContent } from "@/types/site";
 
 import { Action, Eyebrow, Headline, Media, surfaceClass } from "../primitives";
+import { drawableSocials, socialLinks, SocialLinks } from "./contact-band";
 
 function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
+  const socials = drawableSocials(content.socials);
   return (
     <header id={ctx.anchor} className={cn("site-hero", surfaceClass(content.surface))}>
       <div
@@ -17,7 +19,7 @@ function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
         <Eyebrow>{content.eyebrow}</Eyebrow>
         <Headline as="h1" headline={content.headline} className="site-display-xl" />
 
-        {content.body || content.actions.length > 0 ? (
+        {content.body || content.actions.length > 0 || socials.length > 0 ? (
           <div className="site-hero-foot">
             {content.body ? <p className="site-lede">{content.body}</p> : null}
             {content.actions.length > 0 ? (
@@ -26,6 +28,10 @@ function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
                   <Action key={action.label + action.href} action={action} />
                 ))}
               </div>
+            ) : null}
+            {/* Hidden by default; formats that want them in the banner show them. */}
+            {socials.length > 0 ? (
+              <SocialLinks links={socials} className="site-hero-socials" linkClassName="site-hero-social" />
             ) : null}
           </div>
         ) : null}
@@ -85,13 +91,17 @@ export const heroSection = defineSection<HeroContent>({
   },
   // The hook line is bespoke copy that lives in the page config; what the
   // profile can honestly fill is the supporting material around it.
-  derive: (profile) => ({
+  derive: (profile) => {
+    const socials = socialLinks(profile);
+    return {
     ...(profile.tagline ? { eyebrow: profile.tagline.toUpperCase() } : {}),
     headline: { lead: `Welcome to ${profile.name}.` },
     ...(profile.description ? { body: profile.description } : {}),
     ...(profile.coverImageUrl
       ? { image: { src: profile.coverImageUrl, alt: profile.name } }
       : {}),
-  }),
+    ...(socials.length > 0 ? { socials } : {}),
+    };
+  },
   Component: Hero,
 });

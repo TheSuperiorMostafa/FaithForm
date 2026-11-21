@@ -135,21 +135,13 @@
   padding-bottom: 30px;
 }
 
+/* Background and text come from the strip's own surface (parchment by
+ * default, walnut when set to a dark surface), so its labels and times always
+ * contrast with what is behind them. Hard-coding a dark backdrop here lost to
+ * the canvas surface and left pale text on parchment. */
 [data-theme="wood"] .site-strip {
   margin-top: 26px;
-  background: linear-gradient(176deg, rgba(12, 7, 3, 0.82), rgba(12, 7, 3, 0.94));
   border-top-color: color-mix(in srgb, var(--site-accent) 32%, transparent);
-  color: #f8ecd2;
-}
-
-[data-theme="wood"] .site-strip-label,
-[data-theme="wood"] .site-strip-value,
-[data-theme="wood"] .site-strip-lines {
-  color: rgba(248, 236, 210, 0.82);
-}
-
-[data-theme="wood"] .site-strip-label {
-  color: #e9cf92;
 }
 
 [data-theme="wood"] .site-section {
@@ -308,6 +300,22 @@
 [data-theme="wood"] .site-staff-photo,
 [data-theme="wood"] .site-sermon-stage {
   border: 1px solid color-mix(in srgb, var(--site-accent) 45%, transparent);
+}
+
+/* The social links get a centred row of their own, a little below the
+ * Email and Call columns, instead of sitting under the phone number. They are
+ * placed against the band so the markup and tab order stay the same. */
+[data-theme="wood"] .contact-band:has(.contact-band__item--call .contact-band__socials) {
+  position: relative;
+  padding-bottom: calc(var(--site-section-y) * 0.8 + 34px + 30px);
+}
+
+[data-theme="wood"] .contact-band__item--call .contact-band__socials {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--site-section-y) * 0.8);
+  margin: 0;
 }
 
 @media (max-width: 720px) {

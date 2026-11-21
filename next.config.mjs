@@ -17,6 +17,8 @@ const nextConfig = {
   outputFileTracingIncludes: {
     "/api/dashboard/plans/[planId]/pdf": ["./public/fonts/montserrat/**"],
     "/plan/[token]/pdf": ["./public/fonts/montserrat/**"],
+    // Saving an arrangement makes its lyrics and chord chart PDFs.
+    "/dashboard/plans/songs/[songId]": ["./public/fonts/montserrat/**"],
   },
   experimental: {
     serverActions: {

@@ -100,7 +100,7 @@ export const IMAGE_CHAT_SYSTEM_INSTRUCTION = [
   "LISTEN FIRST: follow the person's words literally and completely. Every subject, colour, style, word, size and placement they ask for must be clearly visible in the result. Never skip part of a request, never swap it for something you think looks better, and never add subjects they did not ask for. If a request is ambiguous, take the most literal reading.",
   "FRAME: every image is one 16:9 landscape graphic that will be shown at 1200×630. Keep all text and the logo inside the central 80% of the frame so nothing is lost when the edges are trimmed.",
   "LOOK: contemporary and premium: cinematic photography or a high-end 3D render with real light, depth of field, texture and a subtle film grain; a confident colour grade. Not cartoon, not flat vector illustration, not clip-art, unless the person asks for that style.",
-  "TYPE IS PART OF THE ARTWORK: design the words into the image as one composition, lit by the same light, coloured to match the scene, layered with depth (a title that sits in the sky or the space of the scene, passes partly behind an object, or glows with the scene's light). Never split the frame into a flat colour block with text beside a picture, and never paste plain text on a box. Use a bold modern display face (a condensed grotesk, a wide geometric sans, or a high-contrast serif) with a clear hierarchy: a huge title, then the date and time, then the place, then the church name.",
+  "TYPE IS PART OF THE ARTWORK: design the words into the image as one composition, lit by the same light, coloured to match the scene, layered with depth (a title that sits in the sky or the space of the scene, passes partly behind an object, or glows with the scene's light). Never split the frame into a flat colour block with text beside a picture, and never paste plain text on a box. Use a bold modern display face (a condensed grotesk, a wide geometric sans, or a high-contrast serif) with a clear hierarchy: a huge title, then any date, time or place the person asks for, then the church name.",
   NO_PEOPLE_RULE,
   "If a request asks for people, show the setting and the objects that suggest them instead (an empty room set up for the event, a table laid for a meal, instruments on a stage) and say so in your sentence.",
   "TEXT: render only the words the brief lists or the person asks for, spelled exactly as written: same capitalisation, digits and punctuation. Every listed line must appear; check before you finish. Real, sharp, well-kerned type; never garbled, warped or duplicated. No watermarks and no UI chrome.",
@@ -215,6 +215,15 @@ function eventLines(event: ImageChatEventContext | null): string[] {
   ].filter((line): line is string => Boolean(line));
 }
 
+/** The date, time and place, offered only when the person asks for them. */
+function eventDetailLines(event: ImageChatEventContext | null): string[] {
+  if (!event) return [];
+  return [
+    event.when ? `When: "${event.when}"` : null,
+    event.location ? `Where: "${event.location}"` : null,
+  ].filter((line): line is string => Boolean(line));
+}
+
 function brandLines(brand: ImageChatBrand | null, { forEdit }: { forEdit: boolean }): string[] {
   if (!brand) return [];
   return [
@@ -229,17 +238,22 @@ function brandLines(brand: ImageChatBrand | null, { forEdit }: { forEdit: boolea
   ].filter((line): line is string => Boolean(line));
 }
 
-/** The words an event graphic carries, as numbered must-include lines. */
+/**
+ * The words a first event graphic carries, as numbered must-include lines.
+ * The date, time and place are deliberately left off: churches add them
+ * afterwards in the chat, where they can choose how they read and sit.
+ */
 function eventTextLines(event: ImageChatEventContext, brand: ImageChatBrand | null): string[] {
   return [
     event.title ? `Title, huge, the dominant element: "${event.title}"` : null,
-    event.when ? `Date and time, clearly readable: "${event.when}"` : null,
-    event.location ? `Place: "${event.location}"` : null,
     brand ? `Church name, small: "${brand.churchName}"` : null,
   ]
     .filter((line): line is string => Boolean(line))
     .map((line, i) => `${i + 1}. ${line}`);
 }
+
+const NO_DETAILS_ON_FIRST_DESIGN =
+  "Do NOT print the date, time, place or address anywhere on this design. Leave room for them; they are added later in the chat if wanted.";
 
 /** A finished event graphic, designed from what the church wrote. */
 function buildEventBrief(request: ImageChatRequest, brand: ImageChatBrand | null): string {
@@ -255,6 +269,7 @@ function buildEventBrief(request: ImageChatRequest, brand: ImageChatBrand | null
       : null,
     "TEXT: set ALL of these lines, and no other words, each copied character for character, designed into the scene as described in your brief (no flat panel, no text box):",
     ...eventTextLines(event, brand),
+    NO_DETAILS_ON_FIRST_DESIGN,
     ...brandLines(brand, { forEdit: false }),
     mentionsPeople(subject) ? "Reminder: no people may appear. Show the place and things instead." : null,
   ]
@@ -273,6 +288,7 @@ export function buildImageChatInstruction(
   const lines = eventLines(request.event);
   const defaultText =
     !editing && request.event?.title ? eventTextLines(request.event, brand) : [];
+  const detailLines = eventDetailLines(request.event);
   const parts = [
     editing
       ? `Edit the CURRENT DESIGN. Make exactly this change, fully and visibly: ${request.instruction}`
@@ -284,6 +300,9 @@ export function buildImageChatInstruction(
     ...defaultText,
     editing && lines.length
       ? `EVENT DETAILS (copy exactly if the instruction asks for any of them): ${lines.join(" · ")}`
+      : null,
+    !editing && detailLines.length
+      ? `EVENT DETAILS (print these ONLY if the description asks for them, copied exactly): ${detailLines.join(" · ")}. Otherwise leave the date, time and place off.`
       : null,
     !editing && !defaultText.length && brand
       ? `The church is "${brand.churchName}"; only print its name if asked.`

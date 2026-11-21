@@ -39,6 +39,7 @@ import {
   type TeamMemberStatus,
   type TimeKind,
 } from "@/lib/service-plans/types";
+import { cleanAlertEmails, cleanAlertPhones } from "@/lib/service-plans/alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { zonedDateTimeToUtcMs } from "@/lib/utils/dates";
 
@@ -211,6 +212,9 @@ export async function updateServiceTypeAction(
     targetMinutes?: number | null;
     defaultTemplateId?: string | null;
     times?: Omit<ServiceTypeTime, "id">[];
+    /** Told when someone answers a shared plan of this type. */
+    responseEmails?: string[];
+    responsePhones?: string[];
   },
 ): Promise<Ok | Fail> {
   try {
@@ -238,6 +242,8 @@ export async function updateServiceTypeAction(
       }
       patch.default_template_id = templateId;
     }
+    if (input.responseEmails !== undefined) patch.response_notify_emails = cleanAlertEmails(input.responseEmails);
+    if (input.responsePhones !== undefined) patch.response_notify_phones = cleanAlertPhones(input.responsePhones);
     if (Object.keys(patch).length) {
       const { error } = await admin.from("service_types").update(patch).eq("church_id", auth.churchId).eq("id", id);
       if (error) throw error;
@@ -960,12 +966,37 @@ export async function setPlanTeamMemberStatusAction(
   try {
     const { auth, admin } = await planner();
     if (!(TEAM_MEMBER_STATUSES as readonly string[]).includes(status)) throw new UserFacingError("Pick a status.");
-    const { error } = await admin
+    const { data: member, error } = await admin
       .from("plan_team_members")
       .update({ status })
       .eq("church_id", auth.churchId)
-      .eq("id", assertId(memberId));
+      .eq("id", assertId(memberId))
+      .select("plan_id, person_id")
+      .maybeSingle();
     if (error) throw error;
+    if (!member) throw new UserFacingError("We couldn't find them on this plan any more.");
+    // Staff setting an answer by hand (after a phone call, say) is what the
+    // person's own link shows too. No alert: staff made the change.
+    const answer = admin.from("plan_attendance");
+    const { error: answerError } =
+      status === "unconfirmed"
+        ? await answer
+            .delete()
+            .eq("church_id", auth.churchId)
+            .eq("plan_id", member.plan_id as string)
+            .eq("person_id", member.person_id as string)
+        : await answer.upsert(
+            {
+              church_id: auth.churchId,
+              plan_id: member.plan_id,
+              person_id: member.person_id,
+              status,
+              share_id: null,
+              responded_at: new Date().toISOString(),
+            },
+            { onConflict: "plan_id,person_id" },
+          );
+    if (answerError) throw answerError;
     return { ok: true };
   } catch (e) {
     return failed(e, "We couldn't update their status.");

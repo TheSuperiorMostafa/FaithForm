@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { draftCaption } from "@/lib/sermon-media/captions";
+import { PIPELINE_FAILED, PIPELINE_SKIPPED } from "@/lib/sermon-media/clip-requests";
 import { settingsFromRow } from "@/lib/sermon-media/settings";
 import {
   ClipRuleError,
@@ -82,34 +83,40 @@ export async function ensureSermonRange(
 /**
  * Runs the automatic steps for one recording. `manual` is a person pressing
  * "Make clips" (or having pressed it before the transcript existed): clips are
- * made even when the church turned automatic clips off.
+ * made even when the church turned automatic clips off, and if the strict
+ * pass finds no moment a relaxed one is tried before giving up.
+ *
+ * `clips` counts clips now waiting in Ready to review; `renders` counts the
+ * videos that started. A clip whose video couldn't start still waits there,
+ * with a button to make its video.
  */
 export async function runPipelineForRecording(
   db: SupabaseClient,
   churchId: string,
   recordingId: string,
   options: { manual?: boolean } = {},
-): Promise<{ status: "done" | "needs_range" | "no_transcript" | "off"; clips: number; autoConfirmed: boolean }> {
-  if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) return { status: "off", clips: 0, autoConfirmed: false };
+): Promise<{ status: "done" | "needs_range" | "no_transcript" | "off"; clips: number; renders: number; autoConfirmed: boolean }> {
+  if (!(await isChurchFeatureEnabled(churchId, "sermon_media"))) return { status: "off", clips: 0, renders: 0, autoConfirmed: false };
   const { data: row } = await db.from("sermon_media_settings").select("*").eq("church_id", churchId).maybeSingle();
   const settings = settingsFromRow((row as Record<string, unknown> | null) ?? null);
 
   const transcript = await getTranscript(db, churchId, recordingId);
-  if (!transcript) return { status: "no_transcript", clips: 0, autoConfirmed: false };
+  if (!transcript) return { status: "no_transcript", clips: 0, renders: 0, autoConfirmed: false };
   const ensured = await ensureSermonRange(db, churchId, recordingId, await getSermonMediaState(db, churchId, recordingId), transcript);
   const { state, autoConfirmed } = ensured;
   if (!state.confirmed) {
     // Only a recording with no usable length gets here.
     await markPipeline(db, recordingId, state.inputVersion);
-    return { status: "needs_range", clips: 0, autoConfirmed };
+    return { status: "needs_range", clips: 0, renders: 0, autoConfirmed };
   }
 
   let made = 0;
+  let renders = 0;
   const wanted = options.manual ? Math.max(settings.clipsPerService, 3) : settings.clipsPerService;
   if ((settings.autoClips || options.manual) && wanted > 0) {
     const { data: church } = await db.from("churches").select("name").eq("id", churchId).maybeSingle();
-    await refreshSuggestedClips(db, churchId, recordingId, state, transcript);
-    const { data: suggested } = await db
+    await refreshSuggestedClips(db, churchId, recordingId, state, transcript, { relaxedFallback: Boolean(options.manual) });
+    const { data: suggested, error: suggestedError } = await db
       .from("sermon_clips")
       .select("*")
       .eq("church_id", churchId)
@@ -117,25 +124,30 @@ export async function runPipelineForRecording(
       .eq("status", "suggested")
       .order("rank", { ascending: true })
       .limit(wanted);
+    if (suggestedError) throw new Error(`Could not read clip suggestions: ${suggestedError.message}`);
     for (const clip of (suggested ?? []) as ClipRow[]) {
       const caption = clip.facebook_caption || draftCaption(clip.excerpt, (church?.name as string | undefined) ?? null);
-      const { data: updated } = await db
+      // Moving the clip to a draft is what puts it in Ready to review; a
+      // failure here must not be counted as a clip that was made.
+      const { data: updated, error: updateError } = await db
         .from("sermon_clips")
         .update({ facebook_caption: caption, auto: true, status: "draft", updated_at: new Date().toISOString() })
         .eq("id", clip.id)
         .select("*")
         .single();
+      if (updateError || !updated) throw new Error(`Could not prepare the clip: ${updateError?.message ?? "not found"}`);
+      made += 1;
       try {
-        await requestRender(db, (updated ?? clip) as ClipRow, state, transcript, null);
-        made += 1;
+        await requestRender(db, updated as ClipRow, state, transcript, null);
+        renders += 1;
       } catch (error) {
         logSermonMedia("auto_render_skipped", { clipId: clip.id, error: error instanceof Error ? error.message.slice(0, 120) : "unknown" });
       }
     }
   }
   await markPipeline(db, recordingId, state.inputVersion);
-  logSermonMedia("pipeline_ran", { recordingId, clips: made, autoConfirmed, manual: Boolean(options.manual) });
-  return { status: "done", clips: made, autoConfirmed };
+  logSermonMedia("pipeline_ran", { recordingId, clips: made, renders, autoConfirmed, manual: Boolean(options.manual) });
+  return { status: "done", clips: made, renders, autoConfirmed };
 }
 
 async function markPipeline(db: SupabaseClient, recordingId: string, inputVersion: number) {
@@ -143,29 +155,41 @@ async function markPipeline(db: SupabaseClient, recordingId: string, inputVersio
 }
 
 /** Cron: run the pipeline once for each newly transcribed recording. */
-export async function runAutoPipelines(db: SupabaseClient, limit = 5): Promise<{ ran: number }> {
-  const { data } = await db
+export async function runAutoPipelines(db: SupabaseClient, limit = 5): Promise<{ ran: number; skipped: number; failed: number }> {
+  const { data, error } = await db
     .from("recording_sermon_media")
     .select("recording_id, church_id, stream_recordings!inner(deleted_at)")
     .not("current_transcript_version", "is", null)
     .is("pipeline_input_version", null)
     .is("stream_recordings.deleted_at", null)
+    .order("updated_at", { ascending: true })
     .limit(limit);
+  if (error) throw new Error(`Could not find recordings waiting for clips: ${error.message}`);
   let ran = 0;
+  let skipped = 0;
+  let failed = 0;
   for (const row of data ?? []) {
     try {
       // Someone pressed "Make clips" before there was a transcript.
       const job = await getLatestJob(db, row.church_id as string, row.recording_id as string, "transcribe");
-      await runPipelineForRecording(db, row.church_id as string, row.recording_id as string, {
+      const result = await runPipelineForRecording(db, row.church_id as string, row.recording_id as string, {
         manual: job?.params?.[MAKE_CLIPS_PARAM] === true,
       });
+      if (result.status === "off") {
+        // Mark it, or a church that switched the feature off would hold these
+        // slots every minute and no other church's clips would be made.
+        await markPipeline(db, row.recording_id as string, PIPELINE_SKIPPED);
+        skipped += 1;
+        continue;
+      }
       ran += 1;
     } catch (error) {
+      failed += 1;
       logSermonMedia("pipeline_failed", { recordingId: row.recording_id, error: error instanceof Error ? error.message.slice(0, 160) : "unknown" });
-      await markPipeline(db, row.recording_id as string, -1);
+      await markPipeline(db, row.recording_id as string, PIPELINE_FAILED);
     }
   }
-  return { ran };
+  return { ran, skipped, failed };
 }
 
 export const MAKE_CLIPS_PARAM = "make_clips";
@@ -182,14 +206,14 @@ export async function requestClips(
   db: SupabaseClient,
   input: { churchId: string; recordingId: string; userId: string; language: string },
 ): Promise<
-  | { status: "made"; clips: number; autoConfirmed: boolean }
+  | { status: "made"; clips: number; renders: number; autoConfirmed: boolean }
   | { status: "transcribing"; job: MediaJobRow }
   | { status: "needs_range" | "off" }
 > {
   const { churchId, recordingId } = input;
   if (await getTranscript(db, churchId, recordingId)) {
     const result = await runPipelineForRecording(db, churchId, recordingId, { manual: true });
-    if (result.status === "done") return { status: "made", clips: result.clips, autoConfirmed: result.autoConfirmed };
+    if (result.status === "done") return { status: "made", clips: result.clips, renders: result.renders, autoConfirmed: result.autoConfirmed };
     if (result.status === "needs_range") return { status: "needs_range" };
     if (result.status === "off") return { status: "off" };
   }
@@ -220,7 +244,9 @@ export async function requestClips(
   if (!job) throw new Error("Could not queue the transcription for clips.");
   if (job.params?.[MAKE_CLIPS_PARAM] !== true) {
     const params = { ...(job.params ?? {}), [MAKE_CLIPS_PARAM]: true };
-    await db.from("media_jobs").update({ params }).eq("id", job.id).eq("church_id", churchId);
+    const { error } = await db.from("media_jobs").update({ params }).eq("id", job.id).eq("church_id", churchId);
+    // Without this mark the transcript would finish and no clips would follow.
+    if (error) throw new Error(`Could not remember the clips request: ${error.message}`);
     job = { ...job, params };
   }
   logSermonMedia("clips_requested_before_transcript", { recordingId, jobId: job.id });

@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import { Download } from "lucide-react";
+import { Download, ExternalLink, FileText, Link2 } from "lucide-react";
+import { AttendanceAnswer } from "@/components/service-plans/share/attendance-answer";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { recordView } from "@/lib/service-plans/share";
 import { formatClockTime, formatDuration, formatPlanDate } from "@/lib/service-plans/timing";
-import { SHARE_PRESET_LABELS } from "@/lib/service-plans/types";
+import { SHARE_PRESET_LABELS, type PlanFile } from "@/lib/service-plans/types";
 import { buildPlanView } from "@/lib/service-plans/view";
 import { cn } from "@/lib/utils";
 import { loadSharedPlanByToken, shareViewOptions } from "./load";
@@ -17,6 +18,30 @@ export const metadata: Metadata = {
 };
 
 type PageProps = { params: Promise<{ token: string }>; searchParams: Promise<{ time?: string }> };
+
+function FileLinks({ files, token }: { files: PlanFile[]; token: string }) {
+  return (
+    <span className="flex flex-wrap gap-2 pt-1">
+      {files.map((f) => {
+        const Icon = f.isFile ? FileText : Link2;
+        return (
+          <a
+            key={`${f.source}-${f.id}`}
+            href={f.url ?? `/plan/${token}/files/${f.source}/${f.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-[10px] border border-border px-3 text-[15px] font-semibold text-primary hover:border-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-accent"
+          >
+            <Icon aria-hidden className="size-4 shrink-0" />
+            <span className="truncate">{f.name}</span>
+            {f.url && <ExternalLink aria-hidden className="size-4 shrink-0" />}
+            {f.detail && <span className="sr-only">({f.detail})</span>}
+          </a>
+        );
+      })}
+    </span>
+  );
+}
 
 function Unavailable() {
   return (
@@ -42,7 +67,9 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
   const view = buildPlanView(plan, { ...options, timeId: query.time ?? null });
   const tz = church.timezone;
   const serviceTimes = view.times.filter((t) => t.kind === "service");
-  const person = share.preset === "person" ? plan.team.find((m) => m.personId === share.person_id)?.personName : null;
+  const recipient = share.person_id ? plan.attendance?.find((a) => a.personId === share.person_id) : undefined;
+  const person = options.preset === "person" ? recipient?.personName : null;
+  const answer = recipient?.status === "confirmed" || recipient?.status === "declined" ? recipient.status : null;
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -54,7 +81,7 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
         </h1>
         {view.title && <p className="text-lg font-semibold">{view.title}</p>}
         <p className="text-[15px] text-muted-foreground">
-          {SHARE_PRESET_LABELS[share.preset]}
+          {SHARE_PRESET_LABELS[options.preset]}
           {person ? ` for ${person}` : ""} ·{" "}
           {view.times.map((t) => `${t.label} ${formatClockTime(t.startsAt, tz)}`).join(" · ")}
         </p>
@@ -76,6 +103,15 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
           </nav>
         )}
       </header>
+
+      {share.person_id && (
+        <AttendanceAnswer
+          token={token}
+          initial={answer}
+          firstName={recipient?.personName.split(" ")[0] ?? null}
+          when={view.date ? formatPlanDate(view.date) : view.serviceTypeName}
+        />
+      )}
 
       {view.planNotes.length > 0 && (
         <section className="space-y-2 rounded-2xl border border-border bg-card p-4" aria-label="Notes for the whole service">
@@ -114,6 +150,7 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
                       {n.body}
                     </span>
                   ))}
+                  {row.files.length > 0 && <FileLinks files={row.files} token={token} />}
                 </span>
                 <span className="text-right font-semibold tabular-nums">
                   {row.lengthSeconds !== null ? formatDuration(row.lengthSeconds) : ""}
@@ -138,7 +175,7 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
         </a>
       </footer>
       <p className="text-sm text-muted-foreground">
-        This page always shows the latest plan. It is read-only and only for you, so please don’t forward it.
+        This page always shows the latest plan. It is only for you, so please don’t forward it.
       </p>
     </main>
   );

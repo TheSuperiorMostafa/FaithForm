@@ -49,6 +49,10 @@ export type SongListRow = {
 
 export type SongAttachmentKind = "chart_pdf" | "audio_link" | "file";
 
+/** What a PDF FaithForm makes on each arrangement save was made from. */
+export const GENERATED_SONG_FILES = ["lyrics", "chart"] as const;
+export type GeneratedSongFile = (typeof GENERATED_SONG_FILES)[number];
+
 export type SongAttachment = {
   id: string;
   arrangementId: string;
@@ -58,6 +62,8 @@ export type SongAttachment = {
   /** For links only; files are opened through a short-lived signed URL. */
   url: string | null;
   isFile: boolean;
+  /** Set on the PDFs made from the arrangement's lyrics or chord chart; replaced on each save. */
+  generated: GeneratedSongFile | null;
   createdAt: string;
 };
 

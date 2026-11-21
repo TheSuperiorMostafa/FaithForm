@@ -185,7 +185,7 @@ function callItem(raw: string | null): Partial<ContactBandItem> | null {
   return { text, href: `tel:${dial}` };
 }
 
-function socialLinks(profile: SiteProfile): SiteSocialLink[] {
+export function socialLinks(profile: SiteProfile): SiteSocialLink[] {
   return SOCIAL_SOURCES.flatMap(({ network, label, url }) => {
     const href = webUrl(url(profile));
     return href ? [{ network, label, href }] : [];
@@ -209,16 +209,37 @@ function hasLink(item: ContactBandItem | null | undefined): item is ContactBandI
   return Boolean(item?.href?.trim() && item.text?.trim());
 }
 
-function SocialLinks({ links }: { links: SiteSocialLink[] }) {
+/**
+ * Social links that can be drawn safely. Re-checked at render as well as in
+ * derive: the socials can also arrive through a hand-written override, which
+ * nothing else validates.
+ */
+export function drawableSocials(raw: unknown): SiteSocialLink[] {
+  return (Array.isArray(raw) ? (raw as SiteSocialLink[]) : []).flatMap((link) => {
+    const href = webUrl(link?.href);
+    const drawable = href && Object.hasOwn(SOCIAL_ICONS, link.network);
+    return drawable ? [{ ...link, href }] : [];
+  });
+}
+
+export function SocialLinks({
+  links,
+  className = "contact-band__socials",
+  linkClassName = "contact-band__social",
+}: {
+  links: SiteSocialLink[];
+  className?: string;
+  linkClassName?: string;
+}) {
   return (
-    <ul className="contact-band__socials" aria-label="Social media">
+    <ul className={className} aria-label="Social media">
       {links.map((link) => {
         const Icon = SOCIAL_ICONS[link.network];
         return (
           <li key={link.network}>
             <a
               href={link.href}
-              className="contact-band__social"
+              className={linkClassName}
               aria-label={link.label}
               target="_blank"
               rel="noopener noreferrer"
@@ -235,13 +256,7 @@ function SocialLinks({ links }: { links: SiteSocialLink[] }) {
 function ContactBand({ content, ctx }: SectionComponentProps<ContactBandContent>) {
   const columns = COLUMNS.filter(({ key }) => hasLink(content[key]));
 
-  // Re-checked here as well as in derive: the socials can also arrive through a
-  // hand-written override, which nothing else validates.
-  const socials = (Array.isArray(content.socials) ? content.socials : []).flatMap((link) => {
-    const href = webUrl(link?.href);
-    const drawable = href && Object.hasOwn(SOCIAL_ICONS, link.network);
-    return drawable ? [{ ...link, href }] : [];
-  });
+  const socials = drawableSocials(content.socials);
 
   if (columns.length === 0 && socials.length === 0) return null;
 

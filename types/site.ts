@@ -78,6 +78,11 @@ export type HeroContent = {
   image: SiteImage | null;
   surface: SiteSurface;
   align: SiteAlign;
+  /**
+   * The church's social links, from the profile. Only formats that place them
+   * in the banner (Grace) show them; the rest keep them in Contact info.
+   */
+  socials?: SiteSocialLink[];
 };
 
 /**

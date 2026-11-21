@@ -95,6 +95,9 @@ export function flyerColors(
   };
 }
 
+/** The app's name in the App Store and Google Play. */
+export const APP_STORE_NAME = "FaithForm Connect";
+
 export type FlyerCopy = {
   headline: string;
   subhead: string;
@@ -120,12 +123,12 @@ export function flyerCopy({
     subhead: "Watch services, join groups, give and stay up to date.",
     steps: [
       "Open your phone's camera and point it at the code.",
-      "Tap the link that appears, then download FaithForm. It's free.",
+      `Tap the link that appears, then download ${APP_STORE_NAME}. It's free.`,
       findableInSearch
-        ? `Open FaithForm, search for ${name}, and add our church.`
-        : "Open FaithForm and ask us for an invitation link to add our church.",
+        ? `Open ${APP_STORE_NAME}, search for ${name}, and add our church.`
+        : `Open ${APP_STORE_NAME} and ask us for an invitation link to add our church.`,
     ],
-    storeLine: "Look for FaithForm on the App Store.",
+    storeLine: `Look for ${APP_STORE_NAME} on the App Store.`,
   };
 }
 

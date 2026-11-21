@@ -128,10 +128,13 @@ export function RecordingMediaActions({ recordingId, recordingStatus }: { record
                   : { tone: "neutral" as const, label: "Not made yet" };
 
   return (
-    <section aria-labelledby={`media-${recordingId}`} className="flex flex-col gap-5 border-t border-border pt-5">
-      <h4 id={`media-${recordingId}`} className="text-[15px] font-semibold">
+    <section
+      aria-labelledby={`media-${recordingId}`}
+      className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none"
+    >
+      <h3 id={`media-${recordingId}`} className="font-heading text-lg font-semibold">
         Transcript and clips
-      </h4>
+      </h3>
 
       <div className="flex flex-col gap-3">
         <div className="flex items-start gap-3">

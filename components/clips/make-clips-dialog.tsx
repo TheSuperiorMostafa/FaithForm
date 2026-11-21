@@ -28,6 +28,7 @@ function sourceStatus(item: LibraryItem): { tone: "ready" | "working" | "attenti
   if (item.recordingStatus === "processing") return { tone: "working", label: "Video is processing" };
   if (item.recordingStatus === "failed") return { tone: "attention", label: "Video couldn't be prepared" };
   if (["queued", "dispatched", "running"].includes(item.transcript)) return { tone: "working", label: "Transcribing" };
+  if (item.transcript === "failed" && item.clips.total === 0) return { tone: "attention", label: "Last try didn't finish" };
   if (item.clips.total > 0) return { tone: "ready", label: `${item.clips.total} clip${item.clips.total === 1 ? "" : "s"} made` };
   return null;
 }

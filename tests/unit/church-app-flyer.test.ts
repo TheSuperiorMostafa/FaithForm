@@ -54,6 +54,13 @@ test("only promises app search when search can find the church", () => {
   assert.match(hidden.steps[2], /invitation link/);
 });
 
+test("names the app as it appears in the stores", () => {
+  const copy = flyerCopy({ churchName: "Grace Fellowship", findableInSearch: true });
+  for (const line of [...copy.steps.slice(1), copy.storeLine]) {
+    assert.match(line, /FaithForm Connect/);
+  }
+});
+
 test("sends iPhones and desktops to the App Store", () => {
   const iphone = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)";
   assert.equal(appStoreDestination(iphone), marketingConfig.appStore);

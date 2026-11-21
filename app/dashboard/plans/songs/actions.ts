@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { requireChurchAuth, type ChurchAuth } from "@/lib/auth/church";
 import { toUserError, UserFacingError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
-import { assertId, cleanText, NOT_FOUND, requireText } from "@/lib/service-plans/server";
+import { assertId, cleanText, isUniqueViolation, NOT_FOUND, requireText } from "@/lib/service-plans/server";
 import { normalizeCcli, normalizeKey, normalizeTempo, parseSongFile } from "@/lib/service-plans/songs/parsers";
 import { mapSongAttachment, songIdentities } from "@/lib/service-plans/songs/queries";
 import { songSource } from "@/lib/service-plans/songs/source";
 import { STARTER_HYMNS } from "@/lib/service-plans/songs/starter-hymns";
 import {
+  GENERATED_SONG_FILES,
   SONG_FILE_FORMATS,
+  type GeneratedSongFile,
   type ImportPreviewSong,
   type ImportSongInput,
   type SongAttachment,
@@ -254,7 +256,10 @@ export async function restoreSongAction(songId: string): Promise<Ok | Fail> {
 // Arrangements
 // ---------------------------------------------------------------------------
 
-export async function createArrangementAction(songId: string, input: ArrangementInput): Promise<Ok<{ id: string }> | Fail> {
+export async function createArrangementAction(
+  songId: string,
+  input: ArrangementInput,
+): Promise<Ok<{ id: string } & SongPdfResult> | Fail> {
   try {
     const { auth, admin } = await planner();
     const song = await assertSong(admin, auth.churchId, songId);
@@ -264,31 +269,46 @@ export async function createArrangementAction(songId: string, input: Arrangement
       .eq("church_id", auth.churchId)
       .eq("song_id", song.id);
     if (countError) throw countError;
+    const row = arrangementRow(input);
     const { data, error } = await admin
       .from("song_arrangements")
-      .insert({ ...arrangementRow(input), church_id: auth.churchId, song_id: song.id, sort_order: count ?? 0 })
+      .insert({ ...row, church_id: auth.churchId, song_id: song.id, sort_order: count ?? 0 })
       .select("id")
       .single();
     if (error) throw error;
+    const id = data.id as string;
+    const files =
+      row.chart_text || row.lyrics
+        ? await refreshSongPdfs(admin, auth.churchId, { id, songId: song.id }, row)
+        : { filesUpdated: true, pdfs: [] };
     revalidateSongs(song.id);
-    return { ok: true, id: data.id as string };
+    return { ok: true, id, ...files };
   } catch (error) {
     return failed(error, "We couldn't add that arrangement.");
   }
 }
 
-export async function updateArrangementAction(arrangementId: string, input: ArrangementInput): Promise<Ok | Fail> {
+/**
+ * Saves an arrangement, then remakes its lyrics and chord chart PDFs. The save
+ * stands even when the PDFs can't be made; `filesUpdated` says whether they were.
+ */
+export async function updateArrangementAction(
+  arrangementId: string,
+  input: ArrangementInput,
+): Promise<Ok<SongPdfResult> | Fail> {
   try {
     const { auth, admin } = await planner();
     const arrangement = await assertArrangement(admin, auth.churchId, arrangementId);
+    const row = arrangementRow(input);
     const { error } = await admin
       .from("song_arrangements")
-      .update(arrangementRow(input))
+      .update(row)
       .eq("church_id", auth.churchId)
       .eq("id", arrangement.id);
     if (error) throw error;
+    const files = await refreshSongPdfs(admin, auth.churchId, arrangement, row);
     revalidateSongs(arrangement.songId);
-    return { ok: true };
+    return { ok: true, ...files };
   } catch (error) {
     return failed(error, "We couldn't save the arrangement.");
   }
@@ -317,6 +337,161 @@ export async function deleteArrangementAction(arrangementId: string): Promise<Ok
     return { ok: true };
   } catch (error) {
     return failed(error, "We couldn't delete that arrangement.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Generated PDFs
+// ---------------------------------------------------------------------------
+//
+// Each save makes one lyrics PDF and one chord chart PDF per arrangement,
+// stored as song_attachments rows with `generated_from` set (a partial unique
+// index keeps one of each). A new file is uploaded to a new path, the row is
+// pointed at it, then the old file is removed, so a row never points at a
+// missing file. A save that can't make them still saves the arrangement.
+
+export type SongPdfResult = {
+  /** False when a PDF couldn't be made or stored; the arrangement itself was saved. */
+  filesUpdated: boolean;
+  /** The PDFs now in place, made from this save. */
+  pdfs: GeneratedSongFile[];
+};
+
+const GENERATED_KIND: Record<GeneratedSongFile, "chart_pdf" | "file"> = { chart: "chart_pdf", lyrics: "file" };
+
+function messageOf(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message: unknown }).message);
+  return String(error);
+}
+
+async function generatedFile(
+  admin: Admin,
+  churchId: string,
+  arrangementId: string,
+  kind: GeneratedSongFile,
+): Promise<{ id: string; storagePath: string } | null> {
+  const { data, error } = await admin
+    .from("song_attachments")
+    .select("id, storage_path")
+    .eq("church_id", churchId)
+    .eq("arrangement_id", arrangementId)
+    .eq("generated_from", kind)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { id: data.id as string, storagePath: data.storage_path as string } : null;
+}
+
+/** Puts a newly made PDF in place of the last one, or removes the last one when `pdf` is null. */
+async function replaceGeneratedFile(
+  admin: Admin,
+  churchId: string,
+  arrangement: { id: string; songId: string },
+  kind: GeneratedSongFile,
+  pdf: { bytes: Buffer; fileName: string } | null,
+): Promise<void> {
+  if (!pdf) {
+    const current = await generatedFile(admin, churchId, arrangement.id, kind);
+    if (!current) return;
+    const { error } = await admin.from("song_attachments").delete().eq("church_id", churchId).eq("id", current.id);
+    if (error) throw error;
+    await removeStoredFiles(admin, [current.storagePath]);
+    return;
+  }
+
+  const path = `${churchId}/${arrangement.songId}/${crypto.randomUUID()}-${safeFileName(pdf.fileName)}`;
+  const { error: uploadError } = await admin.storage
+    .from(BUCKET)
+    .upload(path, pdf.bytes, { contentType: "application/pdf", upsert: false });
+  if (uploadError) throw uploadError;
+
+  try {
+    // A save running at the same moment may swap the row first: read again and retry.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const current = await generatedFile(admin, churchId, arrangement.id, kind);
+      if (current) {
+        const { data, error } = await admin
+          .from("song_attachments")
+          .update({ storage_path: path, file_name: pdf.fileName, kind: GENERATED_KIND[kind] })
+          .eq("church_id", churchId)
+          .eq("id", current.id)
+          .eq("storage_path", current.storagePath)
+          .select("id");
+        if (error) throw error;
+        if (!data?.length) continue;
+        await removeStoredFiles(admin, [current.storagePath]);
+        return;
+      }
+      const { error } = await admin.from("song_attachments").insert({
+        church_id: churchId,
+        arrangement_id: arrangement.id,
+        kind: GENERATED_KIND[kind],
+        storage_path: path,
+        file_name: pdf.fileName,
+        generated_from: kind,
+      });
+      if (!error) return;
+      if (!isUniqueViolation(error)) throw error;
+    }
+    throw new Error("the generated file kept changing");
+  } catch (error) {
+    // No row points at the new file; don't leave it behind.
+    await removeStoredFiles(admin, [path]);
+    throw error;
+  }
+}
+
+async function refreshSongPdfs(
+  admin: Admin,
+  churchId: string,
+  arrangement: { id: string; songId: string },
+  row: ReturnType<typeof arrangementRow>,
+): Promise<SongPdfResult> {
+  try {
+    const { data: song, error } = await admin
+      .from("songs")
+      .select("title, author, ccli_number, copyright")
+      .eq("church_id", churchId)
+      .eq("id", arrangement.songId)
+      .maybeSingle();
+    if (error) throw error;
+    if (!song) throw new Error("song not found");
+    // Loaded on demand so the PDF renderer stays out of every other action.
+    const { renderSongPdf, songPdfFileName, songPdfSources } = await import("@/lib/service-plans/songs/song-pdf");
+    const sources = songPdfSources({ chartText: row.chart_text, lyrics: row.lyrics });
+    const songInfo = {
+      title: song.title as string,
+      author: (song.author as string | null) ?? null,
+      ccliNumber: (song.ccli_number as string | null) ?? null,
+      copyright: (song.copyright as string | null) ?? null,
+    };
+
+    let filesUpdated = true;
+    const pdfs: GeneratedSongFile[] = [];
+    for (const kind of GENERATED_SONG_FILES) {
+      try {
+        const text = sources[kind];
+        const pdf = text
+          ? {
+              bytes: await renderSongPdf({
+                kind,
+                song: songInfo,
+                arrangement: { name: row.name, key: row.key, bpm: row.bpm },
+                text,
+              }),
+              fileName: songPdfFileName(songInfo.title, row.name, kind),
+            }
+          : null;
+        await replaceGeneratedFile(admin, churchId, arrangement, kind, pdf);
+        if (pdf) pdfs.push(kind);
+      } catch (error) {
+        filesUpdated = false;
+        console.error(`song ${kind} pdf:`, messageOf(error));
+      }
+    }
+    return { filesUpdated, pdfs };
+  } catch (error) {
+    console.error("song pdfs:", messageOf(error));
+    return { filesUpdated: false, pdfs: [] };
   }
 }
 
@@ -606,7 +781,7 @@ export async function confirmAttachmentAction(input: {
         storage_path: path,
         file_name: cleanText(input.fileName, 255) ?? name,
       })
-      .select("id, arrangement_id, kind, storage_path, url, file_name, created_at")
+      .select("id, arrangement_id, kind, storage_path, url, file_name, generated_from, created_at")
       .single();
     if (error) throw error;
     revalidateSongs(arrangement.songId);
@@ -642,7 +817,7 @@ export async function addAttachmentLinkAction(
         url: parsed.href,
         file_name: cleanText(label, 255) ?? parsed.hostname,
       })
-      .select("id, arrangement_id, kind, storage_path, url, file_name, created_at")
+      .select("id, arrangement_id, kind, storage_path, url, file_name, generated_from, created_at")
       .single();
     if (error) throw error;
     revalidateSongs(arrangement.songId);

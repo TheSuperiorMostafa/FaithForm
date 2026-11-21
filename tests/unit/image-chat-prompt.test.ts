@@ -157,7 +157,7 @@ test("event mode needs a title and always starts a fresh design", () => {
   assert.equal(request.event?.details, "Bring a dish to share.");
 });
 
-test("event brief prints the title, church name and details, and uses the description for the scene", () => {
+test("event brief prints the title and church name, leaves date and place for the chat, and uses the description for the scene", () => {
   const brief = buildImageChatInstruction(
     parsed({
       mode: "event",
@@ -168,8 +168,9 @@ test("event brief prints the title, church name and details, and uses the descri
   assert.match(brief, /16:9/);
   assert.match(brief, /"Fall Potluck"/);
   assert.match(brief, /"Grace Fellowship"/);
-  assert.match(brief, /Date and time, clearly readable: "Sun, Nov 23 · 5 PM"/);
-  assert.match(brief, /Place: "Fellowship Hall"/);
+  assert.doesNotMatch(brief, /Sun, Nov 23/);
+  assert.doesNotMatch(brief, /Fellowship Hall/);
+  assert.match(brief, /Do NOT print the date, time, place/);
   assert.match(brief, /no flat panel/);
   assert.match(brief, /exactly once/);
   assert.match(brief, /do not print it\): Chili cook-off/);
@@ -204,14 +205,15 @@ test("system instruction asks for designed type, one logo, and edits that really
   assert.match(IMAGE_CHAT_SYSTEM_INSTRUCTION, /moved text is gone from its old place/);
 });
 
-test("a described picture still carries the event's title and date unless told otherwise", () => {
+test("a described picture carries the event's title, and the date only when asked", () => {
   const create = buildImageChatInstruction(
     parsed({ instruction: "a cosy reading nook", event: { title: "Bible Study", when: "Wed, Nov 26 · 7 PM" } }),
     BRAND,
   );
   assert.match(create, /unless the description says no text/);
   assert.match(create, /"Bible Study"/);
-  assert.match(create, /"Wed, Nov 26 · 7 PM"/);
+  assert.match(create, /print these ONLY if the description asks for them.*"Wed, Nov 26 · 7 PM"/);
+  assert.doesNotMatch(create, /\d\. .*Wed, Nov 26/);
   assert.match(create, /"Grace Fellowship"/);
   const edit = buildImageChatInstruction(
     parsed({ instruction: "move the title left", previousImage: IMAGE, event: { title: "Bible Study" } }),

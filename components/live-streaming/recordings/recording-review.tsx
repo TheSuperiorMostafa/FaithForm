@@ -67,9 +67,8 @@ type Props = {
   timeZone: string;
   stats: { live: number; replay: number } | null;
   artworkSlot?: React.ReactNode;
-  /** Transcript and clips actions, shown at the end of More options. */
+  /** Transcript and clips card, shown under More options. */
   mediaSlot?: React.ReactNode;
-  websiteSermonsUrl?: string | null;
   /** Speakers and topics used on this church's other recordings. */
   tagSuggestions?: { speakers: string[]; topics: string[] };
 };
@@ -108,7 +107,6 @@ export function RecordingReview({
   stats,
   artworkSlot,
   mediaSlot,
-  websiteSermonsUrl,
   tagSuggestions,
 }: Props) {
   const router = useRouter();
@@ -458,11 +456,14 @@ export function RecordingReview({
         />
       ) : null}
 
-      {/* On wide screens the rarely-needed "More options" sit under the video,
-          so the right side stays a short form that ends in Publish; on phones
-          they follow the publish card. Every field is React state, so moving
-          them changes nothing about what Publish and Save send. */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-start">
+      {/* On wide screens the rarely-needed "More options" and the transcript
+          and clips card sit under the video, so the right side stays a short
+          form that ends in Publish; on phones they follow the publish card.
+          The second row is `1fr` so the tall publish card's extra height goes
+          below them rather than opening a gap above "More options". Every
+          field is React state, so moving them changes nothing about what
+          Publish and Save send. */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:grid-rows-[auto_1fr] lg:items-start">
         <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
           {playback && playerSrc ? (
             <RecordingPlayer
@@ -701,9 +702,6 @@ export function RecordingReview({
                         View on your website <ExternalLink className="size-4" aria-hidden />
                       </a>
                     ) : null}
-                    {recording.website.published && websiteSermonsUrl ? <a href={websiteSermonsUrl} target="_blank" rel="noreferrer" className={cn(buttonVariants({ variant: "outline" }), "gap-2")}>
-                      View Sermons page <ExternalLink className="size-4" aria-hidden />
-                    </a> : null}
                     <Button variant="outline" onClick={() => void unpublish()} disabled={pending} className="gap-2">
                       <Undo2 className="size-4" aria-hidden />
                       Unpublish
@@ -725,13 +723,11 @@ export function RecordingReview({
           ) : null}
         </div>
 
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-2">
         <AdvancedSection
-          className="min-w-0 lg:col-start-1 lg:row-start-2"
+          className="min-w-0"
           title="More options"
-          description={
-            (appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture") +
-            (mediaSlot ? ", transcript and clips" : "")
-          }
+          description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}
         >
           <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
             <legend className="sr-only">More options</legend>
@@ -759,8 +755,9 @@ export function RecordingReview({
               chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics}
               speakerOptions={tagSuggestions?.speakers} topicOptions={tagSuggestions?.topics} />
           </fieldset>
-          {mediaSlot}
         </AdvancedSection>
+        {mediaSlot}
+        </div>
       </div>
 
       {isAdmin ? (

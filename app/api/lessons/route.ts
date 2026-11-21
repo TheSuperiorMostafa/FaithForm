@@ -5,6 +5,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { normalizeTranslationId } from "@/lib/bible/translations";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { parseNewLessonRequest } from "@/lib/lesson-builder/create-lesson";
+import { describeLessonFailure, LessonStageError } from "@/lib/lesson-builder/failure";
 import { createLessonFromSermon } from "@/lib/lesson-builder/from-sermon";
 import { createSermon } from "@/lib/queries/sermons";
 import { requireRecordingAccess } from "@/lib/sermon-media/access";
@@ -12,6 +13,7 @@ import { limit } from "@/lib/sermon-media/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Also set in vercel.json: its "app/api/**/route.ts" entry caps every route at 30s.
 export const maxDuration = 300;
 
 const START_FAILED = "We couldn't start the lesson. Please try again.";
@@ -49,7 +51,13 @@ export async function POST(request: Request) {
         userId: auth.userId,
         recordingId: input.recording_id,
       }).catch((error: unknown) => {
-        console.error("lesson from sermon failed", error instanceof Error ? error.message : error);
+        // Plain words for people; the real cause (stage, AI SDK error, stop
+        // reason, failing fields, provider/database code) for the log.
+        const details =
+          error instanceof LessonStageError
+            ? describeLessonFailure(error.original, error.stage)
+            : describeLessonFailure(error);
+        console.error(JSON.stringify({ msg: "lesson from sermon failed", recordingId: input.recording_id, ...details }));
         return { ok: false as const, status: 500 as const, error: FROM_SERMON_FAILED, code: undefined };
       });
       if (!result.ok) {

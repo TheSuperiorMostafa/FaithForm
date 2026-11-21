@@ -19,7 +19,7 @@ export type ClipSuggestion = {
   signals: Record<string, number>;
 };
 
-type Sentence = { start: number; end: number; text: string; uncertain: boolean };
+type Sentence = { start: number; end: number; text: string; uncertain: boolean; music: boolean; noise: boolean };
 
 const MIN_SEC = 20;
 const MAX_SEC = 75;
@@ -32,6 +32,22 @@ const STORY = /\b(?:i remember|when i was|years ago|one day|there was a|let me t
 const EMOTION = /\b(?:love|loved|fear|afraid|hope|grace|broken|tears|cried|forgive|forgiven|joy|pain|lost|healed|alone|shame|free|freedom|mercy|weep|grief|amor|esperanza|gracia|perd[oó]n|miedo|gozo)\b/gi;
 const QUESTION_OPENING = /^[^.!?]{8,140}\?/;
 
+/** Speech runs at about 2.5 words a second; sung lyrics with held notes are much slower. */
+const SPOKEN_WORDS_PER_SEC = 2;
+
+/**
+ * Strict: only clean, confident words with no music under them, scored above
+ * the bar. Relaxed is for a person pressing Make clips when the strict pass
+ * found nothing: low-confidence words and speech over quiet music (a pianist
+ * playing under the preacher) are allowed with a penalty, and the bar is lower.
+ * Every clip is still watched and approved by a person before it posts, and
+ * noise, missing audio and slow (sung) passages are never clipped.
+ */
+const RULES = {
+  strict: { minScore: 2.2, allowUncertain: false, allowMusic: false },
+  relaxed: { minScore: 1.2, allowUncertain: true, allowMusic: true },
+} as const;
+
 export function suggestClips(input: {
   segments: TranscriptSegment[];
   gaps: TranscriptGap[];
@@ -39,7 +55,9 @@ export function suggestClips(input: {
   rangeStartSec: number;
   rangeEndSec: number;
   max?: number;
+  mode?: keyof typeof RULES;
 }): ClipSuggestion[] {
+  const rules = RULES[input.mode ?? "strict"];
   const sentences = toSentences(input.segments);
   if (sentences.length === 0) return [];
   const blocked = input.gaps.filter((gap) => gap.reason === "missing_audio" || gap.reason === "discontinuity");
@@ -55,7 +73,7 @@ export function suggestClips(input: {
       if (start < input.rangeStartSec || end > input.rangeEndSec) continue;
       if (blocked.some((gap) => gap.end > start && gap.start < end)) continue;
       const window = sentences.slice(i, j + 1);
-      const scored = score(window, input.audioEvents, start, end);
+      const scored = score(window, input.audioEvents, start, end, rules);
       if (scored) candidates.push(scored);
     }
   }
@@ -65,7 +83,7 @@ export function suggestClips(input: {
   const chosen: ClipSuggestion[] = [];
   const limit = input.max ?? 6;
   for (const candidate of candidates) {
-    if (candidate.score < 2.2) break;
+    if (candidate.score < rules.minScore) break;
     const overlaps = chosen.some((other) => {
       const shared = Math.min(other.endSec, candidate.endSec) - Math.max(other.startSec, candidate.startSec);
       return shared > 0.2 * Math.min(other.endSec - other.startSec, candidate.endSec - candidate.startSec);
@@ -79,34 +97,46 @@ export function suggestClips(input: {
 function toSentences(segments: TranscriptSegment[]): Sentence[] {
   const out: Sentence[] = [];
   for (const segment of segments) {
-    const uncertain = Boolean(segment.flags?.some((flag) => flag === "uncertain" || flag === "noise" || flag === "music"));
+    const flags = segment.flags ?? [];
+    const mark = { uncertain: flags.includes("uncertain"), music: flags.includes("music"), noise: flags.includes("noise") };
     if (segment.words && segment.words.length > 0) {
       let current: { start: number; words: string[] } | null = null;
       for (const word of segment.words) {
         current = current ?? { start: word.s, words: [] };
         current.words.push(word.w);
         if (/[.!?]$/.test(word.w)) {
-          out.push({ start: current.start, end: word.e, text: current.words.join(" "), uncertain });
+          out.push({ start: current.start, end: word.e, text: current.words.join(" "), ...mark });
           current = null;
         }
       }
       if (current) {
         const last = segment.words[segment.words.length - 1];
-        out.push({ start: current.start, end: last.e, text: current.words.join(" "), uncertain });
+        out.push({ start: current.start, end: last.e, text: current.words.join(" "), ...mark });
       }
     } else if (segment.text.trim()) {
-      out.push({ start: segment.start, end: segment.end, text: segment.text.trim(), uncertain });
+      out.push({ start: segment.start, end: segment.end, text: segment.text.trim(), ...mark });
     }
   }
   return out;
 }
 
-function score(window: Sentence[], events: AudioEvent[], start: number, end: number): ClipSuggestion | null {
+function score(
+  window: Sentence[],
+  events: AudioEvent[],
+  start: number,
+  end: number,
+  rules: (typeof RULES)[keyof typeof RULES],
+): ClipSuggestion | null {
   const text = window.map((sentence) => sentence.text).join(" ");
   const first = window[0].text;
   const last = window[window.length - 1].text;
-  if (window.some((sentence) => sentence.uncertain)) return null;
-  if (text.split(/\s+/).length < 35) return null;
+  const wordCount = text.split(/\s+/).length;
+  if (wordCount < 35) return null;
+  if (window.some((sentence) => sentence.noise)) return null;
+  const uncertain = window.some((sentence) => sentence.uncertain);
+  const music = window.some((sentence) => sentence.music);
+  if (uncertain && !rules.allowUncertain) return null;
+  if (music && (!rules.allowMusic || wordCount / Math.max(1, end - start) < SPOKEN_WORDS_PER_SEC)) return null;
 
   const signals: Record<string, number> = {};
   signals.clear_opening = WEAK_OPENING.test(first) ? -1.2 : QUESTION_OPENING.test(first) ? 1.3 : 0.8;
@@ -126,6 +156,8 @@ function score(window: Sentence[], events: AudioEvent[], start: number, end: num
   );
   // Secondary: a reaction strengthens an excerpt, it never makes one.
   signals.reaction = reaction.length > 0 ? Math.min(0.8, reaction.length * 0.4) : 0;
+  if (uncertain) signals.unclear_words = -0.6;
+  if (music) signals.music_under = -0.4;
 
   const total = Object.values(signals).reduce((sum, value) => sum + value, 0);
   return {

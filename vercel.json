@@ -72,6 +72,9 @@
     "app/api/sermon-media/recordings/[id]/lesson/route.ts": {
       "maxDuration": 300
     },
+    "app/api/lessons/route.ts": {
+      "maxDuration": 300
+    },
     "app/api/sermon-media/clips/[clipId]/facebook/route.ts": {
       "maxDuration": 300
     }

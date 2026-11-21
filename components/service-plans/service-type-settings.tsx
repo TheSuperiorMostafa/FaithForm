@@ -12,7 +12,9 @@ import { TimePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { undoToast } from "@/lib/ui/undo-toast";
+import { formatUsPhoneDisplay } from "@/lib/sms/phone";
 import { WEEKDAY_NAMES } from "@/lib/service-plans/timing";
 import type { ServiceType, ServiceTypeTime, TimeKind } from "@/lib/service-plans/types";
 
@@ -33,6 +35,10 @@ export function ServiceTypeSettings({
   const [weekday, setWeekday] = useState(String(type.defaultWeekday ?? 0));
   const [target, setTarget] = useState(type.targetSeconds ? String(type.targetSeconds / 60) : "");
   const [templateId, setTemplateId] = useState(type.defaultTemplateId ?? "");
+  const [alertEmails, setAlertEmails] = useState((type.responseEmails ?? []).join("\n"));
+  const [alertPhones, setAlertPhones] = useState(
+    (type.responsePhones ?? []).map((p) => formatUsPhoneDisplay(p) ?? p).join("\n"),
+  );
   const [times, setTimes] = useState<DraftTime[]>(
     type.times.map((t) => ({ kind: t.kind, label: t.label, weekday: t.weekday, localTime: t.localTime, key: t.id })),
   );
@@ -49,6 +55,8 @@ export function ServiceTypeSettings({
         targetMinutes: target ? Number(target) : null,
         defaultTemplateId: templateId || null,
         times: times.map(({ kind, label, weekday: w, localTime }) => ({ kind, label, weekday: w, localTime })),
+        responseEmails: alertEmails.split(/[\n,;]+/),
+        responsePhones: alertPhones.split(/[\n,;]+/),
       });
       if (!result.ok) return void toast.error(result.error);
       toast.success(`${name.trim()} settings saved. New plans use these times.`);
@@ -182,6 +190,49 @@ export function ServiceTypeSettings({
           <Plus aria-hidden />
           Add a time
         </Button>
+      </Card>
+
+      <Card className="flex flex-col gap-4 p-5 sm:p-6">
+        <div>
+          <h2 className="font-heading text-lg font-bold">Answer alerts</h2>
+          <p className="text-[15px] text-muted-foreground">
+            When someone taps “I’ll be there” or “Can’t make it” on a {type.name} plan you shared, everyone below is told.
+          </p>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="type-alert-emails">Email these people</Label>
+            <Textarea
+              id="type-alert-emails"
+              rows={4}
+              value={alertEmails}
+              onChange={(e) => setAlertEmails(e.target.value)}
+              placeholder={"worship@yourchurch.org\npastor@yourchurch.org"}
+              aria-describedby="type-alert-emails-help"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <p id="type-alert-emails-help" className="text-sm text-muted-foreground">
+              One email address per line, up to 10.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="type-alert-phones">Text these mobile numbers</Label>
+            <Textarea
+              id="type-alert-phones"
+              rows={4}
+              inputMode="tel"
+              value={alertPhones}
+              onChange={(e) => setAlertPhones(e.target.value)}
+              placeholder={"502-555-0100\n502-555-0101"}
+              aria-describedby="type-alert-phones-help"
+              autoComplete="off"
+            />
+            <p id="type-alert-phones-help" className="text-sm text-muted-foreground">
+              One number per line, up to 10. Texts come from your church’s texting number.
+            </p>
+          </div>
+        </div>
       </Card>
 
       <div className="flex flex-wrap gap-3">

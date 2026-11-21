@@ -130,7 +130,15 @@ export function usePlanRealtime(planId: string, onChange: (events: ChangeEvent[]
     // A unique topic per mount: React's dev double-mount would otherwise let
     // the first cleanup remove the channel the second mount is using.
     const channel = supabase.channel(`service-plan:${planId}:${crypto.randomUUID()}`);
-    for (const table of ["plan_items", "plan_notes", "plan_item_leaders", "plan_times"]) {
+    // plan_attendance and plan_item_attachments join the publication in 0176.
+    for (const table of [
+      "plan_items",
+      "plan_notes",
+      "plan_item_leaders",
+      "plan_times",
+      "plan_attendance",
+      "plan_item_attachments",
+    ]) {
       channel.on(
         "postgres_changes" as never,
         { event: "*", schema: "public", table, filter: `plan_id=eq.${planId}` },

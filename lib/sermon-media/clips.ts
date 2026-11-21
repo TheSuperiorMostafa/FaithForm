@@ -112,29 +112,60 @@ export function specHash(spec: RenderSpec): string {
   return createHash("sha256").update(JSON.stringify(spec)).digest("hex");
 }
 
-/** Replace untouched suggestions built from an older input with fresh ones. */
+/** Whether two clips share more than half of the shorter one. */
+export function clipsOverlap(a: { startSec: number; endSec: number }, b: { startSec: number; endSec: number }): boolean {
+  const shared = Math.min(a.endSec, b.endSec) - Math.max(a.startSec, b.startSec);
+  return shared > 0.5 * Math.min(a.endSec - a.startSec, b.endSec - b.startSec);
+}
+
+/**
+ * Replace untouched suggestions built from an older input with fresh ones.
+ * Moments the church already has as a clip are left out, so pressing Make
+ * clips again never makes the same clip twice. `relaxed` is for a person
+ * asking for clips when the strict pass found nothing (see suggestClips).
+ */
 export async function refreshSuggestedClips(
   db: SupabaseClient,
   churchId: string,
   recordingId: string,
   state: SermonMediaState,
   transcript: Transcript,
+  options: { relaxedFallback?: boolean } = {},
 ): Promise<number> {
   if (!state.confirmed) throw new ClipRuleError("Confirm where the sermon starts and ends first.");
   const inRange = segmentsInRange(transcript.segments, state.confirmed.startSec, state.confirmed.endSec);
-  const suggestions = suggestClips({
-    segments: inRange,
-    gaps: transcript.gaps,
-    audioEvents: transcript.audioEvents,
-    rangeStartSec: state.confirmed.startSec,
-    rangeEndSec: state.confirmed.endSec,
-  });
-  await db
+  const { data: kept, error: keptError } = await db
+    .from("sermon_clips")
+    .select("start_sec, end_sec")
+    .eq("church_id", churchId)
+    .eq("recording_id", recordingId)
+    .neq("status", "archived")
+    .neq("status", "suggested");
+  if (keptError) throw new Error(`Could not read the recording's clips: ${keptError.message}`);
+  const existing = (kept ?? []).map((row) => ({ startSec: Number(row.start_sec), endSec: Number(row.end_sec) }));
+  const find = (mode: "strict" | "relaxed") =>
+    suggestClips({
+      segments: inRange,
+      gaps: transcript.gaps,
+      audioEvents: transcript.audioEvents,
+      rangeStartSec: state.confirmed!.startSec,
+      rangeEndSec: state.confirmed!.endSec,
+      max: 6 + existing.length,
+      mode,
+    }).filter((suggestion) => !existing.some((clip) => clipsOverlap(clip, suggestion)));
+  let suggestions = find("strict");
+  if (suggestions.length === 0 && options.relaxedFallback) {
+    suggestions = find("relaxed");
+    if (suggestions.length > 0) logSermonMedia("clips_relaxed_fallback", { recordingId, found: suggestions.length });
+  }
+  suggestions = suggestions.slice(0, 6);
+  const { error: archiveError } = await db
     .from("sermon_clips")
     .update({ status: "archived", updated_at: new Date().toISOString() })
     .eq("church_id", churchId)
     .eq("recording_id", recordingId)
     .eq("status", "suggested");
+  if (archiveError) throw new Error(`Could not clear old clip suggestions: ${archiveError.message}`);
   if (suggestions.length === 0) return 0;
   const { error } = await db.from("sermon_clips").insert(
     suggestions.map((suggestion, index) => ({

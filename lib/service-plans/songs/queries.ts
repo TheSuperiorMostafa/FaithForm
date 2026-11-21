@@ -245,6 +245,7 @@ function mapAttachment(row: Row): SongAttachment {
     name: str(row.file_name) ?? (url ? hostOf(url) : "File"),
     url,
     isFile: Boolean(row.storage_path),
+    generated: row.generated_from === "lyrics" || row.generated_from === "chart" ? row.generated_from : null,
     createdAt: row.created_at as string,
   };
 }
@@ -286,7 +287,7 @@ export async function getSongDetail(
   const attachments = arrangementIds.length
     ? await client
         .from("song_attachments")
-        .select("id, arrangement_id, kind, storage_path, url, file_name, created_at")
+        .select("id, arrangement_id, kind, storage_path, url, file_name, generated_from, created_at")
         .eq("church_id", churchId)
         .in("arrangement_id", arrangementIds)
         .order("created_at")

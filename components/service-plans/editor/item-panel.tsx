@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { combineSaveStates, useAutosavedField, type SaveState } from "@/components/service-plans/editor/hooks";
+import { ItemFiles } from "@/components/service-plans/editor/item-files";
 import { LeaderChips } from "@/components/service-plans/editor/leaders-dialog";
 import { formatDuration, parseDuration } from "@/lib/service-plans/timing";
 import {
@@ -20,6 +21,7 @@ import {
   NOTE_CATEGORY_LABELS,
   type ItemType,
   type NoteCategory,
+  type PlanFile,
   type PlanItem,
   type PlanNote,
 } from "@/lib/service-plans/types";
@@ -83,6 +85,8 @@ export function ItemPanel({
   planId,
   item,
   notes,
+  files = [],
+  onFilesChanged,
   startLabel,
   headers,
   currentHeaderId,
@@ -99,6 +103,9 @@ export function ItemPanel({
   planId: string;
   item: PlanItem;
   notes: PlanNote[];
+  /** The item's files and, for a song, its song's files. */
+  files?: PlanFile[];
+  onFilesChanged: () => void;
   startLabel: string | null;
   headers: { id: string; title: string }[];
   currentHeaderId: string | null;
@@ -374,6 +381,15 @@ export function ItemPanel({
               {...mediaUrl.focusProps}
             />
           </div>
+        )}
+
+        {!isHeader && (
+          <ItemFiles
+            itemId={item.id}
+            songId={itemType.value === "song" ? (item.song?.songId ?? null) : null}
+            files={files}
+            onChanged={onFilesChanged}
+          />
         )}
 
         {!isHeader && (

@@ -7,7 +7,7 @@ import { renderEmail } from "@/lib/email/layout";
 import { resolveFromAddress } from "@/lib/email/sender";
 import { getPlan } from "@/lib/service-plans/queries";
 import { formatPlanDate } from "@/lib/service-plans/timing";
-import { NOTE_CATEGORIES, type NoteCategory, type Plan, type SharePreset } from "@/lib/service-plans/types";
+import { NOTE_CATEGORIES, sharedPreset, type NoteCategory, type Plan, type SharePreset } from "@/lib/service-plans/types";
 import { presetDefaults, type PlanViewOptions } from "@/lib/service-plans/view";
 import { absoluteAppPath } from "@/lib/site-url";
 import { sendSms } from "@/lib/sms/send-sms";
@@ -96,7 +96,7 @@ export async function findShareByToken(admin: SupabaseClient, token: string): Pr
 
 /** What a share shows, as view options. Categories are clamped to the known set. */
 export function shareViewOptions(share: Pick<ShareRow, "preset" | "categories" | "person_id">): PlanViewOptions {
-  const base = presetDefaults(share.preset);
+  const base = presetDefaults(sharedPreset(share.preset));
   const categories = share.categories.filter((c): c is NoteCategory => (NOTE_CATEGORIES as readonly string[]).includes(c));
   return {
     ...base,
@@ -155,7 +155,8 @@ export async function emailShareLink(input: {
           : `${input.churchName} shared the plan for ${when} with you.`,
       },
       ...(input.message ? [{ kind: "quote" as const, text: input.message }] : []),
-      { kind: "button", label: "Open the plan", url: input.url },
+      { kind: "paragraph", text: "Open the plan and tap “I’ll be there” or “Can’t make it” so your church knows." },
+      { kind: "button", label: "Open the plan and answer", url: input.url },
       {
         kind: "muted",
         text: `This link is only for you and works until ${new Date(input.expiresAt).toLocaleDateString("en-US", { month: "long", day: "numeric" })}. If the button does not work, paste this into your browser: ${input.url}`,
@@ -195,7 +196,7 @@ export async function textShareLink(input: {
   const when = input.plan.date ? formatPlanDate(input.plan.date, "short") : "the service";
   const body = input.updated
     ? `${input.churchName}: the ${input.plan.serviceTypeName} plan for ${when} changed. ${input.url}`
-    : `${input.churchName}: here is the ${input.plan.serviceTypeName} plan for ${when}. ${input.url}`;
+    : `${input.churchName}: here is the ${input.plan.serviceTypeName} plan for ${when}. Let us know if you can make it: ${input.url}`;
   const result = await sendSms(input.sender, input.phone, body);
   return result.ok ? "sent" : "failed";
 }

@@ -8,29 +8,38 @@ import {
   removePlanTeamMemberAction,
   setPlanTeamMemberStatusAction,
 } from "@/app/dashboard/plans/actions";
+import { AnswerBadge } from "@/components/service-plans/answer-badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SearchPicker } from "@/components/ui/search-picker";
 import { Select } from "@/components/ui/select";
 import { undoToast } from "@/lib/ui/undo-toast";
-import type { PersonOption, PlanTeamMember, Team, TeamMemberStatus } from "@/lib/service-plans/types";
+import {
+  TEAM_MEMBER_STATUS_LABELS as STATUS_LABELS,
+  type PersonOption,
+  type PlanAttendance,
+  type PlanTeamMember,
+  type Team,
+  type TeamMemberStatus,
+} from "@/lib/service-plans/types";
 
-const STATUS_LABELS: Record<TeamMemberStatus, string> = {
-  unconfirmed: "Not confirmed",
-  confirmed: "Confirmed",
-  declined: "Declined",
-};
+function answeredOn(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 /** Who serves on this date, by team and position, with their answer. */
 export function PlanTeam({
   planId,
   team,
+  attendance = [],
   teams,
   people,
   onChanged,
 }: {
   planId: string;
   team: PlanTeamMember[];
+  /** Everyone sent the plan, with their answer through their link. */
+  attendance?: PlanAttendance[];
   teams: Team[];
   people: PersonOption[];
   onChanged: () => void;
@@ -49,6 +58,9 @@ export function PlanTeam({
     return [...groups.entries()];
   }, [team]);
 
+  const answers = useMemo(() => new Map(attendance.map((a) => [a.personId, a])), [attendance]);
+  const others = attendance.filter((a) => !a.onTeam);
+
   const run = (work: () => Promise<{ ok: boolean; error?: string }>, success?: string) =>
     start(async () => {
       const result = await work();
@@ -62,6 +74,9 @@ export function PlanTeam({
       <h2 id="plan-team-title" className="font-heading text-lg font-bold">
         Team for this plan
       </h2>
+      <p className="text-sm text-muted-foreground">
+        Answers update here when people tap “I’ll be there” or “Can’t make it” on the plan you shared.
+      </p>
       {team.length === 0 ? (
         <p className="text-[15px] text-muted-foreground">No one is scheduled yet.</p>
       ) : (
@@ -74,7 +89,12 @@ export function PlanTeam({
                   <li key={m.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-3">
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{m.personName}</span>
-                      <span className="block text-sm text-muted-foreground">{m.positionName}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {m.positionName}
+                        {answers.get(m.personId)?.respondedAt
+                          ? ` · Answered ${answeredOn(answers.get(m.personId)!.respondedAt!)}`
+                          : ""}
+                      </span>
                     </span>
                     <Label htmlFor={`status-${m.id}`} className="sr-only">
                       {m.personName}’s answer
@@ -120,6 +140,25 @@ export function PlanTeam({
               </ul>
             </div>
           ))}
+        </div>
+      )}
+
+      {others.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Also sent this plan</h3>
+          <ul className="space-y-2">
+            {others.map((a) => (
+              <li key={a.personId} className="flex flex-wrap items-center gap-2 rounded-xl border border-border p-3">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold">{a.personName}</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {a.respondedAt ? `Answered ${answeredOn(a.respondedAt)}` : "No answer yet"}
+                  </span>
+                </span>
+                <AnswerBadge status={a.status} />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

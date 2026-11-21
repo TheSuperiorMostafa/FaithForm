@@ -30,6 +30,13 @@ export type TimeKind = (typeof TIME_KINDS)[number];
 export const TEAM_MEMBER_STATUSES = ["unconfirmed", "confirmed", "declined"] as const;
 export type TeamMemberStatus = (typeof TEAM_MEMBER_STATUSES)[number];
 
+/** How staff see someone's answer to a shared plan. */
+export const TEAM_MEMBER_STATUS_LABELS: Record<TeamMemberStatus, string> = {
+  unconfirmed: "Not confirmed yet",
+  confirmed: "Confirmed",
+  declined: "Declined",
+};
+
 export const SHARE_PRESETS = ["full", "team", "person", "order"] as const;
 export type SharePreset = (typeof SHARE_PRESETS)[number];
 
@@ -39,6 +46,17 @@ export const SHARE_PRESET_LABELS: Record<SharePreset, string> = {
   person: "Person view",
   order: "Order only",
 };
+
+/** Presets a planner can pick when sharing. The Team view is print-only. */
+export const SHARE_LINK_PRESETS = ["full", "person", "order"] as const satisfies readonly SharePreset[];
+
+/**
+ * Shared links no longer show the Team view: a link made with it before shows
+ * the full plan, still narrowed to the note categories it was sent with.
+ */
+export function sharedPreset(preset: SharePreset): Exclude<SharePreset, "team"> {
+  return preset === "team" ? "full" : preset;
+}
 
 export const SHARE_CHANNELS = ["email", "sms", "in_app", "link"] as const;
 export type ShareChannel = (typeof SHARE_CHANNELS)[number];
@@ -60,6 +78,10 @@ export type ServiceType = {
   targetSeconds: number | null;
   defaultTemplateId: string | null;
   times: ServiceTypeTime[];
+  /** Told when someone answers a shared plan of this type. Only loaded for one type's settings. */
+  responseEmails?: string[];
+  /** E.164 mobile numbers texted when someone answers. */
+  responsePhones?: string[];
 };
 
 export type ServiceTypeSummary = ServiceType & {
@@ -130,6 +152,34 @@ export type PlanTeamMember = {
   status: TeamMemberStatus;
 };
 
+/**
+ * One person a plan was sent to (or who serves on it) and their answer.
+ * `status` is their own answer through their link, or what staff set.
+ */
+export type PlanAttendance = {
+  personId: string;
+  personName: string;
+  status: TeamMemberStatus;
+  /** When they answered through their link; null when they haven't, or staff set it. */
+  respondedAt: string | null;
+  /** Scheduled on this plan's team (their rows carry the status too). */
+  onTeam: boolean;
+};
+
+/** A file or link shown on a plan item: attached to the item, or one of its song's files. */
+export type PlanFile = {
+  id: string;
+  itemId: string;
+  source: "item" | "song";
+  /** File name, or the label given to a link. */
+  name: string;
+  /** For links only; stored files open through a short-lived signed URL. */
+  url: string | null;
+  isFile: boolean;
+  /** "Chord chart PDF", "Default arrangement" and similar, for the list. */
+  detail: string | null;
+};
+
 export type TeamStatus = {
   confirmed: number;
   pending: number;
@@ -153,6 +203,10 @@ export type Plan = {
   items: PlanItem[];
   notes: PlanNote[];
   team: PlanTeamMember[];
+  /** Everyone sent a personal link or on the team, with their answer. */
+  attendance?: PlanAttendance[];
+  /** Files on items: the item's own, then its song's. */
+  files?: PlanFile[];
   updatedAt: string;
 };
 

@@ -153,7 +153,16 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
         setError(result.error);
         return;
       }
-      toast.success(`Saved the “${name.trim()}” arrangement.`);
+      const saved = `Saved the “${name.trim()}” arrangement`;
+      if (!result.filesUpdated) {
+        toast.warning(`${saved}, but we couldn't update its PDFs this time. Save again to try once more.`);
+      } else if (result.pdfs.length) {
+        const what =
+          result.pdfs.length > 1 ? "lyrics and chord chart PDFs" : result.pdfs[0] === "chart" ? "chord chart PDF" : "lyrics PDF";
+        toast.success(`${saved} and updated its ${what}.`);
+      } else {
+        toast.success(`${saved}.`);
+      }
       router.refresh();
     });
   };

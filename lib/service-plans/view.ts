@@ -17,6 +17,7 @@ import {
   type ItemType,
   type NoteCategory,
   type Plan,
+  type PlanFile,
   type SharePreset,
 } from "@/lib/service-plans/types";
 
@@ -49,6 +50,8 @@ export type PlanViewRow = {
   /** "Key of G · Acoustic · CCLI 7138371" */
   songLine: string | null;
   notes: PlanViewNote[];
+  /** The item's files and its song's files; none in Order only. */
+  files: PlanFile[];
 };
 
 export type PlanView = {
@@ -167,6 +170,7 @@ export function buildPlanView(plan: Plan, options: PlanViewOptions): PlanView {
       description: options.showDescriptions ? item.description : null,
       songLine: options.preset === "order" ? null : songLine(item),
       notes: notesFor(item.id),
+      files: options.preset === "order" ? [] : (plan.files ?? []).filter((f) => f.itemId === item.id),
     });
   }
 

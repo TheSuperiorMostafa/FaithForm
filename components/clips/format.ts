@@ -5,6 +5,7 @@
  * status). Kept free of React so they can be unit tested.
  */
 
+import type { ClipRequestView } from "@/lib/sermon-media/clip-requests";
 import type { JobProgress as JobProgressView } from "@/lib/sermon-media/progress";
 import { formatLength, formatTime } from "@/components/sermon-media/time";
 
@@ -66,6 +67,8 @@ export type FacebookPage = { connected: boolean; pageName: string | null; pageId
 
 export type QueueResponse = {
   items: QueueItem[];
+  /** Make clips requests not yet in Ready to review (review view only). */
+  requests?: ClipRequestView[];
   counts: Record<ClipsView, number>;
   canApprove: boolean;
   facebook: FacebookPage;

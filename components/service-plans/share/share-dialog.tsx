@@ -11,6 +11,7 @@ import {
   type ShareListRow,
   type ShareResult,
 } from "@/app/dashboard/plans/share-actions";
+import { AnswerBadge } from "@/components/service-plans/answer-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   NOTE_CATEGORIES,
   NOTE_CATEGORY_LABELS,
+  SHARE_LINK_PRESETS,
   SHARE_PRESET_LABELS,
   type NoteCategory,
   type PersonOption,
@@ -122,7 +124,7 @@ export function ShareDialog({
     if (!open) return;
     setResult(null);
     setTab("share");
-    setTeamChoices(Object.fromEntries(teams.map((t) => [t.id, { on: false, preset: "team" as SharePreset, categories: t.noteCategories }])));
+    setTeamChoices(Object.fromEntries(teams.map((t) => [t.id, { on: false, preset: "full" as SharePreset, categories: t.noteCategories }])));
   }, [open, teams]);
 
   const loadShares = () =>
@@ -165,7 +167,7 @@ export function ShareDialog({
         <DialogHeader>
           <DialogTitle>Share this plan</DialogTitle>
           <DialogDescription>
-            Each person gets their own read-only link. It always shows the latest plan and stops working the day after the service.
+            Each person gets their own read-only link where they can answer “I’ll be there” or “Can’t make it”. It always shows the latest plan and stops working the day after the service.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-auto overflow-y-auto px-6 py-5">
@@ -239,9 +241,10 @@ export function ShareDialog({
                               <div className="space-y-1.5">
                                 <Label htmlFor={`share-preset-${t.id}`}>They see</Label>
                                 <Select id={`share-preset-${t.id}`} value={c.preset} onChange={(e) => set({ preset: e.target.value as SharePreset })}>
-                                  {(["team", "full", "order"] as const).map((p) => (
+                                  {SHARE_LINK_PRESETS.map((p) => (
                                     <option key={p} value={p}>
                                       {SHARE_PRESET_LABELS[p]}
+                                      {p === "person" ? " (only what they lead)" : ""}
                                     </option>
                                   ))}
                                 </Select>
@@ -288,7 +291,7 @@ export function ShareDialog({
                     </h3>
                     <Checkbox checked={email} onChange={setEmail} label="Email" />
                     <Checkbox checked={sms} onChange={setSms} label="Text message" hint="Uses your church's texting number." />
-                    <Checkbox checked={makeLink} onChange={setMakeLink} label="Also make a link to copy" hint="For a group chat or the ushers' clipboard." />
+                    <Checkbox checked={makeLink} onChange={setMakeLink} label="Also make a link to copy" hint="For a group chat or the ushers' clipboard. People can't answer through it." />
                     {makeLink && (
                       <div className="space-y-1.5 pl-8">
                         <Label htmlFor="share-link-preset">The link shows</Label>
@@ -327,6 +330,7 @@ export function ShareDialog({
                           {s.firstViewedAt ? `Opened ${new Date(s.firstViewedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "Not opened yet"}
                         </span>
                       </span>
+                      {s.answer && <AnswerBadge status={s.answer} />}
                       {s.revoked ? (
                         <StatusBadge tone="neutral">Turned off</StatusBadge>
                       ) : Date.parse(s.expiresAt) < Date.now() ? (

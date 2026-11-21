@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipCard, type ClipCardActions } from "@/components/clips/clip-card";
 import { PostedList, ScheduledList } from "@/components/clips/clip-rows";
 import { CLIP_GRID, ClipsHeaderRow, ClipsViewLoading, TabCountSkeleton } from "@/components/clips/clips-skeleton";
+import { ClipRequests } from "@/components/clips/clip-requests";
 import { MakeClipsDialog } from "@/components/clips/make-clips-dialog";
 import { ScheduleDialog } from "@/components/clips/schedule-dialog";
 import {
@@ -29,6 +30,7 @@ import {
   type QueueResponse,
 } from "@/components/clips/format";
 import { integrationConnectHref } from "@/lib/integrations/connect-href";
+import { clipRequestsActive, type ClipRequestView } from "@/lib/sermon-media/clip-requests";
 import { CLIPS_HREF } from "@/lib/sermon-media/hrefs";
 import { undoToast } from "@/lib/ui/undo-toast";
 import { cn } from "@/lib/utils";
@@ -36,7 +38,7 @@ import { cn } from "@/lib/utils";
 const POLL_MS = 5000;
 const NO_FACEBOOK: FacebookPage = { connected: false, pageName: null, pageId: null, needsReconnect: false };
 
-type ViewData = { items: QueueItem[]; error: string | null; loaded: boolean };
+type ViewData = { items: QueueItem[]; requests: ClipRequestView[]; error: string | null; loaded: boolean };
 
 function isView(value: string | null | undefined): value is ClipsView {
   return CLIPS_VIEWS.includes(value as ClipsView);
@@ -64,7 +66,10 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
     const result = await apiRequest<QueueResponse>(`/api/sermon-media/queue?view=${target}`, {}, "We couldn't load your clips.");
     if (requestSeq.current[target] !== seq) return; // a newer request already answered
     if (result.ok) {
-      setData((current) => ({ ...current, [target]: { items: result.data.items, error: null, loaded: true } }));
+      setData((current) => ({
+        ...current,
+        [target]: { items: result.data.items, requests: result.data.requests ?? [], error: null, loaded: true },
+      }));
       setCounts(result.data.counts);
       setCanApprove(result.data.canApprove);
       setFacebook(result.data.facebook ?? NO_FACEBOOK);
@@ -72,7 +77,12 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
       // Keep what is already on screen; only a first load shows the error.
       setData((current) => ({
         ...current,
-        [target]: { items: current[target]?.items ?? [], error: current[target]?.loaded ? null : result.error, loaded: current[target]?.loaded ?? false },
+        [target]: {
+          items: current[target]?.items ?? [],
+          requests: current[target]?.requests ?? [],
+          error: current[target]?.loaded ? null : result.error,
+          loaded: current[target]?.loaded ?? false,
+        },
       }));
     }
   }, []);
@@ -96,7 +106,9 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
 
   const current = data[view];
   const items = current?.items ?? [];
-  const polling = needsPolling(items, view);
+  const requests = data.review?.requests ?? [];
+  const polling = needsPolling(items, view) || (view === "review" && clipRequestsActive(requests));
+  const [retrying, setRetrying] = useState<string | null>(null);
 
   // Check again every 5 seconds while a video is being made or a post is on its way.
   useEffect(() => {
@@ -282,10 +294,28 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
         `Making ${made} clip${made === 1 ? "" : "s"} from ${title}. They're in Ready to review now, and each video is ready to watch in a few minutes.`,
       );
     } else {
-      toast.success(`We didn't find new moments in ${title}. Its clips are already here.`);
+      // The server only answers 0 when the recording already has its clips.
+      toast.success(`No new moments in ${title}. Its clips are already in Clips.`);
     }
     switchView("review");
     void load("review");
+  };
+
+  /** Make clips again for a request that stopped. */
+  const retryRequest = async (request: ClipRequestView) => {
+    setRetrying(request.recordingId);
+    const result = await apiRequest<{ made: number; transcribing?: boolean }>(
+      `/api/sermon-media/recordings/${request.recordingId}/clips`,
+      { method: "POST", body: { action: "make" } },
+      "We couldn't start making clips. Please try again.",
+    );
+    setRetrying(null);
+    if (!result.ok) {
+      toast.error(result.error);
+      void load("review");
+      return;
+    }
+    onMade(result.data.made, request.title, Boolean(result.data.transcribing));
   };
 
   const fbProblem = counts !== null && !facebookReady(facebook);
@@ -373,6 +403,8 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
               ) : (
                 <ClipsViewLoading view={key} />
               )
+            ) : key === "review" && items.length === 0 && requests.length > 0 ? (
+              <ClipRequests requests={requests} retrying={retrying} onRetry={(request) => void retryRequest(request)} />
             ) : items.length === 0 ? (
               <EmptyState
                 icon={key === "scheduled" ? CalendarClock : key === "posted" ? Send : key === "skipped" ? Undo2 : Clapperboard}
@@ -388,19 +420,24 @@ export function ClipsStudio({ timezone, initialView }: { timezone: string; initi
                 }
               />
             ) : key === "review" || key === "skipped" ? (
-              <div className={CLIP_GRID}>
-                {items.map((item) => (
-                  <ClipCard
-                    key={item.id}
-                    item={item}
-                    mode={key}
-                    timezone={timezone}
-                    canApprove={canApprove}
-                    facebook={facebook}
-                    actions={cardActions}
-                  />
-                ))}
-              </div>
+              <>
+                {key === "review" ? (
+                  <ClipRequests requests={requests} retrying={retrying} onRetry={(request) => void retryRequest(request)} />
+                ) : null}
+                <div className={CLIP_GRID}>
+                  {items.map((item) => (
+                    <ClipCard
+                      key={item.id}
+                      item={item}
+                      mode={key}
+                      timezone={timezone}
+                      canApprove={canApprove}
+                      facebook={facebook}
+                      actions={cardActions}
+                    />
+                  ))}
+                </div>
+              </>
             ) : key === "scheduled" ? (
               <ScheduledList items={items} timezone={timezone} canApprove={canApprove} onUnschedule={unschedule} onPostNow={postScheduledNow} />
             ) : (

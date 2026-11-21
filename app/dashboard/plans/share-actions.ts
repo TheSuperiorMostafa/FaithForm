@@ -18,9 +18,11 @@ import {
 } from "@/lib/service-plans/share";
 import {
   NOTE_CATEGORIES,
-  SHARE_PRESETS,
+  SHARE_LINK_PRESETS,
+  sharedPreset,
   type NoteCategory,
   type SharePreset,
+  type TeamMemberStatus,
 } from "@/lib/service-plans/types";
 import { getChurchSmsSender } from "@/lib/sms/church-sender";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -61,8 +63,9 @@ const REASONS: Record<Exclude<Delivery, "sent">, string> = {
   failed: "couldn't be reached. Try again later",
 };
 
+// Shared links never show the Team view; an old client asking for it gets the full plan.
 const cleanPreset = (p: unknown): SharePreset =>
-  (SHARE_PRESETS as readonly string[]).includes(p as string) ? (p as SharePreset) : "order";
+  p === "team" ? "full" : (SHARE_LINK_PRESETS as readonly string[]).includes(p as string) ? (p as SharePreset) : "order";
 const cleanCategories = (c: unknown): NoteCategory[] =>
   Array.isArray(c) ? [...new Set(c.filter((x): x is NoteCategory => (NOTE_CATEGORIES as readonly string[]).includes(x)))] : [];
 
@@ -296,6 +299,8 @@ export type ShareListRow = {
   firstViewedAt: string | null;
   upToDate: boolean;
   revoked: boolean;
+  /** Their answer through any of their links; null for a link to copy. */
+  answer: TeamMemberStatus | null;
 };
 
 /** Who the plan was shared with and who has opened it. */
@@ -318,18 +323,20 @@ export async function listSharesAction(planId: string): Promise<{ ok: true; shar
       ? await admin.from("members").select("id, first_name, last_name").eq("church_id", auth.churchId).in("id", personIds)
       : { data: [] };
     const names = new Map((people ?? []).map((p) => [p.id as string, [p.first_name, p.last_name].filter(Boolean).join(" ")]));
+    const attendance = new Map((plan.attendance ?? []).map((a) => [a.personId, a.status]));
     return {
       ok: true,
       shares: (data ?? []).map((s) => ({
         id: s.id as string,
         audience: s.audience as ShareListRow["audience"],
         name: s.person_id ? (names.get(s.person_id as string) ?? "Someone") : "Link to copy",
-        preset: s.preset as SharePreset,
+        preset: sharedPreset(s.preset as SharePreset),
         createdAt: s.created_at as string,
         expiresAt: s.expires_at as string,
         firstViewedAt: (s.first_viewed_at as string | null) ?? null,
         upToDate: (s.version_sent as number) >= plan.shareVersion,
         revoked: Boolean(s.revoked_at),
+        answer: s.person_id ? (attendance.get(s.person_id as string) ?? "unconfirmed") : null,
       })),
     };
   } catch (e) {

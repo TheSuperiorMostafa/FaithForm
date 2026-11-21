@@ -12,6 +12,8 @@ import {
   type PersonOption,
   type Plan,
   type PlanItem,
+  type PlanAttendance,
+  type PlanFile,
   type PlanListRow,
   type PlanNote,
   type PlanTeamMember,
@@ -65,6 +67,8 @@ function mapServiceType(row: Row, times: Row[]): ServiceType {
     defaultWeekday: (row.default_weekday as number | null) ?? null,
     targetSeconds: (row.target_seconds as number | null) ?? null,
     defaultTemplateId: (row.default_template_id as string | null) ?? null,
+    ...(Array.isArray(row.response_notify_emails) ? { responseEmails: row.response_notify_emails as string[] } : {}),
+    ...(Array.isArray(row.response_notify_phones) ? { responsePhones: row.response_notify_phones as string[] } : {}),
     times: times
       .filter((t) => t.service_type_id === row.id)
       .map((t) => ({
@@ -168,7 +172,7 @@ export async function getServiceType(
   const [type, times] = await Promise.all([
     client
       .from("service_types")
-      .select(TYPE_COLUMNS)
+      .select(`${TYPE_COLUMNS}, response_notify_emails, response_notify_phones`)
       .eq("church_id", churchId)
       .eq("id", serviceTypeId)
       .is("archived_at", null)
@@ -426,7 +430,7 @@ export async function getPlan(
   fail("plan", error);
   if (!plan) return null;
 
-  const [type, times, items, leaders, notes, team, shares] = await Promise.all([
+  const [type, times, items, leaders, notes, team, shares, answers, recipients, itemFiles] = await Promise.all([
     client
       .from("service_types")
       .select("name, target_seconds")
@@ -471,8 +475,27 @@ export async function getPlan(
       .is("revoked_at", null)
       .order("version_sent", { ascending: false })
       .limit(1),
+    client
+      .from("plan_attendance")
+      .select("person_id, status, share_id, responded_at")
+      .eq("church_id", churchId)
+      .eq("plan_id", planId),
+    client
+      .from("plan_shares")
+      .select("person_id")
+      .eq("church_id", churchId)
+      .eq("plan_id", planId)
+      .is("revoked_at", null)
+      .not("person_id", "is", null)
+      .limit(1000),
+    client
+      .from("plan_item_attachments")
+      .select("id, plan_item_id, storage_path, url, file_name, created_at")
+      .eq("church_id", churchId)
+      .eq("plan_id", planId)
+      .order("created_at"),
   ]);
-  for (const [name, result] of Object.entries({ type, times, items, leaders, notes, team, shares })) {
+  for (const [name, result] of Object.entries({ type, times, items, leaders, notes, team, shares, answers, recipients, itemFiles })) {
     fail(name, result.error);
   }
 
@@ -482,7 +505,9 @@ export async function getPlan(
   ];
   const personIds = [
     ...new Set(
-      [...(leaders.data ?? []), ...(team.data ?? [])].map((r) => r.person_id).filter(Boolean) as string[],
+      [...(leaders.data ?? []), ...(team.data ?? []), ...(answers.data ?? []), ...(recipients.data ?? [])]
+        .map((r) => r.person_id)
+        .filter(Boolean) as string[],
     ),
   ];
   const positionIds = [
@@ -491,7 +516,7 @@ export async function getPlan(
     ),
   ];
 
-  const [songs, arrangements, people, positions] = await Promise.all([
+  const [songs, arrangements, people, positions, songFiles] = await Promise.all([
     songIds.length
       ? client.from("songs").select("id, title, author, ccli_number").eq("church_id", churchId).in("id", songIds)
       : Promise.resolve({ data: [] as Row[], error: null }),
@@ -504,6 +529,7 @@ export async function getPlan(
       : Promise.resolve({ data: [] as Row[], error: null }),
     peopleById(client, churchId, personIds),
     positionLabels(client, churchId, positionIds),
+    songFilesFor(client, churchId, songIds),
   ]);
   fail("songs", songs.error);
   fail("arrangements", arrangements.error);
@@ -577,6 +603,34 @@ export async function getPlan(
     };
   });
 
+  const attendance = attendanceFor(
+    mappedTeam,
+    (answers.data ?? []) as Row[],
+    (recipients.data ?? []).map((r) => r.person_id as string),
+    (id) => personName(people.get(id)),
+  );
+
+  const files: PlanFile[] = [];
+  for (const item of mappedItems) {
+    for (const f of (itemFiles.data ?? []).filter((f) => f.plan_item_id === item.id)) {
+      const url = (f.url as string | null) ?? null;
+      files.push({
+        id: f.id as string,
+        itemId: item.id,
+        source: "item",
+        name: (f.file_name as string | null) ?? (url ? hostOf(url) : "File"),
+        url,
+        isFile: Boolean(f.storage_path),
+        detail: url ? "Link" : "File",
+      });
+    }
+    if (item.itemType === "song" && item.song) {
+      for (const f of songFiles.forItem(item.song.songId, item.song.arrangementId)) {
+        files.push({ ...f, itemId: item.id });
+      }
+    }
+  }
+
   return {
     id: plan.id as string,
     serviceTypeId: plan.service_type_id as string,
@@ -592,8 +646,113 @@ export async function getPlan(
     items: mappedItems,
     notes: mappedNotes,
     team: mappedTeam,
+    attendance,
+    files,
     updatedAt: plan.updated_at as string,
   };
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "Link";
+  }
+}
+
+const SONG_FILE_DETAIL: Record<string, string> = {
+  chart_pdf: "Chord chart PDF",
+  audio_link: "Link",
+  file: "File",
+};
+
+/**
+ * The song files a plan's song items show: the chosen arrangement's, or every
+ * arrangement's when the item has none chosen.
+ */
+async function songFilesFor(client: SupabaseClient, churchId: string, songIds: string[]) {
+  type SongFile = Omit<PlanFile, "itemId"> & { arrangementId: string };
+  const empty = { forItem: (): Omit<PlanFile, "itemId">[] => [] };
+  if (!songIds.length) return empty;
+  const { data: arrangements, error } = await client
+    .from("song_arrangements")
+    .select("id, song_id, name, sort_order")
+    .eq("church_id", churchId)
+    .in("song_id", songIds)
+    .order("sort_order");
+  fail("song arrangements", error);
+  const rows = arrangements ?? [];
+  if (!rows.length) return empty;
+  const { data: attachments, error: attachmentsError } = await client
+    .from("song_attachments")
+    .select("id, arrangement_id, kind, storage_path, url, file_name, created_at")
+    .eq("church_id", churchId)
+    .in(
+      "arrangement_id",
+      rows.map((a) => a.id as string),
+    )
+    .order("created_at");
+  fail("song attachments", attachmentsError);
+
+  const arrangementById = new Map(rows.map((a) => [a.id as string, a]));
+  const all: (SongFile & { songId: string })[] = (attachments ?? []).map((f) => {
+    const arrangement = arrangementById.get(f.arrangement_id as string);
+    const url = (f.url as string | null) ?? null;
+    const arrangementName = (arrangement?.name as string | undefined) ?? null;
+    return {
+      id: f.id as string,
+      source: "song",
+      name: (f.file_name as string | null) ?? (url ? hostOf(url) : "File"),
+      url,
+      isFile: Boolean(f.storage_path),
+      detail: [SONG_FILE_DETAIL[f.kind as string] ?? "File", arrangementName ? `${arrangementName} arrangement` : null]
+        .filter(Boolean)
+        .join(" · "),
+      arrangementId: f.arrangement_id as string,
+      songId: (arrangement?.song_id as string | undefined) ?? "",
+    };
+  });
+
+  return {
+    forItem(songId: string, arrangementId: string | null): Omit<PlanFile, "itemId">[] {
+      return all
+        .filter((f) => (arrangementId ? f.arrangementId === arrangementId : f.songId === songId))
+        .map(({ id, source, name, url, isFile, detail }) => ({ id, source, name, url, isFile, detail }));
+    },
+  };
+}
+
+/**
+ * Each person's answer: their own (through their link) wins; otherwise what
+ * staff set on their team rows (declined if any row is declined, confirmed if
+ * all are confirmed). Team members first, then everyone else sent the plan.
+ */
+export function attendanceFor(
+  team: Pick<PlanTeamMember, "personId" | "status">[],
+  answers: Row[],
+  recipientIds: string[],
+  nameOf: (personId: string) => string,
+): PlanAttendance[] {
+  const answerBy = new Map(answers.map((a) => [a.person_id as string, a]));
+  const teamBy = new Map<string, TeamMemberStatus[]>();
+  for (const m of team) teamBy.set(m.personId, [...(teamBy.get(m.personId) ?? []), m.status]);
+  const order = [...new Set([...team.map((m) => m.personId), ...answers.map((a) => a.person_id as string), ...recipientIds])];
+  return order.map((personId) => {
+    const answer = answerBy.get(personId);
+    const rows = teamBy.get(personId) ?? [];
+    const fromTeam: TeamMemberStatus = rows.includes("declined")
+      ? "declined"
+      : rows.length && rows.every((s) => s === "confirmed")
+        ? "confirmed"
+        : "unconfirmed";
+    return {
+      personId,
+      personName: nameOf(personId),
+      status: answer ? (answer.status as TeamMemberStatus) : fromTeam,
+      respondedAt: answer && answer.share_id ? (answer.responded_at as string) : null,
+      onTeam: rows.length > 0,
+    };
+  });
 }
 
 /**

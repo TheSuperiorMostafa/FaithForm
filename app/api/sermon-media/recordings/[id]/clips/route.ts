@@ -5,6 +5,7 @@ import { assertClipBounds, refreshSuggestedClips } from "@/lib/sermon-media/clip
 import { fail, limit, ok, readJson, routeError } from "@/lib/sermon-media/http";
 import { kickDispatch } from "@/lib/sermon-media/jobs";
 import { getSermonMediaState, getTranscript, publicJob } from "@/lib/sermon-media/store";
+import { NO_MOMENTS_MESSAGE } from "@/lib/sermon-media/clip-requests";
 import { ensureSermonRange, requestClips } from "@/lib/sermon-media/studio";
 import { segmentsInRange } from "@/lib/sermon-media/transcript";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -67,7 +68,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       }
       if (result.status === "needs_range") return fail(409, "This video is too short to make clips from.");
       if (result.status !== "made") return fail(409, "Transcripts & Clips isn't ready for this recording yet.");
-      if (result.clips > 0) await kickDispatch(["render_clip"]);
+      if (result.renders > 0) await kickDispatch(["render_clip"]);
+      if (result.clips === 0) {
+        // Say so plainly rather than report success with nothing to show.
+        const { count } = await db
+          .from("sermon_clips")
+          .select("id", { count: "exact", head: true })
+          .eq("church_id", auth.churchId)
+          .eq("recording_id", id)
+          .neq("status", "archived")
+          .neq("status", "suggested");
+        if (!count) return fail(422, NO_MOMENTS_MESSAGE);
+        return ok({ made: 0, existing: count, autoConfirmed: result.autoConfirmed });
+      }
       return ok({ made: result.clips, autoConfirmed: result.autoConfirmed });
     }
 

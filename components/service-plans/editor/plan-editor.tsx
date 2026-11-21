@@ -14,6 +14,7 @@ import {
   ListOrdered,
   Music,
   NotebookPen,
+  Paperclip,
   Plus,
   Printer,
   RefreshCw,
@@ -179,6 +180,12 @@ export function PlanEditor({
     () => teams.flatMap((t) => t.positions.map((p) => ({ id: p.id, name: p.name, label: `${t.name} · ${p.name}` }))),
     [teams],
   );
+
+  const fileCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const f of plan.files ?? []) counts.set(f.itemId, (counts.get(f.itemId) ?? 0) + 1);
+    return counts;
+  }, [plan.files]);
 
   const showError = useCallback((message: string) => toast.error(message), []);
 
@@ -679,6 +686,12 @@ export function PlanEditor({
                               {[item.song.key ? `Key of ${item.song.key}` : null, item.song.arrangementName].filter(Boolean).join(" · ")}
                             </span>
                           )}
+                          {!isHeader && (fileCounts.get(item.id) ?? 0) > 0 && (
+                            <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                              <Paperclip aria-hidden className="size-3.5" />
+                              {fileCounts.get(item.id) === 1 ? "1 file" : `${fileCounts.get(item.id)} files`}
+                            </span>
+                          )}
                           {isHeader && (
                             <span className="text-sm font-normal normal-case tracking-normal text-muted-foreground">
                               {formatDuration(row?.subtotalSeconds ?? 0)} in this section
@@ -786,7 +799,9 @@ export function PlanEditor({
             </section>
           )}
 
-          {!plan.isTemplate && <PlanTeam planId={plan.id} team={plan.team} teams={teams} people={people} onChanged={refresh} />}
+          {!plan.isTemplate && (
+            <PlanTeam planId={plan.id} team={plan.team} attendance={plan.attendance} teams={teams} people={people} onChanged={refresh} />
+          )}
 
           <section className="space-y-2 rounded-2xl border border-border bg-card p-5 shadow-sm" aria-labelledby="running-total-title">
             <h2 id="running-total-title" className="font-heading text-lg font-bold">
@@ -832,6 +847,8 @@ export function PlanEditor({
           planId={plan.id}
           item={openItem}
           notes={plan.notes.filter((n) => n.itemId === openItem.id)}
+          files={(plan.files ?? []).filter((f) => f.itemId === openItem.id)}
+          onFilesChanged={() => void refresh()}
           startLabel={startLabel(openItem.id)}
           headers={headers}
           currentHeaderId={headerOf(openItem.id)}

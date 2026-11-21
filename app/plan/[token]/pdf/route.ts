@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { planPdfFileName, renderPlanPdf } from "@/lib/service-plans/pdf";
+import { sharedPreset } from "@/lib/service-plans/types";
 import { loadSharedPlanByToken, shareViewOptions } from "../load";
 
 export const runtime = "nodejs";
@@ -31,7 +32,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${planPdfFileName(plan, share.preset)}"`,
+        "Content-Disposition": `attachment; filename="${planPdfFileName(plan, sharedPreset(share.preset))}"`,
         "Cache-Control": "private, no-store",
         "X-Robots-Tag": "noindex",
       },

@@ -1855,6 +1855,61 @@
   align-items: center;
 }
 
+/* Grace puts the social links in the banner's open space, to the right of the
+ * buttons under the headline. Other formats keep them in Contact info only. */
+.site-hero-socials {
+  display: none;
+}
+
+[data-theme="grace"] .site-hero-socials {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  margin: 0 0 0 auto;
+  padding: 0;
+  align-self: center;
+}
+
+[data-theme="grace"] .site-hero-center .site-hero-socials {
+  margin-left: 0;
+}
+
+[data-theme="grace"] .site-hero-social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--site-fg) 28%, transparent);
+  color: var(--site-fg);
+  transition: color 0.18s, background 0.18s, border-color 0.18s;
+}
+
+[data-theme="grace"] .site-hero-social svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+[data-theme="grace"] .site-hero-social:hover {
+  background: color-mix(in srgb, var(--site-fg) 12%, transparent);
+  border-color: color-mix(in srgb, var(--site-fg) 45%, transparent);
+}
+
+[data-theme="grace"] .site-hero-social:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@media (max-width: 860px) {
+  [data-theme="grace"] .site-hero-socials {
+    margin-left: 0;
+    align-self: flex-start;
+  }
+}
+
 /* Every theme and layout uses the compact menu before labels get crowded. */
 @media (max-width: 1100px) {
   .site-nav-inner { flex-wrap: nowrap; gap: 16px; }

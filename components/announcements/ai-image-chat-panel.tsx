@@ -31,6 +31,8 @@ type Message = { id: string; role: "user"; text: string } | ModelMessage;
 
 /** One tap for the changes people ask for most. */
 const QUICK_CHANGES = [
+  // The first design leaves these off on purpose; this puts them in.
+  "Add the date and place",
   "Make the title bigger",
   "Brighter and warmer",
   "Make the logo bigger",
