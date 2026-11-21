@@ -19,6 +19,16 @@
     <string>development</string>
 
     <!--
+        Kids Check-In guardian alerts (a child's room asking for a parent) are
+        sent with interruption-level "time-sensitive", so they break through
+        Focus and scheduled summaries. Without this entitlement iOS delivers
+        them as ordinary notifications. Automatic signing adds the matching
+        capability to the App ID.
+    -->
+    <key>com.apple.developer.usernotifications.time-sensitive</key>
+    <true/>
+
+    <!--
         In-app gifts to a church Apple has approved (guideline 3.2.1(vi)) are
         paid with Apple Pay through Stripe's payment sheet. Must match
         FAITHFORM_APPLE_PAY_MERCHANT_ID in Staging.xcconfig and Release.xcconfig,
