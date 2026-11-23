@@ -138,7 +138,9 @@ test("the actual New calendar event dialog switches to a date, hides timed field
   };
   const placeholder = new Proxy({}, { get: (_object, key) => String(key) });
   const localRequire = createRequire(resolve("components/announcements/create-event-dialog.tsx"));
-  const providers = new Proxy({ react } as Record<string, unknown>, { get: (object, name: string) => object[name] ?? (name.startsWith("@/components/") || name === "lucide-react" ? placeholder : localRequire(name)) });
+  // The dialog reads the current page to come back to it after reconnecting a calendar.
+  const navigation = { usePathname: () => "/dashboard/announcements" };
+  const providers = new Proxy({ react, "next/navigation": navigation } as Record<string, unknown>, { get: (object, name: string) => object[name] ?? (name.startsWith("@/components/") || name === "lucide-react" ? placeholder : localRequire(name)) });
   const Dialog = compile("components/announcements/create-event-dialog.tsx", providers).CreateEventDialog as (props: Record<string, unknown>) => unknown;
   const props = { open: true, defaultDate: new Date(2026, 10, 15), timeZone: "America/Los_Angeles", attendanceCampuses: [], attendancePolicy: {}, onOpenChange() {}, onCreated() {} };
   const render = () => { cursor = 0; const tree = elements(Dialog(props)); effects.splice(0).forEach(effect => effect()); return tree; };
