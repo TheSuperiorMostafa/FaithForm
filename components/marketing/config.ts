@@ -2,7 +2,7 @@
 export const marketingConfig = {
   signIn: "/login",
   contactEmail: "support@faithform.io",
-  contactPhone: "+12709709414",
+  contactPhone: "+15026508301",
   appStore: "https://apps.apple.com/app/id6814346417",
   appStoreQr: "/marketing/app-store-qr.svg",
   androidStore: null as string | null,

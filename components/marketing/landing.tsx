@@ -97,12 +97,12 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
 
         <section id="contact" className="marketing-contact" aria-labelledby="marketing-contact-title">
           <div className="marketing-container marketing-contact-grid">
-            <div className="marketing-contact-copy"><span className="marketing-eyebrow">Let&apos;s talk</span><h2 id="marketing-contact-title">Tell us about<br /><em>your church.</em></h2><p>Tell us what keeps taking time each week. We&apos;ll listen, then show you where FaithForm can help.</p><div className="marketing-contact-direct"><span>Prefer to reach us directly?</span><a href={`mailto:${marketingConfig.contactEmail}`}>{marketingConfig.contactEmail}</a><a href={`tel:${marketingConfig.contactPhone}`}>(270) 970-9414</a></div></div>
+            <div className="marketing-contact-copy"><span className="marketing-eyebrow">Let&apos;s talk</span><h2 id="marketing-contact-title">Tell us about<br /><em>your church.</em></h2><p>Tell us what keeps taking time each week. We&apos;ll listen, then show you where FaithForm can help.</p><div className="marketing-contact-direct"><span>Prefer to reach us directly?</span><a href={`mailto:${marketingConfig.contactEmail}`}>{marketingConfig.contactEmail}</a><a href={`tel:${marketingConfig.contactPhone}`}>(502) 650-8301</a></div></div>
             <MarketingContactForm />
           </div>
         </section>
       </main>
-      <footer className="marketing-footer"><div className="marketing-container marketing-footer-inner"><div className="marketing-footer-brand"><Image src="/faithform-logo.png" width={36} height={36} alt="" /><span>faithform</span></div><p>More time for what matters.</p><div className="marketing-footer-links"><Link href={marketingConfig.signIn}>Sign In</Link><a href={contactHref}><Mail size={15} aria-hidden="true" /> Contact</a><a href={`tel:${marketingConfig.contactPhone}`}><Smartphone size={15} aria-hidden="true" /> Call (270) 970-9414</a><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><span className="marketing-copyright">© {new Date().getFullYear()} FaithForm</span></div></footer>
+      <footer className="marketing-footer"><div className="marketing-container marketing-footer-inner"><div className="marketing-footer-brand"><Image src="/faithform-logo.png" width={36} height={36} alt="" /><span>faithform</span></div><p>More time for what matters.</p><div className="marketing-footer-links"><Link href={marketingConfig.signIn}>Sign In</Link><a href={contactHref}><Mail size={15} aria-hidden="true" /> Contact</a><a href={`tel:${marketingConfig.contactPhone}`}><Smartphone size={15} aria-hidden="true" /> Call (502) 650-8301</a><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><span className="marketing-copyright">© {new Date().getFullYear()} FaithForm</span></div></footer>
     </div>
   );
 }
