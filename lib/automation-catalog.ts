@@ -14,11 +14,11 @@ export type AutomationEntry = {
 };
 
 export const AUTOMATION_CATALOG = {
-  "Attendance Follow-up Text": { category: "Communication", taskId: "OUT", minutes: 2 },
+  "Attendance Follow-up Text": { category: "Communication", taskId: "OUT", minutes: 4 },
   "Church App Updated": {
     category: "Calendar",
     taskId: "CAL",
-    minutes: 6,
+    minutes: 8,
   },
   "Update Church Calendar": {
     category: "Calendar",
@@ -33,7 +33,7 @@ export const AUTOMATION_CATALOG = {
   "Publish Announcement": {
     category: "Communication",
     taskId: "ANN",
-    minutes: 15,
+    minutes: 5,
   },
   "Phone Call + Duration of Call": {
     category: "Phone",
@@ -45,13 +45,7 @@ export const AUTOMATION_CATALOG = {
   "Facebook Post about Announcement": {
     category: "Social",
     taskId: "SOC",
-    minutes: 15,
-  },
-  "Right Now Media Post": { category: "Social", taskId: "SOC", minutes: 7 },
-  "Pastor Repost Live on Personal Account": {
-    category: "Social",
-    taskId: "SOC",
-    minutes: 5,
+    minutes: 20,
   },
   "Monthly Attendance Report": {
     category: "Admin",
@@ -66,7 +60,7 @@ export const AUTOMATION_CATALOG = {
   "Track Weekly Attendance": {
     category: "Admin",
     taskId: "ATT",
-    minutes: 5,
+    minutes: 10,
   },
   "Missed 4 weeks in a row notification": {
     category: "Admin",
@@ -78,12 +72,7 @@ export const AUTOMATION_CATALOG = {
     taskId: "ATT",
     minutes: 15,
   },
-  "Missed Sunday list creation and send": {
-    category: "Admin",
-    taskId: "ATT",
-    minutes: 10,
-  },
-  "Sent Personalized Pastoral Follow up if msg": {
+  "Personalized Pastoral Follow-up": {
     category: "Admin",
     taskId: "OUT",
     minutes: 60,
@@ -91,17 +80,17 @@ export const AUTOMATION_CATALOG = {
   "Annual Attendance Report": {
     category: "Admin",
     taskId: "REP",
-    minutes: 45,
+    minutes: 90,
   },
   "Sermon Created": {
     category: "Admin",
     taskId: "REP",
-    minutes: 10,
+    minutes: 15,
   },
   "Sermon Outline Generated": {
     category: "Admin",
     taskId: "REP",
-    minutes: 20,
+    minutes: 30,
   },
   "Sermon Draft Generated": {
     category: "Admin",
@@ -111,57 +100,41 @@ export const AUTOMATION_CATALOG = {
   "Sermon Published": {
     category: "Admin",
     taskId: "REP",
-    minutes: 5,
-  },
-  "Social Snippet Generated": {
-    category: "Social",
-    taskId: "SOC",
-    minutes: 7,
+    minutes: 10,
   },
   "Discussion Questions Generated": {
     category: "Admin",
     taskId: "REP",
-    minutes: 10,
+    minutes: 15,
   },
   "Sermon PDF Exported": {
     category: "Admin",
     taskId: "REP",
-    minutes: 8,
+    minutes: 15,
   },
   "Sermon PPTX Exported": {
     category: "Admin",
     taskId: "REP",
-    minutes: 12,
+    minutes: 45,
   },
   "Sermon Series Created": {
     category: "Admin",
     taskId: "REP",
-    minutes: 15,
+    minutes: 45,
   },
+  "Image Generation": { category: "Social", taskId: "SOC", minutes: 10 },
 } as const satisfies Record<string, AutomationEntry>;
 
 export type AutomationType = keyof typeof AUTOMATION_CATALOG;
 
 /** Types credited by operational-table derivation (excluded from activity_log extras). */
 export const DERIVED_AUTOMATION_TYPES = new Set<string>([
-  "Church App Updated",
-  "Facebook Post about Announcement",
-  "Announcement Email",
   "Phone Call + Duration of Call",
   "Track Weekly Attendance",
-  "Monthly Attendance Report",
-  "Quarterly Attendance Report",
-  "Annual Attendance Report",
-  "Right Now Media Post",
-  "Pastor Repost Live on Personal Account",
   "Sermon Created",
   "Sermon Outline Generated",
   "Sermon Draft Generated",
   "Sermon Published",
-  "Social Snippet Generated",
-  "Discussion Questions Generated",
-  "Sermon PDF Exported",
-  "Sermon PPTX Exported",
 ]);
 
 export function getCatalogMinutes(type: string): number {

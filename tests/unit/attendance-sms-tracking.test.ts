@@ -53,16 +53,16 @@ test("delivery lookup uses the server key and exact reference and selected hands
 test("confirmed follow-up activity appears in time saved within the selected report period", () => {
   const activity = {
     automation_type: "Attendance Follow-up Text", category: "Communication",
-    time_saved_minutes: 2, executed_at: "2026-10-20T12:00:00Z",
+    time_saved_minutes: 4, executed_at: "2026-10-20T12:00:00Z",
   };
   const result = computeHoursSavedFromSources({
     phoneCalls: [], announcements: [], attendance: [], assets: [], sermons: [],
     activities: [activity, { ...activity, executed_at: "2026-09-20T12:00:00Z" }],
   }, { start: new Date("2026-10-01T00:00:00Z"), end: new Date("2026-11-01T00:00:00Z") });
-  assert.equal(result.minutes, 2);
+  assert.equal(result.minutes, 4);
   assert.equal(result.tasks, 1);
-  assert.equal(result.byCategory.Communication, 2);
-  assert.equal(result.automationMinutes.get("Attendance Follow-up Text"), 2);
+  assert.equal(result.byCategory.Communication, 4);
+  assert.equal(result.automationMinutes.get("Attendance Follow-up Text"), 4);
 });
 
 test("device discovery reads current success/items and legacy responses without inventing online status", async () => {

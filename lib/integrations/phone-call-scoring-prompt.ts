@@ -210,6 +210,10 @@ Set urgency:
 - normal: a real person waiting on a response
 - low: informational, handled, or no action needed
 
+Mark what the call was about (false for spam, vendor, and no_engagement calls):
+- rental_booked: true only when the caller asked to rent or book church space or a facility and the assistant took the booking request or its details
+- help_requested: true when the caller asked the church for help or assistance (food, money, rides, prayer, care) and the assistant handled or passed on the request
+
 STEP 4: Write it up, following the NAMES rules in every field:
 - summary: ${WRITTEN_FIELD_GUIDE.summary}
 - flag_reason: ${WRITTEN_FIELD_GUIDE.flag_reason}

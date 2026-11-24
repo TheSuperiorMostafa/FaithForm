@@ -4,14 +4,11 @@ const PHONE_CALL_AUTOMATION = "Phone Call + Duration of Call";
 
 /** Minutes credited toward hours saved for one answered call. */
 export function phoneCallMinutesSaved(durationSeconds: number | null | undefined): number {
-  const floorMinutes = AUTOMATION_CATALOG[PHONE_CALL_AUTOMATION].minutes;
-
-  if (!durationSeconds || durationSeconds <= 0) {
-    return floorMinutes;
-  }
-
-  const durationMinutes = Math.ceil(durationSeconds / 60);
-  return Math.max(floorMinutes, durationMinutes);
+  // Length of the call (whole minutes, rounded up) plus the catalog's 5 minutes.
+  const baseMinutes = AUTOMATION_CATALOG[PHONE_CALL_AUTOMATION].minutes;
+  const durationMinutes =
+    durationSeconds && durationSeconds > 0 ? Math.ceil(durationSeconds / 60) : 0;
+  return durationMinutes + baseMinutes;
 }
 
 export function phoneCallTaskName(

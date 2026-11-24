@@ -14,6 +14,7 @@ import {
   type ScoringChurchContext,
 } from "@/lib/integrations/phone-call-scoring-prompt";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { logActivity } from "@/lib/activity/log";
 
 /** A written field's guide plus the name rule, which applies to all of them. */
 function writtenField(guide: string): string {
@@ -42,11 +43,28 @@ export const phoneCallScoreSchema = z.object({
     .max(1000)
     .nullable()
     .describe(writtenField(WRITTEN_FIELD_GUIDE.missing_knowledge)),
+  // Time-saved credits ("Rental Booked", "Help is Asked About").
+  rental_booked: z
+    .boolean()
+    .describe(
+      "True only when the caller asked to rent or book church space or a facility and the assistant took the booking request or its details.",
+    ),
+  help_requested: z
+    .boolean()
+    .describe(
+      "True when the caller asked the church for help or assistance (for example food, money, rides, prayer, or care) and the assistant handled or passed on the request.",
+    ),
 });
 
-export type PhoneCallScoreBreakdown = z.infer<typeof phoneCallScoreSchema> & {
+export type PhoneCallScoreBreakdown = Omit<
+  z.infer<typeof phoneCallScoreSchema>,
+  "rental_booked" | "help_requested"
+> & {
   /** Which rubric produced this row, so old 0–100 scores stay legible. */
   version: number;
+  /** Absent on calls scored before these were asked. */
+  rental_booked?: boolean;
+  help_requested?: boolean;
 };
 
 type ScorePhoneCallOptions = {
@@ -141,7 +159,7 @@ export async function scorePhoneCallIfNeeded(
   const { data: call, error } = await client
     .from("phone_calls")
     .select(
-      "id, church_id, transcript, outcome, notes, duration_seconds, call_successful, scored_at",
+      "id, church_id, called_at, transcript, outcome, notes, duration_seconds, call_successful, scored_at",
     )
     .eq("id", phoneCallId)
     .maybeSingle();
@@ -200,10 +218,35 @@ export async function scorePhoneCallIfNeeded(
           }
         : { ...object, version: PHONE_CALL_SCORING_VERSION };
 
-    return persistBreakdown(client, phoneCallId, normalized);
+    const saved = await persistBreakdown(client, phoneCallId, normalized);
+    if (saved && saved.call_type === "real") {
+      await creditCallTopics(client, call, saved);
+    }
+    return saved;
   } catch (err) {
     console.error("[score-phone-call] scoring failed", phoneCallId, err);
     return null;
+  }
+}
+
+/** "Rental Booked" / "Help is Asked About": at most once each per call, even when rescored. */
+async function creditCallTopics(
+  client: SupabaseClient,
+  call: { id: string; church_id: string; called_at: string | null },
+  breakdown: PhoneCallScoreBreakdown,
+): Promise<void> {
+  const credits = [
+    breakdown.rental_booked && { type: "Rental Booked", key: "phone_rental", name: "Rental booked by phone" },
+    breakdown.help_requested && { type: "Help is Asked About", key: "phone_help", name: "Help request handled by phone" },
+  ].filter(Boolean) as { type: string; key: string; name: string }[];
+  for (const credit of credits) {
+    await logActivity({
+      churchId: call.church_id,
+      automationType: credit.type,
+      taskName: credit.name,
+      triggerSource: `${credit.key}:${call.id}`,
+      executedAt: call.called_at ?? undefined,
+    }, client);
   }
 }
 

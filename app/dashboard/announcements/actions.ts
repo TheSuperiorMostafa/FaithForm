@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { logActivity } from "@/lib/activity/log";
+import { logAnnouncementCredit, logCalendarUpdated } from "@/lib/activity/credits";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
 import {
   checkFacebookScheduleTime,
@@ -735,6 +735,7 @@ export async function publishAnnouncement(
           },
           ctx.supabase,
         );
+        await logCalendarUpdated(ctx.churchId, payload.googleEventId, payload.title);
         await syncEventAttendanceDetails({
           churchId: ctx.churchId,
           actorUserId: ctx.user.id,
@@ -798,14 +799,18 @@ export async function publishAnnouncement(
     }
   }
 
-  await logActivity({
-    churchId: ctx.churchId,
-    automationType: "Publish Announcement",
-    category: "Communications",
-    taskName: payload.title,
-    timeSavedMinutes: 15,
-    triggerSource: "announcements_module",
-  });
+  // One credit per announcement and channel. A fixed trigger source here
+  // meant only a church's first announcement was ever logged.
+  await logAnnouncementCredit("publish", ctx.churchId, announcementId!, payload.title);
+  if (mobileResult.applied && payload.mobileVisibility !== "none") {
+    await logAnnouncementCredit("app", ctx.churchId, announcementId!, payload.title);
+  }
+  if (facebookPostId) {
+    await logAnnouncementCredit("facebook", ctx.churchId, announcementId!, payload.title);
+  }
+  if (payload.pushToTeam && weeklyEmailChannel) {
+    await logAnnouncementCredit("email", ctx.churchId, announcementId!, payload.title);
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/announcements");
@@ -1185,6 +1190,9 @@ export async function publishToMoreChannels(
       allDay: Boolean(announcement.all_day),
     });
     notified = mobileResult.enqueued;
+    if (mobileResult.applied) {
+      await logAnnouncementCredit("app", ctx.churchId, announcement.id, announcement.title);
+    }
     if (!mobileResult.applied) {
       errors.push(
         mobileResult.unavailableReason === "migration_0054_missing"
@@ -1252,6 +1260,13 @@ export async function publishToMoreChannels(
     errors.push(
       toUserError({ message: saveError }, "It was shared, but we couldn't save where it went"),
     );
+  }
+
+  if (changes.push_to_facebook) {
+    await logAnnouncementCredit("facebook", ctx.churchId, announcement.id, announcement.title);
+  }
+  if (queuedForWeeklyEmail) {
+    await logAnnouncementCredit("email", ctx.churchId, announcement.id, announcement.title);
   }
 
   revalidatePath("/dashboard");

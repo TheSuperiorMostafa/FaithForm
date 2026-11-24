@@ -44,7 +44,7 @@ test("time tracker excludes web, numberless, and ongoing calls, retaining comple
     ], announcements: [], attendance: [], assets: [], sermons: [], activities: [],
   }, { start: null, end: new Date("2026-10-21T00:00:00Z") });
   assert.equal(result.tasks, 1);
-  assert.equal(result.minutes, 5);
+  assert.equal(result.minutes, 6); // 1-minute call + 5
 });
 
 test("webhook verification binds the original bytes to its signing key and rejects stale signatures", () => {

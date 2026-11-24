@@ -24,6 +24,7 @@ import {
 import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
 import { toUserError } from "@/lib/errors/user-error";
 import { VisitorError } from "@/lib/faithform/errors";
+import { logCalendarUpdated } from "@/lib/activity/credits";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -219,6 +220,7 @@ export async function POST(request: Request) {
       { title, location, startAt, endAt, allDay, description, recurrence: recurrence ? [recurrence] : undefined, timeZone },
       supabase,
     );
+    await logCalendarUpdated(auth.churchId, event.googleEventId, event.title);
     let attendance = null;
     let attendanceWarning: string | null = null;
     if (body.attendance && body.attendance.enabled === true) {

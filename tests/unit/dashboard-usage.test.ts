@@ -80,7 +80,11 @@ const activity = Array.from({ length: 1205 }, (_, index) => ({
   id: String(index).padStart(5, "0"),
   church_id: "church-a",
   executed_at: "2099-01-01T12:00:00Z",
-  category: index < 40 ? "Phone" : "Other",
+  // 40 calls, then 5 rental/help credits that share the Phone category but are not calls.
+  category: index < 45 ? "Phone" : "Other",
+  automation_type: index < 40
+    ? "Phone Call + Duration of Call"
+    : index < 45 ? (index % 2 ? "Rental Booked" : "Help is Asked About") : "Other",
   time_saved_minutes: 2,
 }));
 

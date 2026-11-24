@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logImageGenerated } from "@/lib/activity/credits";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { generateSocialPreview } from "@/lib/social/generate-preview";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -57,6 +58,15 @@ export async function POST(request: Request) {
       skipImage: body.skipImage === true,
     });
 
+    if (preview.usedAiImage) {
+      // One credit per announcement or event, however often it is regenerated.
+      await logImageGenerated(
+        auth.churchId,
+        "announcement",
+        title,
+        body.announcementId ?? body.googleEventId ?? `${title}|${startAt}`,
+      );
+    }
     return NextResponse.json({ preview });
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized") {

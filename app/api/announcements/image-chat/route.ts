@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isImageChatConfigured, loadImageChatBrand, runImageChatTurn } from "@/lib/ai/image/chat";
 import { parseImageChatRequest } from "@/lib/ai/image/chat-prompt";
+import { logImageGenerated } from "@/lib/activity/credits";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { toUserError } from "@/lib/errors/user-error";
 import { featureAccessDenied } from "@/lib/features/guard";
@@ -81,6 +82,10 @@ export async function POST(request: Request) {
 
     const brand = await loadImageChatBrand(createAdminClient(), auth.churchId);
     const result = await runImageChatTurn(parsed.request, brand);
+    // A new picture earns time saved; refining it in the same chat does not.
+    if (parsed.request.history.length === 0 && !parsed.request.previousImage) {
+      await logImageGenerated(auth.churchId, "chat", parsed.request.instruction.slice(0, 120));
+    }
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof Error && e.message === "Unauthorized") {

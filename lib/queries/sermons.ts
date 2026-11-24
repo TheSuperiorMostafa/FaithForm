@@ -350,7 +350,6 @@ export async function saveAsset(input: {
   const sermon = await getSermon(input.sermonId);
   if (sermon?.church_id) {
     const assetTypeByKind: Partial<Record<SermonAssetKind, string>> = {
-      social_snippet: "Social Snippet Generated",
       discussion_questions: "Discussion Questions Generated",
       export_pdf: "Sermon PDF Exported",
       export_pptx: "Sermon PPTX Exported",
@@ -470,7 +469,7 @@ export async function createSeries(input: {
     churchId: input.churchId,
     automationType: "Sermon Series Created",
     taskName: input.title,
-    triggerSource: "sermon_module:series",
+    triggerSource: `sermon_module:series:${(data as { id: string }).id}`,
   });
 
   return data as SermonSeries;

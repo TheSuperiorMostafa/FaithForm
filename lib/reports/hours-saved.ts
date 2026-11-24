@@ -70,32 +70,6 @@ export function toHoursSaved(minutes: number): number {
   return Math.round((minutes / 60) * 100) / 100;
 }
 
-function countAttendanceReportsInRange(
-  records: { service_date: string }[],
-  start: Date | null,
-  end: Date,
-): { monthly: number; quarterly: number; annual: number } {
-  const months = new Set<string>();
-  const quarters = new Set<string>();
-  const years = new Set<string>();
-
-  for (const r of records) {
-    const d = new Date(r.service_date);
-    if (!inHoursSavedWindow(r.service_date, start, end)) continue;
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    months.add(`${y}-${m}`);
-    quarters.add(`${y}-Q${Math.floor(m / 3)}`);
-    years.add(String(y));
-  }
-
-  return {
-    monthly: months.size,
-    quarterly: quarters.size,
-    annual: years.size,
-  };
-}
-
 type AnnouncementRow = {
   created_at: string;
   push_to_facebook: boolean | null;
@@ -260,7 +234,7 @@ export function computeHoursSavedFromSources(
   const byCategory = emptyBreakdown();
   let minutes = 0;
   let tasks = 0;
-  const { phoneCalls, announcements, attendance, assets, sermons, activities } = sources;
+  const { phoneCalls, attendance, sermons, activities } = sources;
   const phoneCallsInWindow = phoneCalls.filter((r) =>
     isCompletedPhoneCall(r) && inHoursSavedWindow(r.called_at, start, end),
   );
@@ -280,35 +254,17 @@ export function computeHoursSavedFromSources(
     addToCategory(byCategory, "Phone", phoneMinutes);
   }
 
-  for (const a of announcements) {
-    if (!inHoursSavedWindow(a.created_at, start, end)) continue;
-    if (a.push_to_facebook) {
-      const m = creditCatalogEntry(
-        automationMinutes,
-        byCategory,
-        "Facebook Post about Announcement",
-      );
-      minutes += m;
-      tasks += 1;
-    }
-    if (a.push_to_team) {
-      const m = creditCatalogEntry(
-        automationMinutes,
-        byCategory,
-        "Announcement Email",
-      );
-      minutes += m;
-      tasks += 1;
-    }
-  }
+  // Announcement credits (publish, app, Facebook, weekly email) are logged to
+  // activity_log per announcement and counted with the other activity below.
 
-  const inRangeAttendance = attendance.filter((r) =>
-    inHoursSavedWindow(
-      r.submitted_at ?? `${r.service_date}T12:00:00Z`,
-      start,
-      end,
-    ),
-  );
+  // Once per Sunday saved, even if a Sunday has more than one record.
+  const seenSundays = new Set<string>();
+  const inRangeAttendance = attendance.filter((r) => {
+    if (!inHoursSavedWindow(r.submitted_at ?? `${r.service_date}T12:00:00Z`, start, end)) return false;
+    if (seenSundays.has(r.service_date)) return false;
+    seenSundays.add(r.service_date);
+    return true;
+  });
   if (inRangeAttendance.length > 0) {
     const weeklyM = creditCatalogEntry(
       automationMinutes,
@@ -319,39 +275,14 @@ export function computeHoursSavedFromSources(
     minutes += weeklyM;
     tasks += inRangeAttendance.length;
 
-    // Only credit reports FaithForm actually generates today (monthly PDF).
-    const reports = countAttendanceReportsInRange(
-      inRangeAttendance,
-      start,
-      end,
-    );
-    if (reports.monthly > 0) {
-      const m = creditCatalogEntry(
-        automationMinutes,
-        byCategory,
-        "Monthly Attendance Report",
-        reports.monthly,
-      );
-      minutes += m;
-      tasks += reports.monthly;
-    }
+    // Monthly, quarterly, and annual reports are logged to activity_log when
+    // each becomes available (lib/activity/attendance-report-credits.ts).
   }
 
-  const assetTypeByKind: Record<string, AutomationType> = {
-    social_snippet: "Social Snippet Generated",
-    discussion_questions: "Discussion Questions Generated",
-    export_pdf: "Sermon PDF Exported",
-    export_pptx: "Sermon PPTX Exported",
-  };
-
-  for (const asset of assets) {
-    if (!inHoursSavedWindow(asset.created_at, start, end)) continue;
-    const automationType = assetTypeByKind[asset.kind];
-    if (!automationType) continue;
-    const m = creditCatalogEntry(automationMinutes, byCategory, automationType);
-    minutes += m;
-    tasks += 1;
-  }
+  // Sermon handouts, slides, and discussion questions are logged to
+  // activity_log (one per sermon) and counted with the other activity below.
+  // PDF and slide exports never wrote a sermon_assets row, so counting them
+  // from that table credited nothing.
 
   for (const sermon of sermons) {
     if (inHoursSavedWindow(sermon.created_at, start, end)) {

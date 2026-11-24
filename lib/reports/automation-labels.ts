@@ -2,9 +2,9 @@
 const AUTOMATION_DISPLAY_LABELS: Record<string, string> = {
   "Facebook Post about Announcement": "Social Media Post Created",
   "Announcement Email": "Email Drafted for Bulletin & Tech",
-  "Publish Announcement": "Email Drafted for Bulletin & Tech",
+  "Publish Announcement": "Announcement Published",
   "Update Church Calendar": "Church Calendar Updated",
-  "Church App Updated": "Church Calendar Updated",
+  "Church App Updated": "Posted to Church App",
   "Monthly Attendance Report": "Created Monthly Attendance Report",
   "Quarterly Attendance Report": "Created Quarterly Attendance Report",
   "Annual Attendance Report": "Created Annual Attendance Report",
@@ -13,8 +13,6 @@ const AUTOMATION_DISPLAY_LABELS: Record<string, string> = {
   "Sermon Draft Generated": "Sermon Draft Generated",
   "Sermon Created": "Sermon Created",
   "Sermon Published": "Sermon Published",
-  "Social Snippet Generated": "Social Media Post Created",
-  "Right Now Media Post": "Social Media Post Created",
 };
 
 export function automationDisplayLabel(automationType: string): string {

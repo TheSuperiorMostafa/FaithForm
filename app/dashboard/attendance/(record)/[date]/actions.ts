@@ -177,8 +177,8 @@ export async function submitAttendance(input: {
     await logActivity({
       churchId,
       automationType: "Track Weekly Attendance",
-      taskName: "Weekly attendance recorded",
-      triggerSource: "attendance_module",
+      taskName: `Weekly attendance recorded for ${serviceDate}`,
+      triggerSource: `attendance:${serviceDate}`,
     });
   }
 
@@ -270,8 +270,8 @@ async function saveHeadcount(
     await logActivity({
       churchId,
       automationType: "Track Weekly Attendance",
-      taskName: "Weekly attendance recorded",
-      triggerSource: "attendance_module",
+      taskName: `Weekly attendance recorded for ${serviceDate}`,
+      triggerSource: `attendance:${serviceDate}`,
     });
   }
 

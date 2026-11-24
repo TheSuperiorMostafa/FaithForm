@@ -15,6 +15,7 @@ import {
   type ArtworkSpec,
 } from "@/lib/media/artwork";
 import { generateEventBackgroundImage, isAiImageConfigured } from "@/lib/ai/image";
+import { logImageGenerated } from "@/lib/activity/credits";
 import {
   listChurchImageLibrary,
   listStockImages,
@@ -356,6 +357,7 @@ export async function createArtworkForMe(input: {
       mode: "background",
     });
     bytes = Buffer.from(generated.imageBytes);
+    await logImageGenerated(guard.churchId, "media", title);
   } catch (error) {
     console.error("[media] artwork generation failed:", error);
     return { ok: false, error: "We couldn't make artwork right now. Please try again, or choose a stock picture." };

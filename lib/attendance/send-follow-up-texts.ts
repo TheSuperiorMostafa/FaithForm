@@ -30,6 +30,8 @@ export type FollowUpSendSummary = {
   /** True when the church has no texting phone of its own, so nothing was sent. */
   notConnected: boolean;
   requiresAppCheck: boolean;
+  /** Everyone a text went out to, with how many Sundays in a row they've missed. */
+  texted: { entryId: string; consecutiveAbsent: number }[];
 };
 
 export type FollowUpSendOptions = {
@@ -111,6 +113,7 @@ export async function sendAttendanceFollowUpTexts(
     skipped: 0,
     notConnected: false,
     requiresAppCheck: false,
+    texted: [],
   };
   if (members.length === 0) return summary;
 
@@ -196,6 +199,7 @@ export async function sendAttendanceFollowUpTexts(
         sender_phone: result.from ?? smsSender.fromNumber,
       });
       summary.sent += 1;
+      summary.texted.push({ entryId: member.entryId, consecutiveAbsent: member.consecutiveAbsent });
       summary.requiresAppCheck ||= smsSender.gateway === "smsmobileapi";
     } else {
       await recordOutcome(admin, member.entryId, {

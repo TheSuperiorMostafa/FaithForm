@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logFollowUpSendCredits } from "@/lib/activity/credits";
 
 import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { validateFollowUpOverride } from "@/lib/attendance/follow-up-message";
@@ -222,6 +223,13 @@ export async function sendFollowUps(input: {
         "The follow-ups were saved, but the texts could not be sent. Try again shortly.",
     };
   }
+
+  await logFollowUpSendCredits({
+    churchId: auth.churchId,
+    serviceDate: input.serviceDate,
+    sent: summary.sent,
+    texted: summary.texted,
+  });
 
   revalidatePath("/dashboard/attendance/follow-up");
   revalidatePath(`/dashboard/attendance/follow-up/${input.serviceDate}`);

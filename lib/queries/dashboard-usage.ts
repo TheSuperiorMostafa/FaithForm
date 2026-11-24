@@ -79,7 +79,8 @@ export async function getChurchDashboardUsageSummary(
       .from("activity_log")
       .select("id", { count: "exact", head: true })
       .eq("church_id", churchId)
-      .eq("category", "Phone")
+      // Rental and help credits share the Phone category; count the calls only.
+      .eq("automation_type", "Phone Call + Duration of Call")
       .gte("executed_at", activitySince30d.toISOString()),
   ]);
 
