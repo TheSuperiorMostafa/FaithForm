@@ -2,16 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  ART_DIRECTION,
   buildBackgroundPrompt,
   buildFullFlyerPrompt,
   NO_PEOPLE_RULE,
-  PEOPLE_WORDS,
   resolveScene,
   TAG_SCENE_HINTS,
 } from "@/lib/ai/image/prompt";
 import { eventSocialSystemPrompt } from "@/lib/ai/prompts";
-import { SOCIAL_BACKGROUND_TAGS, SOCIAL_TEMPLATE_KEYS } from "@/lib/social/constants";
+import { SOCIAL_BACKGROUND_TAGS } from "@/lib/social/constants";
 
 const base = {
   title: "Youth Hangout",
@@ -26,80 +24,69 @@ const base = {
 };
 
 // ---------------------------------------------------------------------------
-// Nobody in the picture
+// The photographic brief (restored from before the September rewrite)
 // ---------------------------------------------------------------------------
 
-test("no fallback motif describes people", () => {
+test("every tag has a fallback scene", () => {
   for (const tag of SOCIAL_BACKGROUND_TAGS) {
-    const hint = TAG_SCENE_HINTS[tag];
-    assert.ok(hint, `${tag} has a motif`);
-    assert.doesNotMatch(hint, PEOPLE_WORDS, `${tag}: "${hint}"`);
+    assert.ok(TAG_SCENE_HINTS[tag], `${tag} has a scene`);
   }
 });
 
-test("every generated prompt carries the no-people rule", () => {
-  for (const key of SOCIAL_TEMPLATE_KEYS) {
-    const flyer = buildFullFlyerPrompt({ ...base, mode: "flyer", templateKey: key });
-    const background = buildBackgroundPrompt({ ...base, templateKey: key });
-    assert.ok(flyer.includes(NO_PEOPLE_RULE), `${key} flyer`);
-    assert.ok(background.includes(NO_PEOPLE_RULE), `${key} background`);
-    assert.ok(flyer.includes(ART_DIRECTION[key]), `${key} flyer art direction`);
-  }
+test("the one-shot prompts do not carry the image chat's no-people rule", () => {
+  assert.ok(!buildFullFlyerPrompt({ ...base, mode: "flyer" }).includes(NO_PEOPLE_RULE));
+  assert.ok(!buildBackgroundPrompt(base).includes(NO_PEOPLE_RULE));
 });
 
-test("a writer's motif about people is set aside for the tag's design motif", () => {
-  assert.equal(
-    resolveScene({ ...base, imageSubject: "teenagers together laughing on a couch" }),
-    TAG_SCENE_HINTS.youth,
-  );
-  assert.equal(
-    resolveScene({ ...base, imageSubject: "silhouettes of hands raised in worship" }),
-    TAG_SCENE_HINTS.youth,
-  );
-});
-
-test("a writer's motif about things is used as written", () => {
+test("a writer's scene is used and given the cinematic treatment", () => {
   const subject = "a set breakfast table with an open Bible in morning light.";
-  assert.equal(
-    resolveScene({ ...base, backgroundTag: "prayer", imageSubject: subject }),
-    "a set breakfast table with an open Bible in morning light",
-  );
+  const scene = resolveScene({ ...base, backgroundTag: "prayer", imageSubject: subject });
+  assert.match(scene, /^a set breakfast table with an open Bible in morning light\. Shot cinematically/);
   const prompt = buildFullFlyerPrompt({ ...base, imageSubject: subject, mode: "flyer" });
-  assert.match(prompt, /HERO SCENE: a set breakfast table/);
+  assert.match(prompt, /Cinematic background photograph: a set breakfast table/);
+});
+
+test("without a writer's scene the tag's scene is used", () => {
+  assert.equal(resolveScene({ ...base, imageSubject: null }), TAG_SCENE_HINTS.youth);
+});
+
+test("the background is briefed as a real photograph", () => {
+  const prompt = buildBackgroundPrompt(base);
+  assert.match(prompt, /Ultra-realistic cinematic editorial photograph/);
+  assert.match(prompt, /85mm lens/);
+  assert.match(prompt, /Absolutely NO text/);
 });
 
 test("the flyer is briefed as a cinematic photo with designed type", () => {
   const prompt = buildFullFlyerPrompt({ ...base, mode: "flyer", season: "autumn" });
-  assert.match(prompt, /cinematic hero image/i);
-  assert.match(prompt, /Photographic and richly detailed/);
+  assert.match(prompt, /Cinematic background photograph/);
+  assert.match(prompt, /Photorealistic background, polished graphic-design overlay/);
   assert.match(prompt, /TYPOGRAPHY:/);
   assert.match(prompt, /central 80%/);
   assert.match(prompt, /Set it in autumn/);
   // The text it must set is still spelled out for it, and nothing else.
   assert.match(prompt, /"Youth Hangout"/);
   assert.match(prompt, /"Louisville Grace Church"/);
-  assert.match(prompt, /"FRIDAY, OCTOBER 3" · "7:00 PM" · "The Loft"/);
+  assert.match(prompt, /"FRIDAY, OCTOBER 3"; "7:00 PM"; "The Loft"/);
   assert.match(prompt, /ONLY words allowed/);
   assert.match(prompt, /character for character/);
 });
 
 test("the flyer prints no location line when none was resolved", () => {
   const prompt = buildFullFlyerPrompt({ ...base, location: null, mode: "flyer" });
-  assert.match(prompt, /"FRIDAY, OCTOBER 3" · "7:00 PM"\./);
+  assert.match(prompt, /"FRIDAY, OCTOBER 3"; "7:00 PM"\./);
   assert.doesNotMatch(prompt, /The Loft/);
 });
 
-test("the copywriter is told the same rule, with examples that contain nobody", () => {
+test("the copywriter is asked for a photograph of this event", () => {
   const system = eventSocialSystemPrompt({
     churchName: "Louisville Grace Church",
     title: "Youth Hangout",
     when: "Friday, October 3 at 7:00 PM",
     location: "The Loft",
   });
-  assert.match(system, /Never people/);
-  assert.doesNotMatch(system, /what people are doing/);
-  assert.doesNotMatch(system, /teenagers together/);
-  assert.doesNotMatch(system, /Prefer hands, silhouettes/);
+  assert.match(system, /describing the photograph that should illustrate THIS event/);
+  assert.match(system, /imageSubject is what actually gets photographed/);
 });
 
 test("the caption brief asks for the real details, a call to action and hashtags", () => {
@@ -134,7 +121,7 @@ test("a guessed church address is offered but never printed as the place", () =>
 
 test("a script accent is offered only for connecting words the title really has", () => {
   const plain = buildFullFlyerPrompt({ ...base, headline: "Ladies Bible Study", mode: "flyer" });
-  assert.doesNotMatch(plain, /elegant script/);
+  assert.doesNotMatch(plain, /brush-script/);
   assert.match(plain, /nothing added or removed/);
   const withPhrase = buildFullFlyerPrompt({ ...base, headline: "Coffee with the Pastor", mode: "flyer" });
   assert.match(withPhrase, /connecting words "with the" may be set smaller/);

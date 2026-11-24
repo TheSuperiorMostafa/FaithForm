@@ -141,7 +141,6 @@ async function generateAiFlyer(
       headline: input.headline,
       backgroundTag: input.backgroundTag as SocialBackgroundTag,
       imageSubject: input.imageSubject ?? null,
-      templateKey: input.templateKey,
       churchName: branding.name,
       primaryColor: branding.primaryColor,
       accentColor: branding.accentColor,
