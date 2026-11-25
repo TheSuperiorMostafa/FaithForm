@@ -11,6 +11,8 @@ import {
   byteaHex,
   emailShareLink,
   hashToken,
+  planHasMaterials,
+  shareShowsMaterials,
   shareUrl,
   textShareLink,
   tokenForShare,
@@ -160,6 +162,7 @@ export async function createShareAction(planId: string, input: ShareRecipientInp
                   expiresAt,
                   updated: false,
                   message,
+                  includesMaterials: shareShowsMaterials(r.preset) && planHasMaterials(plan),
                 })
               : "no_email";
         }
@@ -230,7 +233,7 @@ export async function resendShareAction(planId: string): Promise<{ ok: true; sen
     if (!plan) throw new UserFacingError("We couldn't find that plan.");
     const { data: shares, error } = await admin
       .from("plan_shares")
-      .select("id, person_id, channels, version_sent, expires_at")
+      .select("id, person_id, preset, channels, version_sent, expires_at")
       .eq("church_id", auth.churchId)
       .eq("plan_id", id)
       .is("revoked_at", null)
@@ -272,6 +275,7 @@ export async function resendShareAction(planId: string): Promise<{ ok: true; sen
             expiresAt: share.expires_at as string,
             updated: true,
             message: null,
+            includesMaterials: shareShowsMaterials(share.preset as SharePreset) && planHasMaterials(plan),
           }),
         );
       }

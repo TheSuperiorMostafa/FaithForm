@@ -71,11 +71,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.MarkEmailUnread
-import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Church
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.FavoriteBorder
@@ -97,12 +95,13 @@ import io.faithform.app.ui.components.FaithFormWorkingLabel
  * The signed-out journey: one landing screen, then the doors that get someone in.
  *
  * Same editorial shape as `WelcomeScreen` — a confident sentence, generous
- * space, and only the actions a person can actually take. Invite-first: the
- * primary door is "I have a link", then create account, then sign in. Mirrors
+ * space, and only the actions a person can actually take. Two doors only:
+ * create an account or sign in. An invitation link is entered later, at the
+ * "find my church" step, or arrives as a deep link. Mirrors
  * the SwiftUI `AuthFlowView` state for state, with Android-native navigation:
  * system back pops the flow.
  */
-private enum class AuthScreen { LANDING, CREATE_ACCOUNT, SIGN_IN, RESET, HAVE_LINK }
+private enum class AuthScreen { LANDING, CREATE_ACCOUNT, SIGN_IN, RESET }
 
 @Composable
 fun AuthFlow(
@@ -111,7 +110,6 @@ fun AuthFlow(
     confirmationPhase: ConfirmationPhase = ConfirmationPhase.Idle,
     churchContext: PendingChurchContext? = null,
     onClearChurchContext: (() -> Unit)? = null,
-    onHoldInvitation: ((raw: String, onDone: (ok: Boolean) -> Unit) -> Unit)? = null,
 ) {
     var screen by rememberSaveable { mutableStateOf(AuthScreen.LANDING) }
     // Held here rather than in the landing, which leaves composition whenever
@@ -138,7 +136,6 @@ fun AuthFlow(
                 hasPendingInvitation = hasPendingInvitation,
                 confirmationPhase = confirmationPhase,
                 churchContext = churchContext,
-                onHaveLink = { move(AuthScreen.HAVE_LINK) },
                 onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
                 onSignIn = { move(AuthScreen.SIGN_IN) },
                 onClearChurchContext = onClearChurchContext,
@@ -155,10 +152,6 @@ fun AuthFlow(
                 onForgotPassword = { move(AuthScreen.RESET) }
             )
             AuthScreen.RESET -> ResetPasswordScreen(viewModel)
-            AuthScreen.HAVE_LINK -> HaveLinkEntryScreen(
-                onHoldInvitation = onHoldInvitation,
-                onHeld = { move(AuthScreen.LANDING) }
-            )
         }
     }
 }
@@ -168,7 +161,6 @@ private fun LandingScreen(
     hasPendingInvitation: Boolean,
     confirmationPhase: ConfirmationPhase,
     churchContext: PendingChurchContext?,
-    onHaveLink: () -> Unit,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit,
     onClearChurchContext: (() -> Unit)?,
@@ -290,8 +282,6 @@ private fun LandingScreen(
 
             LandingActions(
                 churchContext = churchContext,
-                hasPendingInvitation = hasPendingInvitation,
-                onHaveLink = onHaveLink,
                 onCreateAccount = onCreateAccount,
                 onSignIn = onSignIn,
                 onClearChurchContext = onClearChurchContext
@@ -301,22 +291,19 @@ private fun LandingScreen(
 }
 
 /**
- * **The doors never scroll away.** Whatever the font scale, invite / create /
+ * **The doors never scroll away.** Whatever the font scale, create account and
  * sign in stay pinned where a thumb already is, and the page above scrolls
  * beneath them.
  */
 @Composable
 private fun LandingActions(
     churchContext: PendingChurchContext?,
-    hasPendingInvitation: Boolean,
-    onHaveLink: () -> Unit,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit,
     onClearChurchContext: (() -> Unit)?
 ) {
     val theme = LocalFaithFormTheme.current
     val context = LocalContext.current
-    val showInviteDoor = churchContext == null && !hasPendingInvitation
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -346,37 +333,20 @@ private fun LandingActions(
                 .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
                 .fillMaxWidth()
         ) {
-            if (showInviteDoor) {
-                Button(
-                    onClick = onHaveLink,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-                ) { Text(stringResource(R.string.have_invitation)) }
-                OutlinedButton(
-                    onClick = onCreateAccount,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-                ) { Text(stringResource(R.string.create_account)) }
-                TextButton(
-                    onClick = onSignIn,
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(stringResource(R.string.sign_in)) }
-            } else {
-                Button(
-                    onClick = onCreateAccount,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-                ) { Text(stringResource(R.string.create_account)) }
-                OutlinedButton(
-                    onClick = onSignIn,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-                ) { Text(stringResource(R.string.sign_in)) }
-            }
+            // Only the two account doors. An invitation link is entered at the
+            // "find my church" step after signing in, not on the front door.
+            Button(
+                onClick = onCreateAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            ) { Text(stringResource(R.string.create_account)) }
+            OutlinedButton(
+                onClick = onSignIn,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            ) { Text(stringResource(R.string.sign_in)) }
             // A link can be forwarded, mistyped, or simply not meant for the
             // person holding it. Disowning the church has to be one tap away,
             // or the branding becomes a trap.
@@ -407,71 +377,6 @@ private fun LandingActions(
                         Text(stringResource(label), style = MaterialTheme.typography.labelSmall)
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Holding an invitation before sign-in: paste, name the church, then create
- * or sign in on the branded landing. The token is not spent until a session
- * exists — same path a deep link takes when the person is signed out.
- */
-@Composable
-private fun HaveLinkEntryScreen(
-    onHoldInvitation: ((raw: String, onDone: (ok: Boolean) -> Unit) -> Unit)?,
-    onHeld: () -> Unit,
-) {
-    val theme = LocalFaithFormTheme.current
-    var raw by rememberSaveable { mutableStateOf("") }
-    var working by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val invalidMessage = stringResource(R.string.invitation_error_invalid)
-
-    AuthScaffold(
-        title = stringResource(R.string.invitation_title),
-        subtitle = stringResource(R.string.invitation_body),
-    ) {
-        AuthTextField(
-            value = raw,
-            onValueChange = {
-                raw = it
-                errorMessage = null
-            },
-            label = stringResource(R.string.invitation_field_label),
-            hint = stringResource(R.string.invitation_hint),
-        )
-
-        errorMessage?.let {
-            Text(it, color = theme.palette.destructive, style = MaterialTheme.typography.bodyMedium)
-        }
-
-        Button(
-            onClick = {
-                val holder = onHoldInvitation
-                if (holder == null) {
-                    onHeld()
-                    return@Button
-                }
-                working = true
-                errorMessage = null
-                holder(raw) { ok ->
-                    working = false
-                    if (ok) onHeld() else errorMessage = invalidMessage
-                }
-            },
-            enabled = !working && raw.isNotBlank(),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-        ) {
-            if (working) {
-                FaithFormWorkingLabel(
-                    text = stringResource(R.string.have_link_continue),
-                    working = true,
-                )
-            } else {
-                Text(stringResource(R.string.have_link_continue))
             }
         }
     }
@@ -960,17 +865,14 @@ private fun ChurchContextHeader(context: PendingChurchContext) {
 /**
  * What stands between creating an account and using it.
  *
- * A confirmation wall is the highest-abandonment screen in any signup, and the
- * reason is nearly always the same: the email has not arrived and the screen
- * offers nothing to do about it. So this one names the exact address, says how
- * long to wait, and puts the three real ways forward on it — open the mail app,
- * send it again, or use a different address — instead of a single button back
- * to a sign-in that cannot work yet.
+ * Names the exact address, tells the person to look in their email for the
+ * confirmation link, and keeps "send it again" small and right under that
+ * address — the one thing to do if it has not arrived. The way back to sign in
+ * sits below for after the link is tapped.
  */
 @Composable
 private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
     val theme = LocalFaithFormTheme.current
-    val context = LocalContext.current
     val address by viewModel.confirmationEmail.collectAsStateWithLifecycle()
     val resent by viewModel.resendNoticeVisible.collectAsStateWithLifecycle()
     val resending by viewModel.isResending.collectAsStateWithLifecycle()
@@ -1000,7 +902,7 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)
         ) {
             Text(
                 stringResource(R.string.auth_check_email_sent_to, address),
@@ -1008,83 +910,64 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 color = theme.palette.contentSecondary,
                 textAlign = TextAlign.Center
             )
+
+            // Small and text-weight, right under the address, but still a
+            // full 48dp touch target.
+            TextButton(
+                onClick = viewModel::resendConfirmation,
+                enabled = !resending,
+                colors = ButtonDefaults.textButtonColors(contentColor = theme.palette.brandPrimary),
+                modifier = Modifier.heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            ) {
+                FaithFormWorkingLabel(
+                    text = stringResource(R.string.auth_check_email_resend),
+                    working = resending,
+                    style = MaterialTheme.typography.labelLarge.copy(textDecoration = TextDecoration.Underline),
+                )
+            }
+
+            if (resent) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = null,
+                        tint = theme.palette.success,
+                        modifier = Modifier.size(FaithFormTokens.IconSize.sizeSmall)
+                    )
+                    Text(
+                        stringResource(R.string.auth_check_email_resent),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = theme.palette.success
+                    )
+                }
+            }
+
+            resendError?.let { AuthErrorText(it) }
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)
+        ) {
             Text(
                 stringResource(R.string.auth_check_email_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = theme.palette.contentSecondary,
                 textAlign = TextAlign.Center
             )
-        }
-
-        Text(
-            stringResource(R.string.auth_check_email_hint),
-            style = MaterialTheme.typography.labelSmall,
-            color = theme.mutedContent,
-            textAlign = TextAlign.Center
-        )
-
-        if (resent) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = null,
-                    tint = theme.palette.success,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeSmall)
-                )
-                Text(
-                    stringResource(R.string.auth_check_email_resent),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = theme.palette.success
-                )
-            }
-        }
-
-        resendError?.let { AuthErrorText(it) }
-
-        // Straight to the inbox, through the OS rather than a hardcoded app:
-        // whichever mail client the person actually uses answers this intent.
-        // Resolved before it is offered, so the button is never a no-op.
-        val mail = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_APP_EMAIL)
-        if (mail.resolveActivity(context.packageManager) != null) {
-            Button(
-                onClick = {
-                    context.startActivity(mail.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-            ) {
-                Icon(
-                    Icons.Outlined.MarkEmailUnread,
-                    contentDescription = null,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                )
-                Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
-                Text(stringResource(R.string.auth_check_email_open_mail))
-            }
-        }
-
-        OutlinedButton(
-            onClick = viewModel::resendConfirmation,
-            enabled = !resending,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-        ) {
-            FaithFormWorkingLabel(
-                text = stringResource(R.string.auth_check_email_resend),
-                working = resending,
+            Text(
+                stringResource(R.string.auth_check_email_hint),
+                style = MaterialTheme.typography.labelSmall,
+                color = theme.mutedContent,
+                textAlign = TextAlign.Center
             )
         }
 
         TextButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {
             Text(stringResource(R.string.auth_sign_in_title))
-        }
-        TextButton(onClick = viewModel::startOver, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.auth_check_email_change_address))
         }
     }
 }

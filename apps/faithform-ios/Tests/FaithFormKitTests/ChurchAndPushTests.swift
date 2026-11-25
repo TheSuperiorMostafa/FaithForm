@@ -340,13 +340,15 @@ struct ChurchInfoRuleTests {
         #expect(grouped[1].services.map(\.startTime) == ["09:00"])
         #expect(grouped[2].services.map(\.startTime) == ["11:00"])
 
-        // One campus: a heading would only repeat the church.
+        // One campus: a heading would only repeat the church, and every time
+        // is one list in date order, church-wide or not.
         let single = ChurchInfo.serviceGroups(info(campuses: [east], services: [
-            service(0, "09:00", campus: "east"), service(3, "19:00", "Midweek"),
+            service(3, "19:00", "Midweek"), service(0, "10:00", campus: "east"),
+            service(0, "9:00", "Early", campus: "east"),
         ]))
         #expect(single.count == 1)
         #expect(single[0].title == nil)
-        #expect(single[0].services.map(\.label) == ["Midweek", "Worship"])
+        #expect(single[0].services.map(\.label) == ["Early", "Worship", "Midweek"])
 
         #expect(ChurchInfo.serviceGroups(info()).isEmpty)
     }

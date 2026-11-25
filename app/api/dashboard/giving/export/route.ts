@@ -5,6 +5,7 @@ import {
   requireChurchAdmin,
 } from "@/lib/auth/require-church-admin";
 import { searchAllGifts } from "@/lib/queries/giving";
+import { parseGiftMethod } from "@/lib/giving/labels";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { csvCell } from "@/lib/utils/csv";
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
     search: searchParams.get("search") ?? undefined,
     fundId: searchParams.get("fundId") ?? undefined,
     giftType: (searchParams.get("giftType") as GiftType) || undefined,
+    method: parseGiftMethod(searchParams.get("method")),
     status: (searchParams.get("status") as DonationStatus) || undefined,
     dateFrom: searchParams.get("dateFrom")
       ? new Date(searchParams.get("dateFrom")!).toISOString()
@@ -56,6 +58,7 @@ export async function GET(request: Request) {
     "amount",
     "fund",
     "type",
+    "method",
     "status",
     "stripe_fee",
     "net",
@@ -70,6 +73,7 @@ export async function GET(request: Request) {
       (d.amountCents / 100).toFixed(2),
       d.fundName ?? "",
       d.giftType,
+      d.method,
       d.status,
       d.stripeFeeCents != null ? (d.stripeFeeCents / 100).toFixed(2) : "",
       d.netAmountCents != null ? (d.netAmountCents / 100).toFixed(2) : "",

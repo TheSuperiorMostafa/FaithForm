@@ -167,7 +167,7 @@ export function ShareDialog({
         <DialogHeader>
           <DialogTitle>Share this plan</DialogTitle>
           <DialogDescription>
-            Each person gets their own read-only link where they can answer “I’ll be there” or “Can’t make it”. It always shows the latest plan and stops working the day after the service.
+            Each person gets their own read-only link where they can answer “I’ll be there” or “Can’t make it”. It always shows the latest plan and stops working the day after the service. Full plan and Person view links include the chord charts, lyrics and files of the songs and items they show.
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 flex-auto overflow-y-auto px-6 py-5">

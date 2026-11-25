@@ -101,13 +101,11 @@ enum ChurchInfo {
     /// Church-wide times — no campus, or a campus the profile does not list —
     /// come first with no heading. With more than one campus the rest are
     /// grouped under each campus's name, in the church's campus order; with
-    /// one campus a heading would only repeat the church, so they follow on.
-    /// Within a group, by day of the week and then time.
+    /// one campus a heading would only repeat the church, so every time is one
+    /// list in date order. Within a list, Sunday to Saturday, earliest first.
     static func serviceGroups(_ profile: ChurchProfile) -> [ServiceGroup] {
         let campusSlugs = Set(profile.campuses.map(\.slug))
-        let sorted = profile.serviceTimes.sorted {
-            ($0.dayOfWeek, $0.startTime) < ($1.dayOfWeek, $1.startTime)
-        }
+        let sorted = sortedByDate(profile.serviceTimes)
         let isChurchWide: (PublicServiceTime) -> Bool = {
             $0.campusSlug.isEmpty || !campusSlugs.contains($0.campusSlug)
         }
@@ -127,8 +125,21 @@ enum ChurchInfo {
             return groups
         }
 
-        let all = churchWide + byCampus
-        return all.isEmpty ? [] : [ServiceGroup(title: nil, services: all)]
+        return sorted.isEmpty ? [] : [ServiceGroup(title: nil, services: sorted)]
+    }
+
+    /// Sunday to Saturday, earliest first. Times compare as clock values, so
+    /// "9:00" never sorts after "10:00"; an unreadable time goes last in its day.
+    static func sortedByDate(_ services: [PublicServiceTime]) -> [PublicServiceTime] {
+        func minutes(_ service: PublicServiceTime) -> Int {
+            guard let clock = clockTime(service.startTime) else { return Int.max }
+            return clock.hour * 60 + clock.minute
+        }
+        return services.enumerated().sorted { lhs, rhs in
+            let left = (min(max(lhs.element.dayOfWeek, 0), 6), minutes(lhs.element), lhs.offset)
+            let right = (min(max(rhs.element.dayOfWeek, 0), 6), minutes(rhs.element), rhs.offset)
+            return left < right
+        }.map(\.element)
     }
 
     struct NextService: Equatable {

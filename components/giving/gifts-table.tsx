@@ -5,7 +5,7 @@ import { formatGiftDate } from "@/components/giving/giving-page-parts";
 import { RefundButton } from "@/components/giving/refund-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { donorDisplayName, giftStatus, giftTypeLabel, isRefundable } from "@/lib/giving/labels";
+import { donorDisplayName, giftStatus, giftMethodLabel, giftTypeLabel, isRefundable } from "@/lib/giving/labels";
 import { giftNetAfterFees } from "@/lib/giving/net-amount";
 import { formatCents } from "@/lib/utils/currency";
 import type { GivingDonationRow } from "@/types/giving";
@@ -41,7 +41,7 @@ export function GiftsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[880px] text-[15px]">
+      <table className="w-full min-w-[960px] text-[15px]">
         <caption className="sr-only">Gifts, newest first</caption>
         <thead className="border-b border-border text-left text-muted-foreground">
           <tr>
@@ -51,6 +51,7 @@ export function GiftsTable({
             <th scope="col" className="px-5 py-4 text-right font-semibold">Net after fees</th>
             <th scope="col" className="px-5 py-4 font-semibold">Fund</th>
             <th scope="col" className="px-5 py-4 font-semibold">Type</th>
+            <th scope="col" className="px-5 py-4 font-semibold">Method</th>
             <th scope="col" className="px-5 py-4 font-semibold">Status</th>
             {isAdmin && (
               <th scope="col" className="px-5 py-4 font-semibold">
@@ -98,6 +99,9 @@ export function GiftsTable({
                 </td>
                 <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
                   {giftTypeLabel(d.giftType)}
+                </td>
+                <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
+                  {giftMethodLabel(d.method)}
                 </td>
                 <td className="px-5 py-4">
                   <StatusBadge tone={status.tone}>{status.label}</StatusBadge>

@@ -187,6 +187,23 @@ export async function resolvePublishedContentRelationshipState(
 }
 
 /**
+ * Service times in date order: Sunday to Saturday, earliest first. Times are
+ * the church's wall-clock "HH:MM[:SS]" values, compared numerically so "9:00"
+ * never sorts after "10:00". Unreadable times go last within their day.
+ */
+export function sortServiceTimes<T extends { dayOfWeek: number; startTime: string }>(services: T[]): T[] {
+  const minutes = (value: string) => {
+    const match = /^(\d{1,2}):(\d{2})/.exec(value.trim());
+    return match ? Number(match[1]) * 60 + Number(match[2]) : Number.POSITIVE_INFINITY;
+  };
+  return [...services].sort((a, b) => {
+    if (a.dayOfWeek !== b.dayOfWeek) return a.dayOfWeek - b.dayOfWeek;
+    const diff = minutes(a.startTime) - minutes(b.startTime);
+    return Number.isNaN(diff) ? 0 : diff;
+  });
+}
+
+/**
  * A church's page in the app.
  *
  * Listed churches are readable by anyone. A church that does not list itself
@@ -258,7 +275,7 @@ export async function getChurchProfile(
       timezone: campus.timezone,
       isPrimary: campus.isPrimary,
     })),
-    serviceTimes: [...churchWideServices, ...campusServices],
+    serviceTimes: sortServiceTimes([...churchWideServices, ...campusServices]),
     relationshipState,
     about: details?.about ?? null,
     mapsUrl: details?.mapsUrl ?? null,

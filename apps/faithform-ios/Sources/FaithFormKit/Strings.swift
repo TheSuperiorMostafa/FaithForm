@@ -34,7 +34,6 @@ public enum L {
     }
     public static var findAChurch: String { t("find_a_church", "Find your church") }
     public static var haveInvitation: String { t("have_invitation", "I have a link") }
-    public static var haveLinkContinue: String { t("have_link_continue", "Continue") }
     public static var enterInvitationCode: String {
         t("enter_invitation_code", "Paste your invitation link")
     }
@@ -1258,7 +1257,7 @@ public enum L {
         t("auth_check_email_title", "Check your email")
     }
     public static var authCheckEmailBody: String {
-        t("auth_check_email_body", "Confirm your address using the link we sent, then sign in here.")
+        t("auth_check_email_body", "Check your email for the confirmation link, then come back and sign in.")
     }
     public static var authCheckEmailSentTo: String {
         t("auth_check_email_sent_to", "We sent a confirmation link to %@")
@@ -1266,17 +1265,11 @@ public enum L {
     public static var authCheckEmailHint: String {
         t("auth_check_email_hint", "It can take a minute to arrive. Check your spam folder if you don't see it.")
     }
-    public static var authCheckEmailOpenMail: String {
-        t("auth_check_email_open_mail", "Open Mail")
-    }
     public static var authCheckEmailResend: String {
         t("auth_check_email_resend", "Send it again")
     }
     public static var authCheckEmailResent: String {
         t("auth_check_email_resent", "Sent. Check your inbox again.")
-    }
-    public static var authCheckEmailChangeAddress: String {
-        t("auth_check_email_change_address", "Use a different address")
     }
     public static var authErrorEmailInvalid: String {
         t("auth_error_email_invalid", "Enter a valid email address.")
@@ -1328,9 +1321,6 @@ public enum L {
     }
     public static var invitationBody: String {
         t("invitation_body", "Paste the invitation your church sent you.")
-    }
-    public static var invitationHint: String {
-        t("invitation_hint", "From your church's email or bulletin.")
     }
     public static var invitationFieldLabel: String {
         t("invitation_field_label", "Invitation link or code")

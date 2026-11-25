@@ -42,12 +42,17 @@ const ADMIN_TABS = visibleSettingsTabs({ isAdmin: true, allowedFeatures: ALL });
 // Settings sections and deep links
 // ---------------------------------------------------------------------------
 
-test("settings has six plain sections, with app colors on the app page", () => {
+test("settings has seven plain sections, with app colors on the app page", () => {
   assert.deepEqual(
     SETTINGS_TABS.map((tab) => tab.label),
-    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Notifications", "Documents"],
+    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Notifications", "Documents", "Billing"],
   );
-  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "notifications", "documents"]);
+  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "notifications", "documents", "billing"]);
+  // Billing is gated like Connected accounts: a teammate who is not an admin never sees it.
+  const staffTabs = visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL });
+  assert.ok(!staffTabs.includes("billing"));
+  assert.ok(!staffTabs.includes("accounts"));
+  assert.equal(resolveSettingsTab(params("tab=billing"), staffTabs), "church");
 });
 
 test("the Advanced section is gone and its old link goes to Settings home", () => {

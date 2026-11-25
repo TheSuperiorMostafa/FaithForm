@@ -47,3 +47,16 @@ test("an invalid row rejects the entire import rather than silently omitting don
 test("quoted multiline and escaped quote cells survive CSV parsing", () => {
   assert.deepEqual(parseDonationCsv('a,b\r\n"two\nlines","A ""quote"""\r\n'), [["a","b"],["two\nlines",'A "quote"']]);
 });
+
+test("a gift's method comes from its offline source and payment method", async () => {
+  const { giftMethodFromRow, parseGiftMethod } = await import("../../lib/giving/labels");
+  assert.equal(giftMethodFromRow(null, null), "online");
+  assert.equal(giftMethodFromRow("stripe", "cash"), "online");
+  assert.equal(giftMethodFromRow("offline", "cash"), "cash");
+  assert.equal(giftMethodFromRow("offline", "check"), "check");
+  assert.equal(giftMethodFromRow("offline", "other"), "other");
+  assert.equal(giftMethodFromRow("offline", null), "other");
+  assert.equal(parseGiftMethod("check"), "check");
+  assert.equal(parseGiftMethod("bitcoin"), undefined);
+  assert.equal(parseGiftMethod(null), undefined);
+});

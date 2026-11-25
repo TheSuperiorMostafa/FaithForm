@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, CalendarDays, History, Music } from "lucide-react";
+import { ArrowLeft, CalendarDays, ExternalLink, FileUp, History, Music } from "lucide-react";
 import { ArrangementsEditor } from "@/components/service-plans/songs/arrangements-editor";
 import { SongDetailsForm } from "@/components/service-plans/songs/song-details-form";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { getChurchAuth } from "@/lib/auth/church";
 import { localDateInTimeZone } from "@/lib/checkin/service-week";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
+import { songSelectUrl } from "@/lib/service-plans/songs/catalog";
 import { ARRANGEMENTS_DESCRIPTION, SONG_SECTIONS } from "@/lib/service-plans/songs/page-copy";
 import { getSongDetail } from "@/lib/service-plans/songs/queries";
 import { formatPlanDate } from "@/lib/service-plans/timing";
@@ -37,6 +38,7 @@ export default async function SongPage({ params }: PageProps) {
   const description =
     [song.author, song.ccliNumber ? `CCLI ${song.ccliNumber}` : null, song.copyright].filter(Boolean).join(" · ") ||
     "Add the writers and CCLI song number below.";
+  const chartUrl = songSelectUrl(song.ccliNumber);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -45,7 +47,42 @@ export default async function SongPage({ params }: PageProps) {
           <ArrowLeft aria-hidden className="size-4" />
           Song library
         </Button>
-        <PageHeader title={song.title} description={description} icon={Music} />
+        <PageHeader
+          title={song.title}
+          description={description}
+          icon={Music}
+          secondary={
+            <>
+              {chartUrl && (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  nativeButton={false}
+                  render={<a href={chartUrl} target="_blank" rel="noopener noreferrer" />}
+                >
+                  <ExternalLink aria-hidden className="size-5" />
+                  Get chart
+                  <span className="sr-only"> on SongSelect (opens in a new tab)</span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="lg"
+                nativeButton={false}
+                render={<Link href="/dashboard/plans/songs/import" />}
+              >
+                <FileUp aria-hidden className="size-5" />
+                Add chart file
+              </Button>
+            </>
+          }
+        />
+        {chartUrl && (
+          <p className="text-sm text-muted-foreground">
+            Get chart opens this song on SongSelect. Download the ChordPro file there, then use Add chart file and it
+            joins this song by its CCLI number.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">

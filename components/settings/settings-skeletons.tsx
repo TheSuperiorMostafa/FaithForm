@@ -1,4 +1,5 @@
 import { STAFF_NOTIFICATION_EVENTS } from "@/lib/notifications/staff-preferences";
+import { SettingsBillingSkeleton } from "@/components/billing/billing-skeletons";
 import { Apple, Calendar, Clock, Mail, MapPin, Play, Plus, Share2 } from "lucide-react";
 
 import {
@@ -375,6 +376,8 @@ export function SettingsTabSkeleton({
         return <MessagesSkeleton />;
       case "giving":
         return <GivingSkeleton />;
+      case "billing":
+        return <SettingsBillingSkeleton />;
     }
   })();
 

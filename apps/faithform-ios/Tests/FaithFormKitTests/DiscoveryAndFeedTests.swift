@@ -448,3 +448,30 @@ struct FeedFormattingTests {
         #expect(!line.isEmpty)
     }
 }
+
+@Suite("Schedule ordering")
+struct ScheduleOrderingTests {
+
+    private func item(_ id: String, startAt: String, isPinned: Bool = false) -> FeedItem {
+        FeedItem(
+            id: id, title: id, body: "", startAt: startAt, endAt: nil, allDay: false,
+            location: nil, posterUrl: nil, posterAltText: nil, isPinned: isPinned,
+            visibility: .followers, publicationVersion: 1, publishedAt: nil,
+            isEvent: true, churchSlug: "grace", churchName: "Grace",
+            churchTimezone: "America/New_York"
+        )
+    }
+
+    @Test("a day's services and events run earliest first, whatever the pin or offset")
+    func dayInDateOrder() throws {
+        let day = try #require(FaithFormInstant.parse("2026-10-04T16:00:00Z"))
+        let items = [
+            // 15:00Z, though its string sorts before 14:00Z.
+            item("late", startAt: "2026-10-04T10:00:00-05:00"),
+            item("pinned-later", startAt: "2026-10-04T18:00:00Z", isPinned: true),
+            item("early", startAt: "2026-10-04T14:00:00.000Z"),
+        ]
+        let ids = ScheduleCalendar.events(on: day, in: items).map(\.id)
+        #expect(ids == ["early", "late", "pinned-later"])
+    }
+}

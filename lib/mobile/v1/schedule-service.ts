@@ -103,8 +103,10 @@ export async function getScheduleWindow(input: {
   const services = input.userId && relationshipState && grantsPublishedContentAccess(relationshipState)
     ? await dependencies.services(church, input.churchSlug, input.from, input.to)
     : [];
-  const combined = [...items.map((item) => toDto(item, input.churchSlug, church)), ...services]
-    .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id));
+  const combined = sortScheduleItems([
+    ...items.map((item) => toDto(item, input.churchSlug, church)),
+    ...services,
+  ]);
   return {
     items: combined,
     scheduleVersion: combined.reduce(
@@ -112,6 +114,25 @@ export async function getScheduleWindow(input: {
       0,
     ),
   };
+}
+
+/**
+ * Earliest first, always — services and events alike. Compared as instants,
+ * not strings: announcement times and service occurrence times can arrive
+ * with different offsets or precision, and a string compare would misorder
+ * them. Unparseable times sort last; ties fall back to the id so the order is
+ * stable between requests.
+ */
+export function sortScheduleItems<T extends { startAt: string; id: string }>(items: T[]): T[] {
+  const instant = (value: string) => {
+    const time = Date.parse(value);
+    return Number.isNaN(time) ? Number.POSITIVE_INFINITY : time;
+  };
+  return [...items].sort((a, b) => {
+    const diff = instant(a.startAt) - instant(b.startAt);
+    if (diff !== 0 && !Number.isNaN(diff)) return diff;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 async function getServiceSchedule(church: ChurchContext, churchSlug: string, from: string, to: string): Promise<FeedItemDto[]> {

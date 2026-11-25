@@ -5,20 +5,18 @@ import SwiftUI
 /// The landing is the first thing anyone who downloads FaithForm sees, so it
 /// does the three jobs a front door has to: say whose app this is (the mark),
 /// what it promises (one sentence), and what it actually does (the four things a
-/// churchgoer gets in 1.0) — then gets out of the way. Invite-first: the primary
-/// door is "I have a link", then create account, then sign in. Doors stay pinned
-/// within thumb reach.
+/// churchgoer gets in 1.0) — then gets out of the way. Two doors only: create
+/// an account or sign in. An invitation link is entered later, at the "find my
+/// church" step, or arrives as a deep link. Doors stay pinned within thumb reach.
 public struct AuthFlowView: View {
     public enum Route: Hashable, Sendable {
         case createAccount
         case signIn
         case resetPassword
-        case haveLink
     }
 
     @Environment(\.faithformTheme) private var theme
     @Bindable private var model: AuthModel
-    @Bindable private var onboarding: OnboardingModel
     @State private var path: [Route] = []
     /// The first frame fades the page in once. A return from a pushed screen
     /// must not replay it, so it is state rather than a transition.
@@ -29,13 +27,11 @@ public struct AuthFlowView: View {
 
     public init(
         model: AuthModel,
-        onboarding: OnboardingModel,
         hasPendingInvitation: Bool = false,
         churchContext: PendingChurchContext? = nil,
         onClearChurchContext: (@MainActor () -> Void)? = nil
     ) {
         self.model = model
-        self.onboarding = onboarding
         self.hasPendingInvitation = hasPendingInvitation
         self.churchContext = churchContext
         self.onClearChurchContext = onClearChurchContext
@@ -58,10 +54,6 @@ public struct AuthFlowView: View {
                         })
                     case .resetPassword:
                         ForgotPasswordView(model: model)
-                    case .haveLink:
-                        HaveLinkEntryView(onboarding: onboarding) {
-                            path = []
-                        }
                     }
                 }
         }
@@ -155,21 +147,12 @@ public struct AuthFlowView: View {
 
     private var landingActions: some View {
         VStack(spacing: FaithFormTokens.Spacing.md) {
-            // Invite-first: most churchgoers arrive with a link. Once a church
-            // is already named (or a token is held), jump straight to account doors.
-            if churchContext == nil, !hasPendingInvitation {
-                Button(L.haveInvitation) { path.append(.haveLink) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                Button(L.createAccount) { path.append(.createAccount) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                Button(L.signIn) { path.append(.signIn) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
-            } else {
-                Button(L.createAccount) { path.append(.createAccount) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                Button(L.signIn) { path.append(.signIn) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-            }
+            // Only the two account doors. An invitation link is entered at the
+            // "find my church" step after signing in, not on the front door.
+            Button(L.createAccount) { path.append(.createAccount) }
+                .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            Button(L.signIn) { path.append(.signIn) }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
             // A link can be forwarded, mistyped, or simply not meant for the
             // person holding it. Disowning the church has to be one tap away, or
             // the branding becomes a trap.
@@ -639,56 +622,6 @@ public struct AuthErrorText: View {
     }
 }
 
-/// Holding an invitation before sign-in: paste, name the church, then create
-/// or sign in on the branded landing. The token is not spent until a session
-/// exists — same path a deep link takes when the person is signed out.
-public struct HaveLinkEntryView: View {
-    @Environment(\.faithformTheme) private var theme
-    @Bindable private var onboarding: OnboardingModel
-    @State private var raw: String = ""
-    @State private var working = false
-    @State private var errorMessage: String?
-    private let onHeld: @MainActor () -> Void
-
-    public init(onboarding: OnboardingModel, onHeld: @escaping @MainActor () -> Void) {
-        self.onboarding = onboarding
-        self.onHeld = onHeld
-    }
-
-    public var body: some View {
-        AuthShell(title: L.invitationTitle, subtitle: L.invitationBody) {
-            AuthField(label: L.invitationFieldLabel, hint: L.invitationHint, text: $raw)
-
-            if let errorMessage {
-                AuthErrorText(message: errorMessage)
-            }
-
-            Button {
-                Task { await holdAndContinue() }
-            } label: {
-                FaithFormWorkingLabel(L.haveLinkContinue, working: working)
-            }
-            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            .disabled(working || raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-    }
-
-    private func holdAndContinue() async {
-        working = true
-        errorMessage = nil
-        let token = onboarding.normalize(raw)
-        guard token.count >= 16, token.count <= 512 else {
-            errorMessage = L.invitationErrorInvalid
-            working = false
-            return
-        }
-        onboarding.hold(invitationToken: token)
-        await onboarding.resolveChurchContext(invitationToken: token)
-        working = false
-        onHeld()
-    }
-}
-
 /// Redeeming an invitation — from the welcome flow, from an invite-only
 /// church's profile, or after a deep link arrived signed out.
 public struct InvitationEntryView: View {
@@ -814,12 +747,10 @@ struct ChurchContextHeader: View {
 
 /// What stands between creating an account and using it.
 ///
-/// A confirmation wall is the highest-abandonment screen in any signup, and the
-/// reason is nearly always the same: the email has not arrived and the screen
-/// offers nothing to do about it. So this one names the exact address, says how
-/// long to wait, and puts the three real ways forward on it — open the mail app,
-/// send it again, or use a different address — instead of a single button back
-/// to a sign-in that cannot work yet.
+/// Names the exact address, tells the person to look in their email for the
+/// confirmation link, and keeps "send it again" small and right under that
+/// address — the one thing to do if it has not arrived. The way back to sign
+/// in sits below for after the link is tapped.
 struct CheckEmailView: View {
     @Environment(\.faithformTheme) private var theme
     @Bindable var model: AuthModel
@@ -829,40 +760,63 @@ struct CheckEmailView: View {
         VStack(spacing: FaithFormTokens.Spacing.lg) {
             icon
 
-            VStack(spacing: FaithFormTokens.Spacing.sm) {
+            VStack(spacing: FaithFormTokens.Spacing.xs) {
                 Text(String(format: L.authCheckEmailSentTo, model.confirmationEmail))
                     .font(theme.font(FaithFormTokens.Text.body))
                     .foregroundStyle(theme.palette.contentSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
 
+                resendButton
+
+                if model.resendNoticeVisible {
+                    Label(L.authCheckEmailResent, systemImage: "checkmark.circle.fill")
+                        .font(theme.font(FaithFormTokens.Text.bodySmall))
+                        .foregroundStyle(theme.palette.success)
+                }
+
+                if let resendError = model.resendError {
+                    AuthErrorText(message: resendError)
+                        .multilineTextAlignment(.center)
+                }
+            }
+
+            VStack(spacing: FaithFormTokens.Spacing.sm) {
                 Text(L.authCheckEmailBody)
                     .font(theme.font(FaithFormTokens.Text.bodySmall))
                     .foregroundStyle(theme.palette.contentSecondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
 
-            Text(L.authCheckEmailHint)
-                .font(theme.font(FaithFormTokens.Text.caption))
-                .foregroundStyle(theme.mutedContent)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if model.resendNoticeVisible {
-                Label(L.authCheckEmailResent, systemImage: "checkmark.circle.fill")
-                    .font(theme.font(FaithFormTokens.Text.bodySmall))
-                    .foregroundStyle(theme.palette.success)
+                Text(L.authCheckEmailHint)
+                    .font(theme.font(FaithFormTokens.Text.caption))
+                    .foregroundStyle(theme.mutedContent)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let resendError = model.resendError {
-                AuthErrorText(message: resendError)
-            }
-
-            actions
+            Button(L.authSignInTitle, action: onSignIn)
+                .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// A small text-weight action rather than a full-width button, but still
+    /// a full 44pt touch target.
+    private var resendButton: some View {
+        Button {
+            Task { await model.resendConfirmation() }
+        } label: {
+            FaithFormWorkingLabel(L.authCheckEmailResend, working: model.isResending)
+                .font(theme.font(FaithFormTokens.Text.label))
+                .foregroundStyle(theme.palette.brandPrimary)
+                .underline()
+                .padding(.horizontal, FaithFormTokens.Spacing.sm)
+                .frame(minHeight: FaithFormTokens.TouchTarget.minimum)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isResending)
     }
 
     private var icon: some View {
@@ -881,42 +835,5 @@ struct CheckEmailView: View {
                 .foregroundStyle(theme.palette.brandPrimary)
         }
         .accessibilityHidden(true)
-    }
-
-    @ViewBuilder
-    private var actions: some View {
-        VStack(spacing: FaithFormTokens.Spacing.md) {
-            #if os(iOS)
-            // Straight to the inbox. `message://` is the documented way to open
-            // Mail; a device without it simply does not offer the button rather
-            // than presenting one that does nothing.
-            if let mail = URL(string: "message://"), UIApplication.shared.canOpenURL(mail) {
-                Button {
-                    UIApplication.shared.open(mail)
-                } label: {
-                    Label(L.authCheckEmailOpenMail, systemImage: "envelope.open")
-                }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            }
-            #endif
-
-            Button {
-                Task { await model.resendConfirmation() }
-            } label: {
-                if model.isResending {
-                    FaithFormWorkingLabel(L.authCheckEmailResend, working: true)
-                } else {
-                    Label(L.authCheckEmailResend, systemImage: "arrow.clockwise")
-                }
-            }
-            .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-            .disabled(model.isResending)
-
-            Button(L.authSignInTitle, action: onSignIn)
-                .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
-
-            Button(L.authCheckEmailChangeAddress) { model.startOver() }
-                .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
-        }
     }
 }

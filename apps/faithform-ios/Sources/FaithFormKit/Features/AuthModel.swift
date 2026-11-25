@@ -163,18 +163,6 @@ public final class AuthModel {
         }
     }
 
-    /// "Use a different address" — back to an empty form, with the address that
-    /// did not work cleared rather than left to be corrected character by
-    /// character.
-    public func startOver() {
-        email = ""
-        password = ""
-        confirmationEmail = ""
-        resendNoticeVisible = false
-        resendError = nil
-        phase = .idle
-    }
-
     /// Codes already exchanged (or refused as spent) this launch. Mail apps
     /// and OS link-resolution can deliver the same URL more than once; a
     /// consumed code must be a no-op, never a second exchange.

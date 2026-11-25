@@ -178,6 +178,8 @@
 .g-table th { padding: 14px 18px; background: var(--muted); font-size: 14px; font-weight: 600; color: var(--muted-foreground); }
 .g-table td { padding: 16px 18px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .g-table tr:last-child td { border-bottom: 0; }
+/* Free text from the app: wide enough to read, never stretching the table. */
+.g-table .g-availability { min-width: 12rem; max-width: 20rem; }
 
 /* ---- Stats and chart ---------------------------------------------------- */
 .g-stat { display: flex; flex-direction: column; padding: 22px; border: 1px solid var(--border); border-radius: 18px; background: var(--card); }

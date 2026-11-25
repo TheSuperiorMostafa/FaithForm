@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readOrSaveAvailability } from "@/lib/groups/availability";
+import { groupAvailabilityByPerson, readAvailabilityForPeople, readOrSaveAvailability } from "@/lib/groups/availability";
 import { groupAvailabilitySchema } from "@/lib/mobile/v1/contract";
 
 const scope = { churchId: "church", groupId: "team", membershipId: "ordinary-member", groupStatus: "active" };
@@ -43,4 +43,39 @@ test("read failures are retryable and request bodies cannot choose another membe
   await assert.rejects(readOrSaveAvailability(db.client, scope), /Could not load/);
   assert.deepEqual(groupAvailabilitySchema.parse({ availability: "Sundays", membershipId: "someone-else" }), { availability: "Sundays" });
   assert.equal(groupAvailabilitySchema.safeParse({ availability: "a".repeat(501) }).success, false);
+});
+
+test("staff availability reads stay inside the staff church and skip blank text and archived groups", async () => {
+  const filters: [string, string, unknown][] = [];
+  let table = "";
+  const rows = [
+    { member_id: "ann", group_id: "g2", availability: " Sunday mornings ", groups: { name: "Worship team", status: "active" } },
+    { member_id: "ann", group_id: "g1", availability: "Second Sundays", groups: [{ name: "Greeters", status: "active" }] },
+    { member_id: "ann", group_id: "g3", availability: "Any time", groups: { name: "Old team", status: "archived" } },
+    { member_id: "bob", group_id: "g1", availability: "   ", groups: { name: "Greeters", status: "active" } },
+  ];
+  const chain = {
+    select() { return chain; },
+    eq(key: string, value: unknown) { filters.push(["eq", key, value]); return chain; },
+    in(key: string, value: unknown) { filters.push(["in", key, value]); return chain; },
+    neq(key: string, value: unknown) { filters.push(["neq", key, value]); return chain; },
+    limit: async () => ({ data: rows, error: null }),
+  };
+  const client = { from: (name: string) => { table = name; return chain; } } as never;
+
+  const result = await readAvailabilityForPeople(client, "staff-church", ["ann", "bob", "ann", ""]);
+  assert.equal(table, "group_memberships");
+  assert.deepEqual(filters, [
+    ["eq", "church_id", "staff-church"],
+    ["eq", "status", "active"],
+    ["in", "member_id", ["ann", "bob"]],
+    ["neq", "availability", ""],
+  ]);
+  assert.deepEqual(result.get("ann"), [
+    { groupId: "g1", groupName: "Greeters", availability: "Second Sundays" },
+    { groupId: "g2", groupName: "Worship team", availability: "Sunday mornings" },
+  ]);
+  assert.equal(result.has("bob"), false);
+  assert.equal((await readAvailabilityForPeople(client, "staff-church", [])).size, 0);
+  assert.equal(groupAvailabilityByPerson([]).size, 0);
 });

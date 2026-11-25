@@ -14,6 +14,9 @@ export type DonationStatus =
 
 export type GiftType = "one_time" | "recurring";
 
+/** How a gift was given: online through FaithForm, or recorded by hand. */
+export type GiftMethod = "online" | "cash" | "check" | "other";
+
 export type SubscriptionStatus =
   | "active"
   | "past_due"
@@ -70,6 +73,7 @@ export type GivingDonationRow = {
   currency: string;
   status: DonationStatus;
   giftType: GiftType;
+  method: GiftMethod;
   donorName: string | null;
   donorEmail: string | null;
   donorId: string | null;
@@ -127,6 +131,7 @@ export type GiftsSearchFilters = {
   search?: string;
   fundId?: string;
   giftType?: GiftType;
+  method?: GiftMethod;
   status?: DonationStatus;
   dateFrom?: string;
   dateTo?: string;

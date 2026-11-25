@@ -254,18 +254,6 @@ class AuthViewModel(
         }
     }
 
-    /** "Use a different address" — back to an empty form, with the address that
-     * did not work cleared rather than left to be corrected character by
-     * character. */
-    fun startOver() {
-        _email.value = ""
-        _password.value = ""
-        _confirmationEmail.value = ""
-        _resendNoticeVisible.value = false
-        _resendError.value = null
-        _phase.value = AuthUiPhase.Idle
-    }
-
     /** Moving between screens clears what no longer applies. The email is kept
      * — retyping it is pure friction — and the password never survives. */
     fun resetForNewScreen() {

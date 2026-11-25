@@ -4,7 +4,7 @@ export const SONGS_DESCRIPTION =
   "Every song your church sings, with keys, chord charts and files, and when you last sang it.";
 export const IMPORT_TITLE = "Import songs";
 export const IMPORT_DESCRIPTION =
-  "Bring in songs from ChordPro, OnSong, SongSelect or a spreadsheet. You check every song before it's saved.";
+  "Bring in songs from ChordPro, OnSong, SongSelect or a spreadsheet. A chart with the CCLI number of a song you already have is added to that song. You check every song before it's saved.";
 export const SONG_SECTIONS = {
   details: "Song details",
   arrangements: "Arrangements",

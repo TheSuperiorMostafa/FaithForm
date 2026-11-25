@@ -178,9 +178,17 @@ object ScheduleCalendar {
         return start.isBefore(dayEnd) && end.isAfter(dayStart)
     }
 
+    /**
+     * A day's events and services, always in date order — earliest first.
+     * Compared as instants rather than strings, since times can arrive with
+     * different offsets; pinning does not reorder the calendar.
+     */
     fun eventsOn(day: java.time.LocalDate, items: List<FeedItem>, zone: ZoneId): List<FeedItem> =
-        items.filter { eventOverlaps(it, day, zone) }
-            .sortedWith(compareByDescending<FeedItem> { it.isPinned }.thenBy { it.startAt })
+        sortedByStart(items.filter { eventOverlaps(it, day, zone) })
+
+    /** Earliest first by parsed start; unreadable starts go last, ties keep the server's order. */
+    fun sortedByStart(items: List<FeedItem>): List<FeedItem> =
+        items.sortedBy { AnnouncementTiming.parseInstant(it.startAt) ?: java.time.Instant.MAX }
 
     fun daysWithEvents(items: List<FeedItem>, zone: ZoneId): Set<java.time.LocalDate> {
         val days = mutableSetOf<java.time.LocalDate>()

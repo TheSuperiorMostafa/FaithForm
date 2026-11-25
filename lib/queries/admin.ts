@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { churchHealth, type ChurchHealth, type ChurchHealthSignals } from "@/lib/admin/church-health";
-import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
+import { FEATURES, parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
+import { automationTypesForFeature, featureForAutomationType } from "@/lib/automation-catalog";
 import {
   getTicketComments,
   type SupportTicketComment,
@@ -106,6 +107,7 @@ export type AdminActivityRow = {
 export type AdminActivityRange = "7d" | "30d" | "90d" | "all";
 
 export type AdminActivityFilters = {
+  feature?: FeatureKey;
   category?: string;
   type?: string;
   range?: AdminActivityRange;
@@ -119,7 +121,10 @@ export type AdminActivityResult = {
   page: number;
   pageSize: number;
   totalPages: number;
+  /** Time saved across every row matching the filters, not just this page. */
+  totalMinutes: number;
   filterOptions: {
+    features: { key: FeatureKey; label: string }[];
     types: string[];
     categories: string[];
   };
@@ -675,19 +680,24 @@ export async function getAdminChurchActivity(
     .eq("church_id", churchId)
     .order("executed_at", { ascending: false });
 
-  if (filters.category) {
-    query = query.eq("category", filters.category);
-  }
-  if (filters.type) {
-    query = query.eq("automation_type", filters.type);
-  }
-
+  const featureTypes = filters.feature ? automationTypesForFeature(filters.feature) : null;
   const rangeStart = activityRangeStart(filters.range ?? "all");
-  if (rangeStart) {
-    query = query.gte("executed_at", rangeStart);
-  }
+  if (featureTypes) query = query.in("automation_type", featureTypes.length ? featureTypes : ["__none__"]);
+  if (filters.category) query = query.eq("category", filters.category);
+  if (filters.type) query = query.eq("automation_type", filters.type);
+  if (rangeStart) query = query.gte("executed_at", rangeStart);
 
-  const [activityRes, optionRows] = await Promise.all([
+  // The time-saved total covers every row matching the same filters.
+  const minutesPage = (pageFrom: number, pageTo: number) => {
+    let q = admin.from("activity_log").select("time_saved_minutes").eq("church_id", churchId);
+    if (featureTypes) q = q.in("automation_type", featureTypes.length ? featureTypes : ["__none__"]);
+    if (filters.category) q = q.eq("category", filters.category);
+    if (filters.type) q = q.eq("automation_type", filters.type);
+    if (rangeStart) q = q.gte("executed_at", rangeStart);
+    return q.order("id").range(pageFrom, pageTo);
+  };
+
+  const [activityRes, optionRows, minuteRows] = await Promise.all([
     query.range(from, to),
     loadAllAdminPages<{ automation_type: string | null; category: string | null }>(
       "activity filter options",
@@ -695,19 +705,32 @@ export async function getAdminChurchActivity(
         .select("automation_type, category")
         .eq("church_id", churchId).order("id").range(pageFrom, pageTo),
     ),
+    loadAllAdminPages<{ time_saved_minutes: number | null }>("activity time saved", minutesPage),
   ]);
 
   if (activityRes.error || !Number.isSafeInteger(activityRes.count)) {
     throw new Error("admin church activity unavailable");
   }
 
-  const types = Array.from(
-    new Set(
-      optionRows
-        .map((row) => row.automation_type)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ).sort();
+  const presentTypes = new Set(
+    optionRows
+      .map((row) => row.automation_type)
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  const presentFeatures = new Set(
+    Array.from(presentTypes)
+      .map((type) => featureForAutomationType(type))
+      .filter((key): key is FeatureKey => Boolean(key)),
+  );
+  const features = FEATURES
+    .filter((feature) => presentFeatures.has(feature.key) || feature.key === filters.feature)
+    .map((feature) => ({ key: feature.key, label: feature.label }));
+
+  // With a feature chosen, only offer that feature's types.
+  const types = Array.from(presentTypes)
+    .filter((type) => !featureTypes || (featureTypes as string[]).includes(type))
+    .sort();
 
   const categories = Array.from(
     new Set(
@@ -716,6 +739,8 @@ export async function getAdminChurchActivity(
         .filter((value): value is string => Boolean(value)),
     ),
   ).sort();
+
+  const totalMinutes = minuteRows.reduce((sum, row) => sum + (row.time_saved_minutes ?? 0), 0);
 
   const total = activityRes.count as number;
 
@@ -732,7 +757,8 @@ export async function getAdminChurchActivity(
     page,
     pageSize,
     totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    filterOptions: { types, categories },
+    totalMinutes,
+    filterOptions: { features, types, categories },
   };
 }
 

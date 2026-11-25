@@ -74,6 +74,8 @@ type ChurchDetailTabsProps = {
   retellAgentsError: string | null;
   /** The church's own texting phone for follow-ups (never the key). */
   smsStatus: ChurchSmsStatus;
+  /** Billing tab body: a server component that loads its own data. */
+  billingPanel?: React.ReactNode;
 };
 
 function MemberAccessCell({
@@ -123,6 +125,7 @@ export function ChurchDetailTabs({
   retellAgents,
   retellAgentsError,
   smsStatus,
+  billingPanel,
 }: ChurchDetailTabsProps) {
   const openDomainRequests = domainRequests.filter((request) =>
     ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
@@ -148,6 +151,7 @@ export function ChurchDetailTabs({
         </TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
+        <TabsTrigger value="billing">Billing</TabsTrigger>
         <TabsTrigger value="activity">Activity</TabsTrigger>
         <TabsTrigger value="support">Support</TabsTrigger>
       </TabsList>
@@ -383,6 +387,8 @@ export function ChurchDetailTabs({
         <ChurchGivingPanel detail={detail} />
       </TabsContent>
 
+      <TabsContent value="billing">{billingPanel}</TabsContent>
+
       <TabsContent value="integrations" className="grid gap-4 md:grid-cols-2">
         <ChurchSmsPanel
           churchId={detail.church.id}
@@ -419,7 +425,9 @@ export function ChurchDetailTabs({
         <Card className="overflow-hidden">
           <ActivityFilters
             filterOptions={activity.filterOptions}
+            totalMinutes={activity.totalMinutes}
             current={{
+              feature: activityFilters.feature,
               category: activityFilters.category,
               type: activityFilters.type,
               range: activityFilters.range ?? "all",

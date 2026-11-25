@@ -4,6 +4,8 @@ import { RememberLastType } from "@/components/service-plans/remember-last-type"
 import { getChurchAuth } from "@/lib/auth/church";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 import { getPlan, listPeopleOptions, listTeams } from "@/lib/service-plans/queries";
+import { readAvailabilityForPeople } from "@/lib/groups/availability";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -23,10 +25,30 @@ export default async function PlanPage({ params }: PageProps) {
   if (!plan) notFound();
   if (plan.serviceTypeId !== serviceTypeId) redirect(`/dashboard/plans/${plan.serviceTypeId}/${plan.id}`);
 
-  const [people, teams] = await Promise.all([
+  const [peopleList, teams] = await Promise.all([
     listPeopleOptions(client, auth.churchId),
     listTeams(client, auth.churchId, plan.serviceTypeId),
   ]);
+
+  // What each person told their groups about when they can serve, shown while
+  // scheduling. Scoped to the signed-in staff member's church. Optional: if it
+  // can't be read, the plan still opens without it.
+  const availability = await readAvailabilityForPeople(
+    createAdminClient(),
+    auth.churchId,
+    peopleList.map((p) => p.id),
+  ).catch((error) => {
+    console.error("[plans] availability failed to load", error);
+    return new Map<string, { groupName: string; availability: string }[]>();
+  });
+  const people = peopleList.map((p) => {
+    const entries = availability.get(p.id);
+    if (!entries?.length) return p;
+    const text = entries.length === 1
+      ? entries[0].availability
+      : entries.map((e) => `${e.groupName}: ${e.availability}`).join(" · ");
+    return { ...p, availability: text };
+  });
 
   return (
     <>

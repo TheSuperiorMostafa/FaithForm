@@ -69,7 +69,7 @@ test("announcement credits use one trigger source per channel per announcement",
     ["announcement_publish:ann-1", "Publish Announcement", 5],
     ["announcement_app:ann-1", "Church App Updated", 8],
     ["announcement_facebook:ann-1", "Facebook Post about Announcement", 20],
-    ["announcement_email:ann-1", "Announcement Email", 20],
+    ["announcement_email:ann-1", "Announcement Email", 5],
     ["announcement_publish:ann-2", "Publish Announcement", 5],
   ]);
 });

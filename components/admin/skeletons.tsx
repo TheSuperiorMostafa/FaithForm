@@ -146,7 +146,7 @@ export function AdminChurchDetailSkeleton() {
 
       <div className="space-y-4">
         <div className="flex w-full gap-1 overflow-x-auto rounded-lg border border-border p-1 sm:w-auto sm:self-start">
-          {["Overview", "Profile", "AI", "Features", "Users", "Website", "Integrations", "Giving", "Activity", "Support"].map((tab) => (
+          {["Overview", "Profile", "AI", "Features", "Users", "Website", "Integrations", "Giving", "Billing", "Activity", "Support"].map((tab) => (
             <span key={tab} className="whitespace-nowrap rounded-md px-3 py-2 text-sm text-muted-foreground">
               {tab}
             </span>

@@ -36,7 +36,14 @@ function toInput(song: ImportPreviewSong): ImportSongInput {
     chartText: song.chartText,
     lyrics: song.lyrics,
     format: song.format,
+    attachToSongId: song.attachTo?.songId ?? null,
   };
+}
+
+/** Ticked to start: new songs, and files whose CCLI number matched a library song. */
+function startsTicked(song: ImportPreviewSong): boolean {
+  if (song.attachTo) return song.attachTo.reason === "ccli";
+  return !song.duplicate;
 }
 
 /** Pick files, review what was found, then save the songs kept. */
@@ -82,7 +89,7 @@ export function SongImporter() {
         ...result.files,
         ...tooBig.map((f) => ({ name: f.name, format: null, songCount: 0, warnings: ["This file is too large to read."] })),
       ]);
-      setKept(new Set(result.songs.filter((s) => !s.duplicate).map((s) => s.previewId)));
+      setKept(new Set(result.songs.filter(startsTicked).map((s) => s.previewId)));
     });
   };
 
@@ -103,7 +110,15 @@ export function SongImporter() {
         setError(result.error);
         return;
       }
-      toast.success(`Added ${result.added} ${result.added === 1 ? "song" : "songs"} to your song library.`);
+      const parts = [
+        result.added ? `added ${result.added} ${result.added === 1 ? "song" : "songs"}` : null,
+        result.attached
+          ? `added ${result.attached === 1 ? "a chart" : `${result.attached} charts`} to ${result.attached === 1 ? "a song" : "songs"} you already had`
+          : null,
+      ].filter(Boolean);
+      const message = `Done: ${parts.join(" and ")}.`;
+      if (result.filesUpdated) toast.success(message);
+      else toast.warning(`${message} Some chart PDFs couldn't be made; open the song and save it to try again.`);
       router.push("/dashboard/plans/songs");
     });
 
@@ -192,8 +207,9 @@ export function SongImporter() {
           </h2>
           <p className="text-[15px] text-muted-foreground">
             Found {songs.length} {songs.length === 1 ? "song" : "songs"} in {files.length}{" "}
-            {files.length === 1 ? "file" : "files"}. Untick any you don’t want. Songs already in your library start
-            unticked.
+            {files.length === 1 ? "file" : "files"}. Untick any you don’t want. A file with the same CCLI number as a
+            song you have adds its chart to that song. A match by title only starts unticked, so you can check it
+            first.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -246,11 +262,15 @@ export function SongImporter() {
                     <label htmlFor={inputId} className="cursor-pointer text-base font-semibold text-foreground">
                       {song.title}
                     </label>
-                    {song.duplicate && (
+                    {song.attachTo ? (
+                      <StatusBadge tone={song.attachTo.reason === "ccli" ? "ready" : "attention"}>
+                        {song.attachTo.reason === "ccli" ? "Adds chart to your song" : "Check: same title"}
+                      </StatusBadge>
+                    ) : song.duplicate ? (
                       <StatusBadge tone="attention">
                         {song.duplicate.inFile ? "Also in this upload" : "Already in your library"}
                       </StatusBadge>
-                    )}
+                    ) : null}
                   </div>
                   <p id={`${inputId}-details`} className="text-[15px] text-muted-foreground">
                     {[
@@ -265,7 +285,23 @@ export function SongImporter() {
                       .filter(Boolean)
                       .join(" · ")}
                   </p>
-                  {song.duplicate && !song.duplicate.inFile && song.duplicate.songId && (
+                  {song.attachTo && (
+                    <p className="text-sm text-muted-foreground">
+                      {song.attachTo.reason === "ccli" ? "Same CCLI number as " : "Same title as "}
+                      <Link
+                        href={`/dashboard/plans/songs/${song.attachTo.songId}`}
+                        className="font-semibold text-primary underline underline-offset-4 dark:text-accent"
+                        target="_blank"
+                      >
+                        {song.attachTo.title}
+                      </Link>{" "}
+                      in your library.{" "}
+                      {song.attachTo.reason === "ccli"
+                        ? "Its chart and lyrics are added to that song; a chart it already has is kept."
+                        : "Tick it only if this file is that song. Its chart is added; a chart it already has is kept."}
+                    </p>
+                  )}
+                  {!song.attachTo && song.duplicate && !song.duplicate.inFile && song.duplicate.songId && (
                     <p className="text-sm text-muted-foreground">
                       Matches{" "}
                       <Link
@@ -309,7 +345,9 @@ export function SongImporter() {
             ? "Saving…"
             : keptSongs.length === 0
               ? "Save songs"
-              : `Save ${keptSongs.length} ${keptSongs.length === 1 ? "song" : "songs"}`}
+              : keptSongs.every((s) => s.attachTo)
+                ? `Add ${keptSongs.length} ${keptSongs.length === 1 ? "chart" : "charts"}`
+                : `Save ${keptSongs.length} ${keptSongs.length === 1 ? "song" : "songs"}`}
         </Button>
       </div>
     </section>

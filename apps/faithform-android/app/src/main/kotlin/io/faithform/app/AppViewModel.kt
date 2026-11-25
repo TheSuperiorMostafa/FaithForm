@@ -907,23 +907,6 @@ class AppViewModel(
         }
     }
 
-    /**
-     * Holds an invitation for after sign-in and names the church on the front
-     * door. Same path a deep link takes when the person is signed out.
-     */
-    fun holdInvitationLink(raw: String, onDone: (ok: Boolean) -> Unit) {
-        viewModelScope.launch {
-            val token = normalizeInvitation(raw)
-            if (token.length < 16 || token.length > 512) {
-                onDone(false)
-                return@launch
-            }
-            _pendingInvitationToken.value = token
-            resolveChurchContextFromInvitation(token)
-            onDone(true)
-        }
-    }
-
     fun normalizeInvitation(raw: String): String {
         val trimmed = raw.trim()
         InvitationLink.token(trimmed)?.let { return it }

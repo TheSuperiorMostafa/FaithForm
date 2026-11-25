@@ -59,10 +59,11 @@ export function Members({ groupId, groupName, capacity, memberCount, members, ar
     {members.length > 0 && <p className="text-[15px] text-muted-foreground">{peopleCount(members.length)} · {onApp} on the app{capacity !== null && ` · ${Math.max(0, capacity - memberCount)} spots left`}</p>}
     {error && <Notice>{error}</Notice>}
     {filtered.length ? <div className="g-panel g-table-wrap"><table className="g-table">
-      <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Recent meetings</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
+      <thead><tr><th scope="col">Person</th><th scope="col">Role</th><th scope="col">Availability</th><th scope="col">Recent meetings</th><th scope="col"><span className="sr-only">Remove</span></th></tr></thead>
       <tbody>{filtered.map(m => <tr key={m.membershipId}>
-        <td><div className="flex items-center gap-3"><Avatar name={m.name} /><div><div className="g-row-title">{m.name}</div><p className="g-row-sub">Joined {date(m.joinedAt)} · {m.hasApp ? "On the app" : "Not on the app yet"}</p>{m.availability && <p className="g-row-sub whitespace-pre-wrap">Availability: {m.availability}</p>}</div></div></td>
+        <td><div className="flex items-center gap-3"><Avatar name={m.name} /><div><div className="g-row-title">{m.name}</div><p className="g-row-sub">Joined {date(m.joinedAt)} · {m.hasApp ? "On the app" : "Not on the app yet"}</p></div></div></td>
         <td><select aria-label={`Role for ${m.name}`} title={ROLE_HINTS[m.role]} value={m.role} disabled={pending || archived} onChange={e => void changeRole(m, e.target.value as GroupRole)} className="g-role-select"><option value="member">Member</option><option value={m.role === "manager" ? "manager" : "leader"}>Leader</option></select></td>
+        <td className="g-availability"><MemberAvailability text={m.availability} /></td>
         <td className="whitespace-nowrap text-muted-foreground">{m.recentGatherings ? `Came to ${m.attendedRecent} of ${m.recentGatherings}` : "No attendance yet"}</td>
         <td className="text-right">{!archived && <Button variant="ghost" disabled={pending} onClick={() => setRemoving(m)} aria-label={`Remove ${m.name} from ${groupName}`}><X className="size-5" aria-hidden />Remove</Button>}</td>
       </tr>)}</tbody>
@@ -79,6 +80,14 @@ export function Members({ groupId, groupName, capacity, memberCount, members, ar
       <div className="g-form-actions"><Button type="button" variant="ghost" onClick={() => setRemoving(null)}>Go back</Button><Button type="submit" variant="destructive" disabled={pending}>Remove {removing.name}</Button></div>
     </form>}</Modal>
   </div>;
+}
+
+/** What the person said in the app about when they can serve, or a plain note that they haven't. */
+export function MemberAvailability({ text }: { text: string | null | undefined }) {
+  const value = text?.trim() ?? "";
+  return value
+    ? <p className="whitespace-pre-wrap break-words text-[15px] text-foreground">{value}</p>
+    : <p className="text-[15px] text-muted-foreground">No availability given</p>;
 }
 
 function AddPeople({ groupId, groupName, capacity, memberCount, close }: { groupId: string; groupName: string; capacity: number | null; memberCount: number; close: () => void }) {

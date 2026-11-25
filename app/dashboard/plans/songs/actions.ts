@@ -6,6 +6,8 @@ import { toUserError, UserFacingError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import { assertId, cleanText, isUniqueViolation, NOT_FOUND, requireText } from "@/lib/service-plans/server";
 import { normalizeCcli, normalizeKey, normalizeTempo, parseSongFile } from "@/lib/service-plans/songs/parsers";
+import { matchLibrarySong, type CatalogSong } from "@/lib/service-plans/songs/catalog";
+import { contributeAndLink, getCatalogSong, linkSongToCatalog, searchCatalog } from "@/lib/service-plans/songs/catalog-server";
 import { mapSongAttachment, songIdentities } from "@/lib/service-plans/songs/queries";
 import { songSource } from "@/lib/service-plans/songs/source";
 import { STARTER_HYMNS } from "@/lib/service-plans/songs/starter-hymns";
@@ -142,16 +144,20 @@ function arrangementRow(input: ArrangementInput) {
   };
 }
 
-async function assertSong(admin: Admin, churchId: string, songId: unknown): Promise<{ id: string; title: string }> {
+async function assertSong(
+  admin: Admin,
+  churchId: string,
+  songId: unknown,
+): Promise<{ id: string; title: string; ccliNumber: string | null }> {
   const { data, error } = await admin
     .from("songs")
-    .select("id, title")
+    .select("id, title, ccli_number")
     .eq("church_id", churchId)
     .eq("id", assertId(songId))
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new UserFacingError(NOT_FOUND);
-  return { id: data.id as string, title: data.title as string };
+  return { id: data.id as string, title: data.title as string, ccliNumber: (data.ccli_number as string | null) ?? null };
 }
 
 async function assertArrangement(
@@ -193,6 +199,15 @@ export async function createSongAction(input: SongInput): Promise<Ok<{ id: strin
       bpm: row.tempo,
     });
     if (arrangementError) throw arrangementError;
+    await contributeAndLink(admin, auth.churchId, {
+      id: songId,
+      ccliNumber: row.ccli_number,
+      title: row.title,
+      author: row.author,
+      copyright: row.copyright,
+      defaultKey: row.default_key,
+      tempo: row.tempo,
+    });
     revalidateSongs();
     return { ok: true, id: songId };
   } catch (error) {
@@ -204,12 +219,27 @@ export async function updateSongAction(songId: string, input: SongInput): Promis
   try {
     const { auth, admin } = await planner();
     const song = await assertSong(admin, auth.churchId, songId);
+    const row = songRow(input);
     const { error } = await admin
       .from("songs")
-      .update(songRow(input))
+      .update(row)
       .eq("church_id", auth.churchId)
       .eq("id", song.id);
     if (error) throw error;
+    if (row.ccli_number && row.ccli_number !== song.ccliNumber) {
+      await contributeAndLink(admin, auth.churchId, {
+        id: song.id,
+        ccliNumber: row.ccli_number,
+        title: row.title,
+        author: row.author,
+        copyright: row.copyright,
+        defaultKey: row.default_key,
+        tempo: row.tempo,
+      });
+    } else if (!row.ccli_number && song.ccliNumber) {
+      // A cleared CCLI number no longer points at that catalog song.
+      await linkSongToCatalog(admin, auth.churchId, song.id, null);
+    }
     revalidateSongs(song.id);
     return { ok: true };
   } catch (error) {
@@ -509,6 +539,100 @@ export async function searchSongsAction(query: string): Promise<Ok<{ songs: Song
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared catalog
+// ---------------------------------------------------------------------------
+
+export type CatalogResult = CatalogSong & {
+  /** The church's own copy, when it already has this song. */
+  librarySongId: string | null;
+};
+
+/** Searches the shared catalog by title, writer or CCLI number. Facts only. */
+export async function searchCatalogAction(query: string): Promise<Ok<{ songs: CatalogResult[] }> | Fail> {
+  try {
+    const { auth, admin } = await planner();
+    const found = await searchCatalog(admin, query, 20);
+    if (!found.length) return { ok: true, songs: [] };
+    const library = await songIdentities(admin, auth.churchId);
+    const byCcli = new Map(library.filter((s) => s.ccliNumber).map((s) => [s.ccliNumber!, s.id]));
+    return {
+      ok: true,
+      songs: found.map((song) => ({ ...song, librarySongId: song.ccliNumber ? (byCcli.get(song.ccliNumber) ?? null) : null })),
+    };
+  } catch (error) {
+    return failed(error, "We couldn't search the song catalog.");
+  }
+}
+
+/**
+ * Adds a catalog song to the church's library with the catalog's facts and
+ * CCLI number, linked back to it. No lyrics come from the catalog, except a
+ * verified public-domain text, which becomes the church's own editable copy.
+ * When the church already has the song (same CCLI number), returns that one.
+ */
+export async function addSongFromCatalogAction(
+  catalogId: string,
+): Promise<Ok<{ id: string; existing: boolean }> | Fail> {
+  try {
+    const { auth, admin } = await planner();
+    const found = await getCatalogSong(admin, assertId(catalogId));
+    if (!found) throw new UserFacingError("That song isn't in the catalog any more. Search again.");
+    const { song, publicDomainText } = found;
+    if (song.ccliNumber) {
+      const library = await songIdentities(admin, auth.churchId);
+      const existing = library.find((s) => s.ccliNumber === song.ccliNumber);
+      if (existing) return { ok: true, id: existing.id, existing: true };
+    }
+    const row = songRow({
+      title: song.title,
+      author: song.author,
+      ccliNumber: song.ccliNumber,
+      copyright: song.copyright,
+      defaultKey: song.defaultKey,
+      tempo: song.tempo,
+    });
+    const { data, error } = await admin
+      .from("songs")
+      .insert({ ...row, themes: cleanList(song.themes, 20, 40), church_id: auth.churchId, source: "catalog" })
+      .select("id")
+      .single();
+    if (error) throw error;
+    const songId = data.id as string;
+    const { data: arrangement, error: arrangementError } = await admin
+      .from("song_arrangements")
+      .insert({
+        church_id: auth.churchId,
+        song_id: songId,
+        name: "Default",
+        key: row.default_key,
+        bpm: row.tempo,
+        lyrics: publicDomainText ? cleanLong(publicDomainText.lyrics, "lyrics") : null,
+        section_order: publicDomainText ? cleanList(publicDomainText.sectionOrder, 50, 40) : [],
+      })
+      .select("id")
+      .single();
+    if (arrangementError) {
+      await admin.from("songs").delete().eq("church_id", auth.churchId).eq("id", songId);
+      throw arrangementError;
+    }
+    await linkSongToCatalog(admin, auth.churchId, songId, song.id);
+    if (publicDomainText) {
+      const lyrics = cleanLong(publicDomainText.lyrics, "lyrics");
+      await refreshSongPdfs(
+        admin,
+        auth.churchId,
+        { id: arrangement.id as string, songId },
+        arrangementRow({ name: "Default", key: row.default_key, bpm: row.tempo, lyrics }),
+      );
+    }
+    revalidateSongs();
+    return { ok: true, id: songId, existing: false };
+  } catch (error) {
+    return failed(error, "We couldn't add that song.");
+  }
+}
+
 export async function seedStarterHymnsAction(): Promise<Ok<{ added: number }> | Fail> {
   try {
     const { auth, admin } = await planner();
@@ -575,8 +699,6 @@ export async function importPreviewAction(
     if (files.length > MAX_FILES) throw new UserFacingError(`Choose up to ${MAX_FILES} files at a time.`);
 
     const library = await songIdentities(admin, auth.churchId);
-    const byCcli = new Map(library.filter((s) => s.ccliNumber).map((s) => [s.ccliNumber!, s]));
-    const byTitle = new Map(library.map((s) => [s.title.toLowerCase(), s]));
     const seenCcli = new Map<string, string>();
     const seenTitle = new Map<string, string>();
 
@@ -599,15 +721,11 @@ export async function importPreviewAction(
       summaries.push({ name, format: result.format, songCount: parsed.length, warnings });
       parsed.forEach((song, i) => {
         const titleKey = song.title.toLowerCase();
-        const libraryMatch = (song.ccliNumber && byCcli.get(song.ccliNumber)) || byTitle.get(titleKey);
+        // By CCLI number first, then by title (which the church confirms).
+        const libraryMatch = matchLibrarySong(song, library);
         let duplicate: ImportPreviewSong["duplicate"] = null;
         if (libraryMatch) {
-          duplicate = {
-            songId: libraryMatch.id,
-            title: libraryMatch.title,
-            reason: song.ccliNumber && libraryMatch.ccliNumber === song.ccliNumber ? "ccli" : "title",
-            inFile: false,
-          };
+          duplicate = { songId: libraryMatch.songId, title: libraryMatch.title, reason: libraryMatch.reason, inFile: false };
         } else if (song.ccliNumber && seenCcli.has(song.ccliNumber)) {
           duplicate = { songId: null, title: seenCcli.get(song.ccliNumber)!, reason: "ccli", inFile: true };
         } else if (seenTitle.has(titleKey)) {
@@ -621,6 +739,10 @@ export async function importPreviewAction(
           fileName: name,
           format: result.format!,
           duplicate,
+          attachTo:
+            libraryMatch && (song.chartText || song.lyrics)
+              ? { songId: libraryMatch.songId, title: libraryMatch.title, reason: libraryMatch.reason }
+              : null,
         });
       });
     }
@@ -631,13 +753,30 @@ export async function importPreviewAction(
 }
 
 /** Saves the songs kept in the review, each with a first arrangement. */
-export async function importSaveAction(input: ImportSongInput[]): Promise<Ok<{ added: number }> | Fail> {
+export async function importSaveAction(
+  input: ImportSongInput[],
+): Promise<Ok<{ added: number; attached: number; filesUpdated: boolean }> | Fail> {
   try {
     const { auth, admin } = await planner();
     if (!Array.isArray(input) || !input.length) throw new UserFacingError("Choose at least one song to save.");
     if (input.length > MAX_IMPORT_SONGS) throw new UserFacingError(`Save up to ${MAX_IMPORT_SONGS} songs at a time.`);
 
-    const rows = input.flatMap((song) => {
+    // Files that belong to a song already in the library add their chart there.
+    const attaching = input.filter((song) => song && typeof song.attachToSongId === "string" && song.attachToSongId);
+    const adding = input.filter((song) => !attaching.includes(song));
+    let attached = 0;
+    let filesUpdated = true;
+    for (const song of attaching) {
+      const result = await attachImportedChart(admin, auth.churchId, song);
+      attached += 1;
+      if (!result.filesUpdated) filesUpdated = false;
+    }
+    if (!adding.length) {
+      revalidateSongs();
+      return { ok: true, added: 0, attached, filesUpdated };
+    }
+
+    const rows = adding.flatMap((song) => {
       const title = cleanText(song?.title, 200);
       if (!title) return [];
       // The review already showed these warnings; here they only drop bad values.
@@ -693,11 +832,110 @@ export async function importSaveAction(input: ImportSongInput[]): Promise<Ok<{ a
       }
       throw error;
     }
+    for (const { song } of rows) {
+      if (!song.ccli_number) continue;
+      await contributeAndLink(admin, auth.churchId, {
+        id: song.id,
+        ccliNumber: song.ccli_number,
+        title: song.title,
+        author: song.author,
+        copyright: song.copyright,
+        defaultKey: song.default_key,
+        tempo: song.tempo,
+        themes: song.themes,
+      });
+    }
     revalidateSongs();
-    return { ok: true, added: rows.length };
+    return { ok: true, added: rows.length, attached, filesUpdated };
   } catch (error) {
-    return failed(error, "We couldn't save those songs. Nothing was added.");
+    return failed(error, "We couldn't save those songs. Nothing new was added.");
   }
+}
+
+/**
+ * Puts an imported file's chart and lyrics on a song already in the library:
+ * into its first arrangement when that has no chart or lyrics yet (a song
+ * just added from the catalog), otherwise into a new "Imported chart"
+ * arrangement, so a chart the church already has is never overwritten.
+ * Blank song facts (writers, copyright, CCLI number) are filled from the file.
+ */
+async function attachImportedChart(admin: Admin, churchId: string, input: ImportSongInput): Promise<SongPdfResult> {
+  const song = await assertSong(admin, churchId, input.attachToSongId);
+  const ignored: string[] = [];
+  const key = normalizeKey(typeof input.key === "string" ? input.key : null, ignored);
+  const tempo = normalizeTempo(typeof input.tempo === "number" ? input.tempo : null, ignored);
+  const chartText = cleanLong(input.chartText, "chord chart");
+  const lyrics = cleanLong(input.lyrics, "lyrics");
+  if (!chartText && !lyrics) throw new UserFacingError(`The file for “${song.title}” has no chart or lyrics to add.`);
+
+  const { data: arrangements, error } = await admin
+    .from("song_arrangements")
+    .select("id, name, key, bpm, section_order, chart_text, lyrics, length_seconds")
+    .eq("church_id", churchId)
+    .eq("song_id", song.id)
+    .order("sort_order")
+    .order("created_at");
+  if (error) throw error;
+  const list = arrangements ?? [];
+  const empty = list.find((a) => !a.chart_text && !a.lyrics);
+  const sectionOrder = cleanList(input.sectionOrder, 50, 40);
+
+  let target: { id: string; songId: string };
+  let row: ReturnType<typeof arrangementRow>;
+  if (empty) {
+    const existingOrder = Array.isArray(empty.section_order) ? (empty.section_order as string[]) : [];
+    row = arrangementRow({
+      name: empty.name as string,
+      key: (empty.key as string | null) ?? key,
+      bpm: (empty.bpm as number | null) ?? tempo,
+      lengthSeconds: (empty.length_seconds as number | null) ?? null,
+      sectionOrder: existingOrder.length ? existingOrder : sectionOrder,
+      chartText,
+      lyrics,
+    });
+    const { error: updateError } = await admin
+      .from("song_arrangements")
+      .update(row)
+      .eq("church_id", churchId)
+      .eq("id", empty.id as string);
+    if (updateError) throw updateError;
+    target = { id: empty.id as string, songId: song.id };
+  } else {
+    const names = new Set(list.map((a) => (a.name as string).toLowerCase()));
+    let name = "Imported chart";
+    for (let n = 2; names.has(name.toLowerCase()); n += 1) name = `Imported chart ${n}`;
+    row = arrangementRow({ name, key, bpm: tempo, sectionOrder, chartText, lyrics });
+    const { data, error: insertError } = await admin
+      .from("song_arrangements")
+      .insert({ ...row, church_id: churchId, song_id: song.id, sort_order: list.length })
+      .select("id")
+      .single();
+    if (insertError) throw insertError;
+    target = { id: data.id as string, songId: song.id };
+  }
+
+  const { data: facts, error: factsError } = await admin
+    .from("songs")
+    .select("author, copyright, ccli_number")
+    .eq("church_id", churchId)
+    .eq("id", song.id)
+    .maybeSingle();
+  if (factsError) throw factsError;
+  const fill: Record<string, string> = {};
+  const author = cleanText(input.author, 300);
+  const copyright = cleanText(input.copyright, 500);
+  const ccli = normalizeCcli(typeof input.ccliNumber === "string" ? input.ccliNumber : null, ignored);
+  if (!facts?.author && author) fill.author = author;
+  if (!facts?.copyright && copyright) fill.copyright = copyright;
+  if (!facts?.ccli_number && ccli) fill.ccli_number = ccli;
+  if (Object.keys(fill).length) {
+    const { error: fillError } = await admin.from("songs").update(fill).eq("church_id", churchId).eq("id", song.id);
+    if (fillError) throw fillError;
+  }
+
+  const files = await refreshSongPdfs(admin, churchId, target, row);
+  revalidateSongs(song.id);
+  return files;
 }
 
 // ---------------------------------------------------------------------------

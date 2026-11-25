@@ -3,7 +3,7 @@
  * screens' song picker. Database rows are mapped into these in `queries.ts`.
  */
 
-export const SONG_SOURCES = ["manual", "chordpro", "onsong", "songselect", "csv", "starter"] as const;
+export const SONG_SOURCES = ["manual", "chordpro", "onsong", "songselect", "csv", "starter", "catalog"] as const;
 export type SongSourceKind = (typeof SONG_SOURCES)[number];
 
 export const SONG_FILE_FORMATS = ["chordpro", "onsong", "songselect", "csv"] as const;
@@ -144,9 +144,18 @@ export type ImportPreviewSong = ParsedSong & {
   fileName: string;
   format: SongFileFormat;
   duplicate: { songId: string | null; title: string; reason: "ccli" | "title"; inFile: boolean } | null;
+  /**
+   * The file matches a song already in the library and has a chart or lyrics:
+   * saving it adds them to that song instead of making a second copy. Ticked
+   * to start when the CCLI number matched; a title-only match waits for the
+   * church to confirm.
+   */
+  attachTo: { songId: string; title: string; reason: "ccli" | "title" } | null;
 };
 
 /** What the review step sends back to be saved. */
 export type ImportSongInput = Omit<ParsedSong, "warnings" | "sections"> & {
   format: SongFileFormat;
+  /** Add the chart and lyrics to this library song instead of adding a new one. */
+  attachToSongId?: string | null;
 };

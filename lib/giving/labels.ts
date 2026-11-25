@@ -1,6 +1,7 @@
 import type { StatusTone } from "@/components/ui/status-badge";
 import type {
   DonationStatus,
+  GiftMethod,
   GiftType,
   GivingDonationRow,
   StripeOnboardingStatus,
@@ -47,6 +48,37 @@ export function giftTypeLabel(type: GiftType | string | null | undefined): strin
   if (type === "recurring") return "Recurring";
   if (type === "one_time") return "One-time";
   return "Gift";
+}
+
+export function giftMethodLabel(method: GiftMethod): string {
+  switch (method) {
+    case "online":
+      return "Online";
+    case "cash":
+      return "Cash";
+    case "check":
+      return "Check";
+    default:
+      return "Other";
+  }
+}
+
+/** The method filter's options. "Other" is an offline gift that wasn't cash or check. */
+export const GIFT_METHOD_FILTERS: { value: GiftMethod; label: string }[] = [
+  { value: "online", label: "Online" },
+  { value: "cash", label: "Cash" },
+  { value: "check", label: "Check" },
+  { value: "other", label: "Other" },
+];
+
+export function parseGiftMethod(value: string | null | undefined): GiftMethod | undefined {
+  return GIFT_METHOD_FILTERS.some((option) => option.value === value) ? (value as GiftMethod) : undefined;
+}
+
+/** A gift's method from its stored source and payment method (see migration 0144). */
+export function giftMethodFromRow(source: unknown, paymentMethod: unknown): GiftMethod {
+  if (source !== "offline") return "online";
+  return paymentMethod === "cash" || paymentMethod === "check" ? paymentMethod : "other";
 }
 
 /** Only a received gift can be refunded; the refund route refuses the rest. */

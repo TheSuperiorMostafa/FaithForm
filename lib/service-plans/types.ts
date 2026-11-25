@@ -231,4 +231,6 @@ export type PersonOption = {
   id: string;
   name: string;
   photoUrl: string | null;
+  /** When they said they can serve, from their groups in the member app; absent when none given. */
+  availability?: string;
 };

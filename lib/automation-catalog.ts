@@ -1,3 +1,5 @@
+import type { FeatureKey } from "@/lib/features/catalog";
+
 export type AutomationCategory =
   | "Calendar"
   | "Communication"
@@ -28,7 +30,7 @@ export const AUTOMATION_CATALOG = {
   "Announcement Email": {
     category: "Communication",
     taskId: "ANN",
-    minutes: 20,
+    minutes: 5,
   },
   "Publish Announcement": {
     category: "Communication",
@@ -126,6 +128,50 @@ export const AUTOMATION_CATALOG = {
 } as const satisfies Record<string, AutomationEntry>;
 
 export type AutomationType = keyof typeof AUTOMATION_CATALOG;
+
+/**
+ * The product feature (lib/features/catalog.ts) each credit comes from, so the
+ * admin Activity tab can filter by feature. Image Generation is credited from
+ * Events graphics and the image chat; both sit under Events.
+ */
+export const AUTOMATION_FEATURE = {
+  "Attendance Follow-up Text": "attendance_follow_up",
+  "Church App Updated": "announcements",
+  "Update Church Calendar": "announcements",
+  "Announcement Email": "announcements",
+  "Publish Announcement": "announcements",
+  "Phone Call + Duration of Call": "voice_assistant",
+  "Rental Booked": "voice_assistant",
+  "Help is Asked About": "voice_assistant",
+  "Facebook Post about Announcement": "announcements",
+  "Monthly Attendance Report": "library",
+  "Quarterly Attendance Report": "library",
+  "Track Weekly Attendance": "attendance",
+  "Missed 4 weeks in a row notification": "attendance",
+  "Missed 2 weeks in a row notification": "attendance",
+  "Personalized Pastoral Follow-up": "attendance_follow_up",
+  "Annual Attendance Report": "library",
+  "Sermon Created": "sermon_builder",
+  "Sermon Outline Generated": "sermon_builder",
+  "Sermon Draft Generated": "sermon_builder",
+  "Sermon Published": "sermon_builder",
+  "Discussion Questions Generated": "sermon_builder",
+  "Sermon PDF Exported": "sermon_builder",
+  "Sermon PPTX Exported": "sermon_builder",
+  "Sermon Series Created": "sermon_builder",
+  "Image Generation": "announcements",
+} as const satisfies Record<AutomationType, FeatureKey>;
+
+/** Activity types credited by a feature. */
+export function automationTypesForFeature(feature: FeatureKey): AutomationType[] {
+  return (Object.keys(AUTOMATION_FEATURE) as AutomationType[]).filter(
+    (type) => AUTOMATION_FEATURE[type] === feature,
+  );
+}
+
+export function featureForAutomationType(type: string): FeatureKey | null {
+  return AUTOMATION_FEATURE[type as AutomationType] ?? null;
+}
 
 /** Types credited by operational-table derivation (excluded from activity_log extras). */
 export const DERIVED_AUTOMATION_TYPES = new Set<string>([

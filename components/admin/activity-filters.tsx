@@ -2,7 +2,9 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import type { FeatureKey } from "@/lib/features/catalog";
 import type { AdminActivityRange } from "@/lib/queries/admin";
+import { formatHours } from "@/components/admin/format";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 
@@ -15,10 +17,14 @@ const ranges: { value: AdminActivityRange; label: string }[] = [
 
 type ActivityFiltersProps = {
   filterOptions: {
+    features: { key: FeatureKey; label: string }[];
     types: string[];
     categories: string[];
   };
+  /** Time saved across everything matching the filters. */
+  totalMinutes: number;
   current: {
+    feature?: FeatureKey;
     category?: string;
     type?: string;
     range: AdminActivityRange;
@@ -26,7 +32,7 @@ type ActivityFiltersProps = {
   };
 };
 
-export function ActivityFilters({ filterOptions, current }: ActivityFiltersProps) {
+export function ActivityFilters({ filterOptions, totalMinutes, current }: ActivityFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -47,6 +53,7 @@ export function ActivityFilters({ filterOptions, current }: ActivityFiltersProps
   };
 
   const hasFilters =
+    Boolean(current.feature) ||
     Boolean(current.category) ||
     Boolean(current.type) ||
     current.range !== "all" ||
@@ -55,7 +62,31 @@ export function ActivityFilters({ filterOptions, current }: ActivityFiltersProps
   return (
     <div className="flex flex-col gap-3 border-b border-border p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="space-y-1.5">
+            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Feature
+            </span>
+            <Select
+              value={current.feature ?? ""}
+              onChange={(event) =>
+                updateParams({
+                  feature: event.target.value || null,
+                  // A type from another feature would match nothing.
+                  type: null,
+                })
+              }
+              aria-label="Filter by feature"
+            >
+              <option value="">All features</option>
+              {filterOptions.features.map((feature) => (
+                <option key={feature.key} value={feature.key}>
+                  {feature.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+
           <label className="space-y-1.5">
             <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Category
@@ -101,26 +132,36 @@ export function ActivityFilters({ filterOptions, current }: ActivityFiltersProps
           </label>
         </div>
 
-        <div
-          className="inline-flex rounded-full border border-border/80 bg-background/70 p-1 shadow-sm"
-          role="group"
-          aria-label="Activity time range"
-        >
-          {ranges.map(({ value, label }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => updateParams({ range: value === "all" ? null : value })}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
-                current.range === value
-                  ? "bg-accent text-accent-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {label}
-            </button>
-          ))}
+        <div className="flex flex-col items-start gap-2 lg:items-end">
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            <span className="font-heading text-2xl font-bold text-foreground">
+              {formatHours(totalMinutes / 60)} hr
+            </span>{" "}
+            saved
+            <span className="sr-only"> for the selected filters</span>
+          </p>
+          <div
+            className="inline-flex rounded-full border border-border/80 bg-background/70 p-1 shadow-sm"
+            role="group"
+            aria-label="Activity time range"
+          >
+            {ranges.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={current.range === value}
+                onClick={() => updateParams({ range: value === "all" ? null : value })}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+                  current.range === value
+                    ? "bg-accent text-accent-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -130,7 +171,9 @@ export function ActivityFilters({ filterOptions, current }: ActivityFiltersProps
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => router.replace("?", { scroll: false })}
+            onClick={() =>
+              updateParams({ feature: null, category: null, type: null, range: null, page: null })
+            }
           >
             Clear filters
           </Button>

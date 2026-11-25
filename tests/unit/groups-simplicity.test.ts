@@ -259,3 +259,13 @@ test("switching Groups tabs keeps the header and links on screen", () => {
   const body = skeleton.slice(skeleton.indexOf("export function GroupsSectionBodySkeleton"), skeleton.indexOf("function SectionBody"));
   assert.doesNotMatch(body, /PageHeader|GroupsNav/, "the content skeleton must not redraw the header");
 });
+
+test("the members table shows each person's availability, with a plain empty state, and its loading state matches", () => {
+  const people = read("components/groups/people.tsx");
+  const skeletons = read("components/groups/skeletons.tsx");
+  const header = '<th scope="col">Role</th><th scope="col">Availability</th><th scope="col">Recent meetings</th>';
+  assert.ok(people.includes(header), "members table has an Availability column");
+  assert.ok(skeletons.includes(header), "members skeleton has the same columns");
+  assert.match(people, /<MemberAvailability text=\{m\.availability\} \/>/);
+  assert.match(people, /No availability given/);
+});

@@ -6,9 +6,17 @@ import { Resend } from "resend";
 import { renderEmail } from "@/lib/email/layout";
 import { resolveFromAddress } from "@/lib/email/sender";
 import { getPlan } from "@/lib/service-plans/queries";
+import { chartHasContent, lyricsFromChart, lyricsHaveContent } from "@/lib/service-plans/songs/chart";
 import { formatPlanDate } from "@/lib/service-plans/timing";
-import { NOTE_CATEGORIES, sharedPreset, type NoteCategory, type Plan, type SharePreset } from "@/lib/service-plans/types";
-import { presetDefaults, type PlanViewOptions } from "@/lib/service-plans/view";
+import {
+  NOTE_CATEGORIES,
+  sharedPreset,
+  type NoteCategory,
+  type Plan,
+  type PlanItem,
+  type SharePreset,
+} from "@/lib/service-plans/types";
+import { presetDefaults, type PlanView, type PlanViewOptions } from "@/lib/service-plans/view";
 import { absoluteAppPath } from "@/lib/site-url";
 import { sendSms } from "@/lib/sms/send-sms";
 import type { ChurchSmsSender } from "@/lib/sms/church-sender";
@@ -118,6 +126,115 @@ export async function recordView(admin: SupabaseClient, share: ShareRow): Promis
 }
 
 // ---------------------------------------------------------------------------
+// Songs on a share link
+// ---------------------------------------------------------------------------
+//
+// A link that shows files (every preset but Order only) also shows the chord
+// chart and lyrics of each song on the rows its view shows, read from the
+// arrangement the plan chose (or the song's first one). Same rule as files:
+// only what this link's own view lists, only this plan's church.
+
+/** One song as a share link shows it. */
+export type SharedSong = {
+  itemId: string;
+  title: string;
+  author: string | null;
+  ccliNumber: string | null;
+  copyright: string | null;
+  arrangementName: string | null;
+  /** The key the chart is written in. */
+  chartKey: string | null;
+  /** The key the plan lists for this item, when it is set. */
+  planKey: string | null;
+  bpm: number | null;
+  chart: string | null;
+  lyrics: string | null;
+};
+
+/** Song items on the rows this view shows; none for Order only. */
+export function sharedSongItems(plan: Plan, view: PlanView): (PlanItem & { song: NonNullable<PlanItem["song"]> })[] {
+  if (view.options.preset === "order") return [];
+  const shown = new Set(view.rows.map((r) => r.id));
+  return plan.items.filter(
+    (item): item is PlanItem & { song: NonNullable<PlanItem["song"]> } =>
+      item.itemType !== "header" && item.song !== null && shown.has(item.id),
+  );
+}
+
+/** Whether a link with this preset shows files, charts and lyrics. */
+export function shareShowsMaterials(preset: SharePreset): boolean {
+  return sharedPreset(preset) !== "order";
+}
+
+/** Whether the plan has anything a recipient could open: files or songs. */
+export function planHasMaterials(plan: Pick<Plan, "files" | "items">): boolean {
+  return (plan.files?.length ?? 0) > 0 || plan.items.some((i) => i.song !== null);
+}
+
+/**
+ * Charts and lyrics for the songs a share link's view shows, with the
+ * service role, scoped to the share's church. `onlyItemId` narrows to one.
+ */
+export async function loadSharedSongs(
+  admin: SupabaseClient,
+  share: Pick<ShareRow, "church_id">,
+  plan: Plan,
+  view: PlanView,
+  onlyItemId?: string,
+): Promise<SharedSong[]> {
+  const items = sharedSongItems(plan, view).filter((i) => !onlyItemId || i.id === onlyItemId);
+  if (!items.length) return [];
+  const songIds = [...new Set(items.map((i) => i.song.songId))];
+  const [songs, arrangements] = await Promise.all([
+    admin
+      .from("songs")
+      .select("id, title, author, ccli_number, copyright")
+      .eq("church_id", share.church_id)
+      .in("id", songIds),
+    admin
+      .from("song_arrangements")
+      .select("id, song_id, name, key, bpm, chart_text, lyrics, sort_order, created_at")
+      .eq("church_id", share.church_id)
+      .in("song_id", songIds)
+      .order("sort_order")
+      .order("created_at"),
+  ]);
+  if (songs.error || arrangements.error) {
+    console.error("service-plans share songs:", (songs.error ?? arrangements.error)?.message);
+    return [];
+  }
+  const songById = new Map((songs.data ?? []).map((s) => [s.id as string, s]));
+  const rows = arrangements.data ?? [];
+
+  const out: SharedSong[] = [];
+  for (const item of items) {
+    const song = songById.get(item.song.songId);
+    if (!song) continue;
+    const arrangement =
+      (item.song.arrangementId ? rows.find((a) => a.id === item.song.arrangementId) : undefined) ??
+      rows.find((a) => a.song_id === item.song.songId);
+    const chartText = (arrangement?.chart_text as string | null | undefined) ?? null;
+    const ownLyrics = (arrangement?.lyrics as string | null | undefined) ?? null;
+    const chart = chartHasContent(chartText) ? chartText : null;
+    const lyricsText = ownLyrics?.trim() ? ownLyrics : chart ? lyricsFromChart(chart) : null;
+    out.push({
+      itemId: item.id,
+      title: song.title as string,
+      author: (song.author as string | null) ?? null,
+      ccliNumber: (song.ccli_number as string | null) ?? null,
+      copyright: (song.copyright as string | null) ?? null,
+      arrangementName: (arrangement?.name as string | undefined) ?? null,
+      chartKey: (arrangement?.key as string | null | undefined) ?? null,
+      planKey: item.song.key,
+      bpm: (arrangement?.bpm as number | null | undefined) ?? null,
+      chart,
+      lyrics: lyricsHaveContent(lyricsText) ? lyricsText : null,
+    });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Delivery
 // ---------------------------------------------------------------------------
 
@@ -132,6 +249,8 @@ export async function emailShareLink(input: {
   expiresAt: string;
   updated: boolean;
   message: string | null;
+  /** The link shows song charts, lyrics and files, and the plan has some. */
+  includesMaterials?: boolean;
 }): Promise<Delivery> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -155,6 +274,9 @@ export async function emailShareLink(input: {
           : `${input.churchName} shared the plan for ${when} with you.`,
       },
       ...(input.message ? [{ kind: "quote" as const, text: input.message }] : []),
+      ...(input.includesMaterials
+        ? [{ kind: "paragraph" as const, text: "The chord charts, lyrics and files for this service are on the same page." }]
+        : []),
       { kind: "paragraph", text: "Open the plan and tap “I’ll be there” or “Can’t make it” so your church knows." },
       { kind: "button", label: "Open the plan and answer", url: input.url },
       {

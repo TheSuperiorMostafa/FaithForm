@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, ChevronDown, ChevronRight, Link2, Music, Plus, Save, Trash2, Upload } from "lucide-react";
+import { Archive, ArrowLeft, ChevronDown, ChevronRight, FileUp, Link2, Music, Plus, Save, Trash2, Upload } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
@@ -30,7 +30,17 @@ export default function SongLoading() {
           title={<Skeleton className="h-9 w-64 max-w-full" />}
           description={<Skeleton className="mt-1 h-5 w-80 max-w-full" />}
           icon={Music}
+          secondary={
+            <>
+              <Skeleton className="h-12 w-36 rounded-[10px]" />
+              <span aria-hidden className={buttonVariants({ variant: "outline", size: "lg" })}>
+                <FileUp className="size-5" />
+                Add chart file
+              </span>
+            </>
+          }
         />
+        <Skeleton className="h-4 w-[28rem] max-w-full" />
       </div>
 
       <div aria-hidden className="grid gap-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
@@ -101,18 +111,31 @@ export default function SongLoading() {
               </span>
               <p className="text-sm text-muted-foreground">Separate sections with commas.</p>
             </div>
-            <div className="space-y-2">
-              <span className="block text-sm font-semibold leading-none text-foreground">Chord chart</span>
-              <span className="block h-[346px] w-full rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3 shadow-sm">
-                <span className="block space-y-3">
-                  {["w-16", "w-72", "w-64", "w-56", "w-24", "w-16", "w-72", "w-60"].map((w, i) => (
-                    <Skeleton key={i} className={cn("h-3.5 max-w-full", w)} />
-                  ))}
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-2">
+                <span className="block text-sm font-semibold leading-none text-foreground">Chord chart</span>
+                <span className="block h-[346px] w-full rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3 shadow-sm">
+                  <span className="block space-y-3">
+                    {["w-16", "w-72", "w-64", "w-56", "w-24", "w-16", "w-72", "w-60"].map((w, i) => (
+                      <Skeleton key={i} className={cn("h-3.5 max-w-full", w)} />
+                    ))}
+                  </span>
                 </span>
-              </span>
-              <p className="text-sm text-muted-foreground">
-                Put chords in square brackets before the word, or on their own line above it.
-              </p>
+                <p className="text-sm text-muted-foreground">
+                  Type a chord in square brackets just before the syllable where it changes, like [G]Amazing, or put a
+                  line of chords above the words. The chart shows each chord above its word.
+                </p>
+              </div>
+              <div className="flex min-w-0 flex-col gap-2">
+                <span className="block text-sm font-semibold leading-none text-foreground">Chart</span>
+                <span className="block min-h-[346px] w-full flex-auto rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3">
+                  <span className="block space-y-2">
+                    {["w-16", "w-10", "w-64", "w-10", "w-56", "w-16", "w-10", "w-60"].map((w, i) => (
+                      <Skeleton key={i} className={cn("h-3.5 max-w-full", w)} />
+                    ))}
+                  </span>
+                </span>
+              </div>
             </div>
             <div className="rounded-2xl border border-border bg-card/50">
               <div className="flex min-h-12 items-center justify-between gap-3 px-5 py-3">

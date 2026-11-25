@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity/log";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { getDefaultTranslationId } from "@/lib/bible/translations";
-import { getChurchAISettings, verifySermonAccess } from "@/lib/queries/sermons";
+import { getChurchAISettings, getLatestAsset, verifySermonAccess } from "@/lib/queries/sermons";
 import { renderSermonPdf } from "@/lib/sermon/export-pdf";
 import { resolveExportPassages } from "@/lib/sermon/passages";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import type { DiscussionQuestion } from "@/types/sermon";
 import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
@@ -35,14 +36,16 @@ export async function GET(
       sermon.translation ??
       (await getDefaultTranslationId(settings?.default_translation));
 
-    const passages =
+    const [passages, questionsAsset] = await Promise.all([
       sermon.scripture_refs.length > 0
-        ? await resolveExportPassages(sermon.scripture_refs, translation).catch(
-            () => [],
-          )
-        : [];
+        ? resolveExportPassages(sermon.scripture_refs, translation).catch(() => [])
+        : Promise.resolve([]),
+      getLatestAsset(sermon.id, "discussion_questions"),
+    ]);
+    const questions =
+      (questionsAsset?.payload as { questions?: DiscussionQuestion[] } | null)?.questions ?? [];
 
-    const buffer = await renderSermonPdf(sermon, passages);
+    const buffer = await renderSermonPdf(sermon, passages, questions);
     const filename = `${sermon.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "sermon"}.pdf`;
 
     await logActivity({

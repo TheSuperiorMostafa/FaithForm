@@ -7,6 +7,7 @@ import {
   pdf,
 } from "@react-pdf/renderer";
 import type {
+  DiscussionQuestion,
   Sermon,
   SermonContent,
   SermonOutline,
@@ -27,7 +28,31 @@ const styles = StyleSheet.create({
   translation: { fontSize: 9, color: "#94a3b8", marginBottom: 8 },
   pointSummary: { lineHeight: 1.5, marginBottom: 4 },
   pointScripture: { fontSize: 10, color: "#64748b", marginBottom: 8 },
+  question: { flexDirection: "row", lineHeight: 1.5, marginBottom: 10 },
+  questionNumber: { width: 18, fontWeight: "bold" },
+  questionText: { flex: 1 },
 });
+
+/**
+ * The discussion questions as a plain numbered list. The on-screen warm-up /
+ * observation / interpretation / application labels are left off: printed,
+ * they read as filler between the lesson and the questions themselves.
+ */
+function QuestionsBlock({ questions }: { questions: DiscussionQuestion[] }) {
+  return (
+    <View>
+      <Text style={styles.sectionTitle} minPresenceAhead={40}>
+        Discussion Questions
+      </Text>
+      {questions.map((q, i) => (
+        <View key={i} style={styles.question} wrap={false}>
+          <Text style={styles.questionNumber}>{`${i + 1}.`}</Text>
+          <Text style={styles.questionText}>{q.question}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function PassageBlock({ passage }: { passage: ExportPassage }) {
   return (
@@ -53,9 +78,11 @@ function PassageBlock({ passage }: { passage: ExportPassage }) {
 function SermonPdfDoc({
   sermon,
   passages,
+  questions,
 }: {
   sermon: Sermon;
   passages: ExportPassage[];
+  questions: DiscussionQuestion[];
 }) {
   const content = sermon.content as SermonContent | null;
   const outline = sermon.outline as SermonOutline | null;
@@ -131,24 +158,23 @@ function SermonPdfDoc({
         ) : (
           <Text style={styles.body}>No lesson content yet.</Text>
         )}
+        {questions.length > 0 && <QuestionsBlock questions={questions} />}
       </Page>
     </Document>
   );
 }
 
 /**
- * The lesson as a handout.
- *
- * Deliberately not everything the builder holds: the discussion questions stay
- * on screen, where their warm-up / observation / interpretation / application
- * labels help whoever is leading. Printed, that scaffolding read as filler
- * between the lesson and the passage it was teaching.
+ * The lesson as a handout: scripture, the lesson itself, then the discussion
+ * questions so a small group can work from the printout alone.
  */
 export async function renderSermonPdf(
   sermon: Sermon,
   passages: ExportPassage[] = [],
+  questions: DiscussionQuestion[] = [],
 ): Promise<Buffer> {
-  const doc = <SermonPdfDoc sermon={sermon} passages={passages} />;
+  const usable = questions.filter((q) => typeof q?.question === "string" && q.question.trim());
+  const doc = <SermonPdfDoc sermon={sermon} passages={passages} questions={usable} />;
   const blob = await pdf(doc).toBlob();
   const arrayBuffer = await blob.arrayBuffer();
   return Buffer.from(arrayBuffer);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useDeferredValue, useMemo, useState, useTransition } from "react";
 import { ListMusic, Plus, Save, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -19,6 +19,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { ChordChart } from "@/components/service-plans/songs/chord-chart";
+import { chartHasContent } from "@/lib/service-plans/songs/chart";
 import { sectionLabel } from "@/lib/service-plans/songs/parsers";
 import type { SongArrangement } from "@/lib/service-plans/songs/types";
 import { formatDuration, parseDuration } from "@/lib/service-plans/timing";
@@ -121,6 +123,8 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
   const [order, setOrder] = useState(arrangement.sectionOrder.join(", "));
   const [chart, setChart] = useState(arrangement.chartText ?? "");
   const [lyrics, setLyrics] = useState(arrangement.lyrics ?? "");
+  // The preview follows typing without holding up the text box on long charts.
+  const previewChart = useDeferredValue(chart);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
@@ -247,21 +251,42 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${id}-chart`}>Chord chart</Label>
-          <Textarea
-            id={`${id}-chart`}
-            value={chart}
-            onChange={(e) => setChart(e.target.value)}
-            rows={14}
-            spellCheck={false}
-            className="font-mono text-sm leading-relaxed"
-            placeholder={"Verse 1\n[G]Amazing grace, how [C]sweet the [G]sound"}
-            aria-describedby={`${id}-chart-help`}
-          />
-          <p id={`${id}-chart-help`} className="text-sm text-muted-foreground">
-            Put chords in square brackets before the word, or on their own line above it.
-          </p>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">
+            <Label htmlFor={`${id}-chart`}>Chord chart</Label>
+            <Textarea
+              id={`${id}-chart`}
+              value={chart}
+              onChange={(e) => setChart(e.target.value)}
+              rows={14}
+              spellCheck={false}
+              className="flex-auto font-mono text-sm leading-relaxed"
+              placeholder={"Verse 1\n[G]Amazing grace, how [C]sweet the [G]sound"}
+              aria-describedby={`${id}-chart-help`}
+            />
+            <p id={`${id}-chart-help`} className="text-sm text-muted-foreground">
+              Type a chord in square brackets just before the syllable where it changes, like [G]Amazing, or put a line
+              of chords above the words. The chart shows each chord above its word.
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col gap-2">
+            <p id={`${id}-chart-preview-label`} className="text-sm font-semibold leading-none text-foreground">
+              Chart{key ? ` · Key of ${key}` : ""}
+            </p>
+            <div
+              role="region"
+              aria-labelledby={`${id}-chart-preview-label`}
+              className="min-h-[346px] flex-auto overflow-x-auto rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3"
+            >
+              {chartHasContent(previewChart) ? (
+                <ChordChart chart={previewChart} />
+              ) : (
+                <p className="text-[15px] text-muted-foreground">
+                  The chart shows here as you type, with chords above the words.
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         <AdvancedSection title="Lyrics" description="Words only, without chords, for slides and printouts." defaultOpen={Boolean(arrangement.lyrics)}>

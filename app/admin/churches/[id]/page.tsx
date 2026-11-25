@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { loadChurchProfileForAdmin } from "@/app/admin/church-profile-actions";
+import { ChurchBillingSection } from "@/components/admin/church-billing-section";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { OpenChurchDashboardButton } from "@/components/admin/open-church-dashboard-button";
 import { PageHeader } from "@/components/admin/page-header";
@@ -7,7 +8,7 @@ import {
   getChurchFeatureEmailFlags,
   getChurchFeatureState,
 } from "@/lib/features/access";
-import type { FeatureKey } from "@/lib/features/catalog";
+import { FEATURE_KEYS, type FeatureKey } from "@/lib/features/catalog";
 import { listRetellAgents } from "@/lib/integrations/retell-client";
 import { hasChurchRetellKey } from "@/lib/integrations/retell-key";
 import {
@@ -44,6 +45,10 @@ function parseActivityRange(value: string | undefined): AdminActivityRange {
   return "all";
 }
 
+function parseActivityFeature(value: string | undefined): FeatureKey | undefined {
+  return (FEATURE_KEYS as readonly string[]).includes(value ?? "") ? (value as FeatureKey) : undefined;
+}
+
 function parsePage(value: string | undefined): number {
   const page = Number(value);
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
@@ -59,6 +64,7 @@ const TABS = [
   "website",
   "integrations",
   "giving",
+  "billing",
   "activity",
   "support",
 ];
@@ -73,6 +79,9 @@ export default async function AdminChurchDetailPage({
 }: PageProps) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const activityFilters = {
+    feature: parseActivityFeature(
+      typeof query.feature === "string" ? query.feature : undefined,
+    ),
     category:
       typeof query.category === "string"
         ? query.category
@@ -170,6 +179,7 @@ export default async function AdminChurchDetailPage({
         retellAgents={retellAgents.agents}
         retellAgentsError={retellAgents.error}
         smsStatus={await smsStatusPromise}
+        billingPanel={<ChurchBillingSection churchId={detail.church.id} timeZone={detail.church.timezone} />}
       />
     </div>
   );

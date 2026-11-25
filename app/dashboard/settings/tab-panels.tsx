@@ -1,6 +1,9 @@
 import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
 import { emptyStaffPreferences, staffPreferencesSchema } from "@/lib/notifications/staff-preferences";
 import { DocumentsPanel } from "@/components/settings/documents-panel";
+import { SettingsBillingPanel } from "@/components/billing/settings-billing-panel";
+import { getChurchBillingProfile, listChurchInvoices } from "@/lib/billing/queries";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getFaithFormSmsSender } from "@/lib/sms/church-sender";
 import Link from "next/link";
 import { ArrowRight, Heart, Mail } from "lucide-react";
@@ -63,6 +66,8 @@ export async function SettingsTabPanel({
         return await MessagesPanel(context);
       case "giving":
         return await GivingPanel();
+      case "billing":
+        return await BillingPanel(context);
     }
   } catch (error) {
     console.error(`[settings] ${tab} failed to load:`, error);
@@ -230,4 +235,26 @@ async function NotificationsPanel({ auth, allowedFeatures }: SettingsPanelContex
   const faithFormSender = getFaithFormSmsSender();
   const textSender = { available: Boolean(faithFormSender), number: faithFormSender?.fromNumber ?? null };
   return <NotificationPreferencesForm initial={initial?.success ? initial.data : emptyStaffPreferences()} email={auth.userEmail} allowedFeatures={allowedFeatures} textSender={textSender} />;
+}
+
+async function BillingPanel({ auth }: SettingsPanelContext) {
+  // The tab is only offered to admins; this keeps a hand-typed ?tab= honest.
+  if (!auth.isAdmin) {
+    return (
+      <ErrorState
+        compact
+        title="Billing is for church admins"
+        description="Ask an admin on your team if you need a copy of an invoice."
+      />
+    );
+  }
+  // RLS limits church admins to their own church. A platform admin stepping
+  // into this church is not a member, so they read with the service role,
+  // still filtered to this church only.
+  const client = auth.impersonation ? createAdminClient() : createClient();
+  const [profile, invoices] = await Promise.all([
+    getChurchBillingProfile(client, auth.churchId),
+    listChurchInvoices(client, auth.churchId),
+  ]);
+  return <SettingsBillingPanel profile={profile} invoices={invoices} />;
 }

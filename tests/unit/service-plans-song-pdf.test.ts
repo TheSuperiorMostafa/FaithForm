@@ -14,52 +14,60 @@ import {
   songPdfSources,
 } from "@/lib/service-plans/songs/song-pdf";
 
+// Invented placeholder words only; no real song text in fixtures.
 const CHART = [
   "Verse 1",
-  "[G]Amazing grace, how [C]sweet the [G]sound",
-  "That saved a wretch like [D]me",
+  "[G]Morning light is on the [C]hill, the [G]valley",
+  "We will sing and we will [D]rest",
   "",
   "",
   "Chorus",
   "G        C       G",
-  "I once was lost, but now am found",
+  "Lanterns glow along the river",
   "Chorus (2)",
-  "Was [Em]blind but [D]now I [G]see",
+  "All the [Em]fields are [D]green and [G]bright",
   "",
 ].join("\n");
 
-const SONG = { title: "Amazing Grace", author: "John Newton", ccliNumber: "22025", copyright: "Public Domain" };
+const SONG = { title: "Morning Light", author: "A. Writer", ccliNumber: "1234567", copyright: "Public Domain" };
 const ARRANGEMENT = { name: "Default", key: "G", bpm: 72 };
 
 test("inline chords become chord-over-syllable segments", () => {
-  assert.deepEqual(chartSegments("[G]Amazing grace, how [C]sweet"), [
-    { chord: "G", text: "Amazing grace, how " },
-    { chord: "C", text: "sweet" },
+  assert.deepEqual(chartSegments("[G]Morning light is on the [C]hill"), [
+    { chord: "G", text: "Morning light is on the " },
+    { chord: "C", text: "hill" },
   ]);
   // A chord inside a word, words before the first chord, and a chord at the end.
-  assert.deepEqual(chartSegments("Ama[D/F#]zing [G]"), [
-    { chord: null, text: "Ama" },
-    { chord: "D/F#", text: "zing " },
+  assert.deepEqual(chartSegments("Lan[D/F#]terns [G]"), [
+    { chord: null, text: "Lan" },
+    { chord: "D/F#", text: "terns " },
     { chord: "G", text: "" },
   ]);
   assert.deepEqual(chartSegments("No chords here"), [{ chord: null, text: "No chords here" }]);
 });
 
-test("chart lines: sections, chord-only lines, lyrics and single blanks", () => {
+test("chart lines: sections, lyrics, a chord line merged with the words under it, single blanks", () => {
   const lines = parseChartLines(CHART);
   assert.deepEqual(
     lines.map((l) => l.kind),
-    ["section", "lyric", "lyric", "blank", "section", "chords", "lyric", "section", "lyric"],
+    ["section", "lyric", "lyric", "blank", "section", "lyric", "section", "lyric"],
   );
   assert.deepEqual(lines[0], { kind: "section", text: "Verse 1" });
-  assert.deepEqual(lines[5], { kind: "chords", text: "G   C   G" });
-  assert.deepEqual(lines[7], { kind: "section", text: "Chorus (2)" });
+  assert.deepEqual(lines[6], { kind: "section", text: "Chorus (2)" });
   const first = lines[1];
   assert.ok(first.kind === "lyric");
   assert.deepEqual(
     first.segments.map((s) => s.chord),
     ["G", "C", "G"],
   );
+  // "G        C       G" above "Lanterns glow along the river": each chord at its column.
+  const merged = lines[5];
+  assert.ok(merged.kind === "lyric");
+  assert.deepEqual(merged.segments, [
+    { chord: "G", text: "Lanterns " },
+    { chord: "C", text: "glow alo" },
+    { chord: "G", text: "ng the river" },
+  ]);
 });
 
 test("lyrics come from the chart when the lyrics box is empty", () => {
@@ -67,13 +75,13 @@ test("lyrics come from the chart when the lyrics box is empty", () => {
     lyricsFromChart(CHART),
     [
       "Verse 1",
-      "Amazing grace, how sweet the sound",
-      "That saved a wretch like me",
+      "Morning light is on the hill, the valley",
+      "We will sing and we will rest",
       "",
       "Chorus",
-      "I once was lost, but now am found",
+      "Lanterns glow along the river",
       "Chorus (2)",
-      "Was blind but now I see",
+      "All the fields are green and bright",
     ].join("\n"),
   );
   // Section names and chords alone are not lyrics.
@@ -96,13 +104,13 @@ test("lyric lines keep sections and collapse blank runs", () => {
 });
 
 test("file names, header and footer text", () => {
-  assert.equal(songPdfFileName("Amazing Grace", "Default", "lyrics"), "amazing-grace-default-lyrics.pdf");
-  assert.equal(songPdfFileName("10,000 Reasons (Bless the Lord)", "Acoustic", "chart"), "10-000-reasons-bless-the-lord-acoustic-chord-chart.pdf");
+  assert.equal(songPdfFileName("Morning Light", "Default", "lyrics"), "morning-light-default-lyrics.pdf");
+  assert.equal(songPdfFileName("1,000 Lanterns (Live)", "Acoustic", "chart"), "1-000-lanterns-live-acoustic-chord-chart.pdf");
   assert.equal(songPdfFileName("¡¡", "", "chart"), "song-chord-chart.pdf");
   assert.equal(songPdfMetaLine(ARRANGEMENT), "Default arrangement · Key of G · 72 BPM");
   assert.equal(songPdfMetaLine({ name: "Christmas Arrangement", key: null, bpm: null }), "Christmas Arrangement");
   assert.equal(copyrightLine("Public Domain"), "Public Domain");
-  assert.equal(copyrightLine("2004 sixsteps Music"), "© 2004 sixsteps Music");
+  assert.equal(copyrightLine("2004 Example Music"), "© 2004 Example Music");
 });
 
 test("renderSongPdf returns a real PDF for the chart and the lyrics", async () => {
@@ -113,7 +121,10 @@ test("renderSongPdf returns a real PDF for the chart and the lyrics", async () =
     assert.equal(buffer.subarray(0, 4).toString("latin1"), "%PDF");
   }
   // A long chart spills onto more pages without failing.
-  const long = Array.from({ length: 40 }, (_, i) => `Verse ${(i % 9) + 1}\n${"[G]Lord, I [C]lift Your [D]name on [G]high ".repeat(4)}`).join("\n\n");
+  const long = Array.from(
+    { length: 40 },
+    (_, i) => `Verse ${(i % 9) + 1}\n${"[G]Over the [C]hills the [D]morning [G]comes ".repeat(4)}`,
+  ).join("\n\n");
   const buffer = await renderSongPdf({
     kind: "chart",
     song: { ...SONG, ccliNumber: null, copyright: null },

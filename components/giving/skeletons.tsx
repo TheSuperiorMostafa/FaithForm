@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { List } from "@/components/ui/list-row";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { GIFT_METHOD_FILTERS } from "@/lib/giving/labels";
 import { RANGE_PRESETS } from "@/lib/giving/periods";
 import type { SetupStep } from "@/lib/giving/setup";
 import { defaultStatementYear } from "@/lib/giving/statement-year";
@@ -297,6 +298,16 @@ export function GiftsSkeleton() {
             </span>
           ))}
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {["All gifts", ...GIFT_METHOD_FILTERS.map((option) => option.label)].map((label) => (
+            <span
+              key={label}
+              className="inline-flex min-h-11 items-center rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-foreground"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
         <StaticAdvanced title="More filters" description="Fund, one-time or recurring, and status" />
       </section>
 
@@ -307,7 +318,7 @@ export function GiftsSkeleton() {
         </div>
         <Card className="overflow-hidden p-0">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-[15px]">
+            <table className="w-full min-w-[960px] text-[15px]">
               <thead className="border-b border-border text-left text-muted-foreground">
                 <tr>
                   <th className="px-5 py-4 font-semibold">Date</th>
@@ -316,6 +327,7 @@ export function GiftsSkeleton() {
                   <th className="px-5 py-4 text-right font-semibold">Net after fees</th>
                   <th className="px-5 py-4 font-semibold">Fund</th>
                   <th className="px-5 py-4 font-semibold">Type</th>
+                  <th className="px-5 py-4 font-semibold">Method</th>
                   <th className="px-5 py-4 font-semibold">Status</th>
                   <th className="px-5 py-4" />
                 </tr>
@@ -329,6 +341,7 @@ export function GiftsSkeleton() {
                     <td className="px-5 py-4"><Skeleton className="ml-auto h-5 w-16" /></td>
                     <td className="px-5 py-4"><Skeleton className="h-5 w-20" /></td>
                     <td className="px-5 py-4"><Skeleton className="h-5 w-20" /></td>
+                    <td className="px-5 py-4"><Skeleton className="h-5 w-14" /></td>
                     <td className="px-5 py-4"><Skeleton className="h-8 w-24 rounded-full" /></td>
                     <td className="px-5 py-4"><Skeleton className="ml-auto h-11 w-24 rounded-[10px]" /></td>
                   </tr>
@@ -393,6 +406,15 @@ export function DonorDetailSkeleton() {
           <Card key={label} className="flex flex-col gap-2 p-6">
             <h2 className="text-[15px] font-semibold text-muted-foreground">{label}</h2>
             <Skeleton className="h-[30px] w-32" />
+          </Card>
+        ))}
+      </section>
+      <section className="grid gap-4 sm:grid-cols-2">
+        {["Given online", "Given by cash or check"].map((label) => (
+          <Card key={label} className="flex flex-col gap-2 p-6">
+            <h2 className="text-[15px] font-semibold text-muted-foreground">{label}</h2>
+            <Skeleton className="h-[30px] w-32" />
+            <Skeleton className="h-5 w-40" />
           </Card>
         ))}
       </section>

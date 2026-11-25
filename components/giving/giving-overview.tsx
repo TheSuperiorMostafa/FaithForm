@@ -15,7 +15,7 @@ import { ErrorState } from "@/components/ui/error-state";
 import { InitialsAvatar, List, ListRow } from "@/components/ui/list-row";
 import { SectionHeader } from "@/components/ui/page-header";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { donorDisplayName, giftStatus, giftTypeLabel } from "@/lib/giving/labels";
+import { donorDisplayName, giftMethodLabel, giftStatus, giftTypeLabel } from "@/lib/giving/labels";
 import type { GiftNet } from "@/lib/giving/net-amount";
 import { defaultStatementYear } from "@/lib/giving/statement-year";
 import { getGivingByFundPeriods, getGivingSummary } from "@/lib/queries/giving";
@@ -212,7 +212,7 @@ export function GiftRow({
           </span>
         }
         title={amount}
-        subtitle={`${fund} · ${formatGiftDate(gift.createdAt)} · ${giftTypeLabel(gift.giftType)}`}
+        subtitle={`${fund} · ${formatGiftDate(gift.createdAt)} · ${giftTypeLabel(gift.giftType)} · ${giftMethodLabel(gift.method)}`}
         trailing={badge}
       />
     );
@@ -223,7 +223,7 @@ export function GiftRow({
       href={gift.donorId ? `/dashboard/giving/donors/${gift.donorId}` : undefined}
       leading={<InitialsAvatar name={name} />}
       title={name}
-      subtitle={`${fund} · ${formatGiftDate(gift.createdAt)} · ${giftTypeLabel(gift.giftType)}`}
+      subtitle={`${fund} · ${formatGiftDate(gift.createdAt)} · ${giftTypeLabel(gift.giftType)} · ${giftMethodLabel(gift.method)}`}
       // Before the arrow, not after it: a "Refunded" badge is wider than an
       // amount, and the arrow has to stay in one place down the list.
       status={

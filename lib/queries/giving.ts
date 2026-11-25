@@ -2,6 +2,7 @@ import { formatAddressLine } from "@/lib/utils/address";
 export { formatAddressLine } from "@/lib/utils/address";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { giftMethodFromRow } from "@/lib/giving/labels";
 import { totalNetAfterFees, type GiftNet } from "@/lib/giving/net-amount";
 import { startOfWeek } from "@/lib/giving/periods";
 import { sheetDate } from "@/lib/giving/spreadsheet";
@@ -64,6 +65,8 @@ const DONATION_SELECT = `
   refund_reason,
   stripe_payment_intent_id,
   created_at,
+  gift_source:metadata->>source,
+  gift_payment_method:metadata->>payment_method,
   giving_funds ( name )
 `;
 
@@ -104,6 +107,7 @@ function mapDonation(row: Record<string, unknown>): GivingDonationRow {
     currency: row.currency as string,
     status: row.status as GivingDonationRow["status"],
     giftType: row.gift_type as GivingDonationRow["giftType"],
+    method: giftMethodFromRow(row.gift_source, row.gift_payment_method),
     donorName: (row.donor_name as string) ?? null,
     donorEmail: (row.donor_email as string) ?? null,
     donorId: (row.donor_id as string) ?? null,
@@ -565,6 +569,13 @@ function applyGiftFilters<Q extends { eq: any; gte: any; lte: any; or: any }>(
   let q = query;
   if (filters.fundId) q = q.eq("fund_id", filters.fundId);
   if (filters.giftType) q = q.eq("gift_type", filters.giftType);
+  // Offline gifts (migration 0144) carry metadata.source = 'offline' and the
+  // method; everything else came through online giving.
+  if (filters.method === "online") {
+    q = q.or("metadata->>source.is.null,metadata->>source.neq.offline");
+  } else if (filters.method) {
+    q = q.eq("metadata->>source", "offline").eq("metadata->>payment_method", filters.method);
+  }
   if (filters.status) q = q.eq("status", filters.status);
   if (filters.dateFrom) q = q.gte("created_at", filters.dateFrom);
   if (filters.dateTo) q = q.lte("created_at", filters.dateTo);

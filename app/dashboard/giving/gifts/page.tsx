@@ -15,6 +15,7 @@ import {
   searchGifts,
   sumGifts,
 } from "@/lib/queries/giving";
+import { parseGiftMethod } from "@/lib/giving/labels";
 import { formatCents } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
@@ -26,7 +27,7 @@ type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-const FILTER_KEYS = ["search", "fundId", "giftType", "status", "dateFrom", "dateTo"] as const;
+const FILTER_KEYS = ["search", "method", "fundId", "giftType", "status", "dateFrom", "dateTo"] as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function GiftsPage({ searchParams }: PageProps) {
@@ -55,6 +56,7 @@ export default async function GiftsPage({ searchParams }: PageProps) {
     search: str(query.search),
     fundId: str(query.fundId),
     giftType: str(query.giftType) as GiftType | undefined,
+    method: parseGiftMethod(str(query.method)),
     status: str(query.status) as DonationStatus | undefined,
     dateFrom: dateFrom && DATE_RE.test(dateFrom) ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
     dateTo: dateTo && DATE_RE.test(dateTo) ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,

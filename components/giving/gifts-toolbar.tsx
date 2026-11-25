@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { GIFT_STATUS_FILTERS } from "@/lib/giving/labels";
+import { GIFT_METHOD_FILTERS, GIFT_STATUS_FILTERS } from "@/lib/giving/labels";
 import { detectRangePreset, RANGE_PRESETS, rangeForPreset, type RangePreset } from "@/lib/giving/periods";
 import { cn } from "@/lib/utils";
 import type { GivingFundRow } from "@/types/giving";
@@ -39,8 +39,9 @@ export function GiftsToolbar({ funds }: { funds: GivingFundRow[] }) {
   const fundId = searchParams.get("fundId") ?? "";
   const giftType = searchParams.get("giftType") ?? "";
   const status = searchParams.get("status") ?? "";
+  const method = searchParams.get("method") ?? "";
   const moreActive = Boolean(fundId || giftType || status);
-  const anyActive = Boolean(currentSearch || dateFrom || dateTo || moreActive);
+  const anyActive = Boolean(currentSearch || dateFrom || dateTo || method || moreActive);
 
   const updateParams = (updates: Record<string, string | null>) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -141,6 +142,21 @@ export function GiftsToolbar({ funds }: { funds: GivingFundRow[] }) {
             Clear filters
           </Button>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="How it was given">
+        <Chip active={!method} onClick={() => updateParams({ method: null })}>
+          All gifts
+        </Chip>
+        {GIFT_METHOD_FILTERS.map((option) => (
+          <Chip
+            key={option.value}
+            active={method === option.value}
+            onClick={() => updateParams({ method: method === option.value ? null : option.value })}
+          >
+            {option.label}
+          </Chip>
+        ))}
       </div>
 
       {(customOpen || detected === "custom") && (

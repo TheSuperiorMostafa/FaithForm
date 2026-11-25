@@ -414,6 +414,8 @@ function applyMetaDirective(meta: Meta, name: string, value: string): boolean {
     case "ccli_song":
     case "ccli_song_number":
     case "ccli_song_id":
+    case "x_ccli":
+    case "x_ccli_number":
       if (!meta.ccli) meta.ccli = value;
       return true;
     case "copyright":
@@ -436,6 +438,24 @@ function applyMetaDirective(meta: Meta, name: string, value: string): boolean {
   }
 }
 
+/**
+ * "CCLI Song # 1234567", "CCLI Song #1234567", "CCLI Song No. 1234567",
+ * "CCLI Song Number: 1234567", optionally behind a "#" comment mark. Never
+ * the church's own "CCLI License # …", which is not the song's number.
+ *
+ * SongSelect's ChordPro download format is not documented to us, so the
+ * ChordPro reader accepts the number as a directive ({ccli: N},
+ * {ccli_number: N}, {meta: ccli N}), in a comment directive, on a "#"
+ * comment line, or as a footer line in the body.
+ */
+const CCLI_SONG_TEXT = /^#*\s*CCLI\s+Song\s*(?:#|No\.?|Number)?\s*:?\s*#?\s*(\d{1,10})\b/i;
+const CCLI_LICENSE_TEXT = /^#*\s*CCLI\s+Licen[cs]e\b/i;
+
+/** The song number from a "CCLI Song # 1234567" line, or null. */
+export function ccliSongNumberFromLine(line: string): string | null {
+  return CCLI_SONG_TEXT.exec(line.trim())?.[1] ?? null;
+}
+
 const SKIP_BLOCKS = new Set(["tab", "grid", "abc", "ly", "svg"]);
 const BLOCK_ALIASES: Record<string, string> = { sov: "verse", soc: "chorus", sob: "bridge", sot: "tab", sog: "grid" };
 const END_ALIASES = new Set(["eov", "eoc", "eob", "eot", "eog"]);
@@ -448,15 +468,30 @@ export function parseChordPro(text: string, fileName = "song.cho"): ParsedSong {
 
   for (const raw of toLines(text)) {
     const line = raw.trim();
-    if (line.startsWith("#")) continue;
+    const footerCcli = ccliSongNumberFromLine(line);
+    if (footerCcli) {
+      if (!meta.ccli) meta.ccli = footerCcli;
+      continue;
+    }
+    if (line.startsWith("#") || CCLI_LICENSE_TEXT.test(line)) continue;
+    // A footer copyright line ("© 2020 …") is a fact about the song, not words to sing.
+    if (/^(?:©|\(c\)\s)/i.test(line)) {
+      if (!meta.copyright) meta.copyright = line.replace(/^(?:©|\(c\))\s*/i, "").trim() || undefined;
+      continue;
+    }
     const directive = DIRECTIVE.exec(line);
     if (directive) {
       let name = directive[1].toLowerCase();
       let value = directiveValue(directive);
       if (name === "meta") {
         const [first, ...rest] = value.split(/\s+/);
-        name = (first ?? "").toLowerCase();
+        name = (first ?? "").toLowerCase().replace(/:$/, "");
         value = rest.join(" ");
+      }
+      const commentCcli = ccliSongNumberFromLine(value);
+      if (commentCcli && ["comment", "c", "ci", "comment_italic", "cb", "comment_box", "highlight", "footer"].includes(name)) {
+        if (!meta.ccli) meta.ccli = commentCcli;
+        continue;
       }
       if (applyMetaDirective(meta, name, value)) continue;
 

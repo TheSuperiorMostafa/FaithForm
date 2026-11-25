@@ -80,6 +80,12 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
     .filter((g) => g.createdAt >= yearStart)
     .reduce((sum, g) => sum + g.amountCents, 0);
   const allTimeCents = received.reduce((sum, g) => sum + g.amountCents, 0);
+  // Online gifts came through FaithForm; manual ones were recorded by hand
+  // (cash, check or other) from Giving > Record gifts.
+  const sumBy = (online: boolean, sinceIso?: string) =>
+    received
+      .filter((g) => (g.method === "online") === online && (!sinceIso || g.createdAt >= sinceIso))
+      .reduce((sum, g) => sum + g.amountCents, 0);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -101,6 +107,19 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
         <Stat label="This year" value={formatCents(thisYearCents)} />
         <Stat label="All time" value={formatCents(allTimeCents)} />
         <Stat label="Gifts received" value={received.length.toLocaleString("en-US")} />
+      </section>
+
+      <section aria-label={`How ${name} gives`} className="grid gap-4 sm:grid-cols-2">
+        <Stat
+          label="Given online"
+          value={formatCents(sumBy(true))}
+          detail={`All time · ${formatCents(sumBy(true, yearStart))} this year`}
+        />
+        <Stat
+          label="Given by cash or check"
+          value={formatCents(sumBy(false))}
+          detail={`All time · ${formatCents(sumBy(false, yearStart))} this year`}
+        />
       </section>
 
       {subscriptions.length > 0 && (
@@ -146,13 +165,14 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
 
 const GIVING_DONOR_NO_NAME = "No name given";
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <Card className="flex flex-col gap-2 p-6">
       <h2 className="text-[15px] font-semibold text-muted-foreground">{label}</h2>
       <p className="font-heading text-3xl font-bold leading-none tracking-tight text-foreground">
         {value}
       </p>
+      {detail && <p className="text-[15px] text-muted-foreground">{detail}</p>}
     </Card>
   );
 }

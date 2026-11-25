@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { Download, ExternalLink, FileText, Link2 } from "lucide-react";
+import { Download, ExternalLink, FileText, Link2, Music } from "lucide-react";
 import { AttendanceAnswer } from "@/components/service-plans/share/attendance-answer";
+import { ChordChart, LyricsSheet } from "@/components/service-plans/songs/chord-chart";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
-import { recordView } from "@/lib/service-plans/share";
+import { loadSharedSongs, recordView, type SharedSong } from "@/lib/service-plans/share";
+import { copyrightLine } from "@/lib/service-plans/songs/chart";
 import { formatClockTime, formatDuration, formatPlanDate } from "@/lib/service-plans/timing";
 import { SHARE_PRESET_LABELS, type PlanFile } from "@/lib/service-plans/types";
 import { buildPlanView } from "@/lib/service-plans/view";
@@ -19,6 +21,9 @@ export const metadata: Metadata = {
 
 type PageProps = { params: Promise<{ token: string }>; searchParams: Promise<{ time?: string }> };
 
+const CHIP =
+  "inline-flex min-h-11 max-w-full items-center gap-2 rounded-[10px] border border-border px-3 text-[15px] font-semibold text-primary hover:border-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-accent";
+
 function FileLinks({ files, token }: { files: PlanFile[]; token: string }) {
   return (
     <span className="flex flex-wrap gap-2 pt-1">
@@ -30,7 +35,7 @@ function FileLinks({ files, token }: { files: PlanFile[]; token: string }) {
             href={f.url ?? `/plan/${token}/files/${f.source}/${f.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-[10px] border border-border px-3 text-[15px] font-semibold text-primary hover:border-primary/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-accent"
+            className={CHIP}
           >
             <Icon aria-hidden className="size-4 shrink-0" />
             <span className="truncate">{f.name}</span>
@@ -40,6 +45,75 @@ function FileLinks({ files, token }: { files: PlanFile[]; token: string }) {
         );
       })}
     </span>
+  );
+}
+
+/** One song's chart and lyrics, shown on the page with a PDF of each. */
+function SongMaterials({ song, token }: { song: SharedSong; token: string }) {
+  const keyNote =
+    song.planKey && song.chartKey && song.planKey !== song.chartKey
+      ? `The plan lists the key of ${song.planKey}; this chart is written in ${song.chartKey}.`
+      : null;
+  const meta = [
+    song.chartKey ? `Key of ${song.chartKey}` : song.planKey ? `Key of ${song.planKey}` : null,
+    song.arrangementName && song.arrangementName !== "Default" ? `${song.arrangementName} arrangement` : null,
+    song.bpm ? `${song.bpm} BPM` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <article id={`song-${song.itemId}`} aria-labelledby={`song-${song.itemId}-title`} className="scroll-mt-6 space-y-3 px-4 py-4">
+      <div className="space-y-0.5">
+        <h3 id={`song-${song.itemId}-title`} className="font-heading text-lg font-bold">
+          {song.title}
+        </h3>
+        {song.author && <p className="text-sm text-muted-foreground">{song.author}</p>}
+        {meta && <p className="text-sm font-semibold">{meta}</p>}
+        {keyNote && <p className="text-sm text-muted-foreground">{keyNote}</p>}
+      </div>
+      {song.chart && (
+        <details className="group rounded-xl border border-border" open>
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 text-[15px] font-semibold">Chord chart</summary>
+          <div className="overflow-x-auto border-t border-border px-4 py-3">
+            <ChordChart chart={song.chart} />
+          </div>
+        </details>
+      )}
+      {song.lyrics && (
+        <details className="rounded-xl border border-border" open={!song.chart}>
+          <summary className="flex min-h-11 cursor-pointer items-center px-4 text-[15px] font-semibold">Lyrics</summary>
+          <div className="border-t border-border px-4 py-3">
+            <LyricsSheet lyrics={song.lyrics} />
+          </div>
+        </details>
+      )}
+      {!song.chart && !song.lyrics && (
+        <p className="text-[15px] text-muted-foreground">No chart or lyrics have been added for this song yet.</p>
+      )}
+      {(song.chart || song.lyrics) && (
+        <span className="flex flex-wrap gap-2">
+          {song.chart && (
+            <a href={`/plan/${token}/songs/${song.itemId}/chart`} target="_blank" rel="noopener noreferrer" className={CHIP}>
+              <Download aria-hidden className="size-4 shrink-0" />
+              Chord chart PDF
+            </a>
+          )}
+          {song.lyrics && (
+            <a href={`/plan/${token}/songs/${song.itemId}/lyrics`} target="_blank" rel="noopener noreferrer" className={CHIP}>
+              <Download aria-hidden className="size-4 shrink-0" />
+              Lyrics PDF
+            </a>
+          )}
+        </span>
+      )}
+      {(song.ccliNumber || song.copyright) && (
+        <p className="text-xs text-muted-foreground">
+          {[song.ccliNumber ? `CCLI Song # ${song.ccliNumber}` : null, song.copyright ? copyrightLine(song.copyright) : null]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
+    </article>
   );
 }
 
@@ -70,6 +144,8 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
   const recipient = share.person_id ? plan.attendance?.find((a) => a.personId === share.person_id) : undefined;
   const person = options.preset === "person" ? recipient?.personName : null;
   const answer = recipient?.status === "confirmed" || recipient?.status === "declined" ? recipient.status : null;
+  const songs = admin ? await loadSharedSongs(admin, share, plan, view) : [];
+  const songByItem = new Map(songs.map((song) => [song.itemId, song]));
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -150,6 +226,14 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
                       {n.body}
                     </span>
                   ))}
+                  {songByItem.has(row.id) && (
+                    <span className="flex flex-wrap gap-2 pt-1">
+                      <a href={`#song-${row.id}`} className={CHIP}>
+                        <Music aria-hidden className="size-4 shrink-0" />
+                        {songByItem.get(row.id)!.chart ? "Chord chart" : songByItem.get(row.id)!.lyrics ? "Lyrics" : "Song details"}
+                      </a>
+                    </span>
+                  )}
                   {row.files.length > 0 && <FileLinks files={row.files} token={token} />}
                 </span>
                 <span className="text-right font-semibold tabular-nums">
@@ -159,6 +243,24 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
             ),
           )}
         </ol>
+      )}
+
+      {songs.length > 0 && (
+        <section aria-labelledby="shared-songs-title" className="space-y-3">
+          <div className="space-y-1">
+            <h2 id="shared-songs-title" className="font-heading text-xl font-bold">
+              Songs
+            </h2>
+            <p className="text-[15px] text-muted-foreground">
+              Chord charts and lyrics for each song, in service order. Files for each item are listed with it above.
+            </p>
+          </div>
+          <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
+            {songs.map((song) => (
+              <SongMaterials key={song.itemId} song={song} token={token} />
+            ))}
+          </div>
+        </section>
       )}
 
       <footer className="flex flex-col gap-3 text-[15px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">

@@ -12,6 +12,7 @@ export const SETTINGS_TABS = [
   { id: "messages", label: "Messages & email" },
   { id: "notifications", label: "Notifications" },
   { id: "documents", label: "Documents" },
+  { id: "billing", label: "Billing" },
 ] as const;
 
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
@@ -69,7 +70,8 @@ export function visibleSettingsTabs(viewer: SettingsViewer): SettingsTabId[] {
   return SETTINGS_TABS.map((tab) => tab.id).filter((id) => {
     if (id === "notifications") return allowed.has("attendance") || allowed.has("checkin");
     if (id === "documents") return allowed.has("attendance") || allowed.has("library");
-    if (id === "accounts") return viewer.isAdmin;
+    // Billing is as sensitive as connected accounts: church admins only.
+    if (id === "accounts" || id === "billing") return viewer.isAdmin;
     if (id === "messages") {
       return viewer.isAdmin && (allowed.has("announcements") || allowed.has("attendance"));
     }

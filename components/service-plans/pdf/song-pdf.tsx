@@ -2,13 +2,10 @@ import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import React from "react";
 
 import { registerPlanPdfFonts } from "@/components/service-plans/pdf/plan-pdf";
-import type {
-  ChartLine,
-  ChartSegment,
-  LyricLine,
-  SongPdfArrangement,
-  SongPdfSong,
-} from "@/lib/service-plans/songs/song-pdf";
+import { chartUnits, copyrightLine, type ChartLine, type ChartSegment, type LyricLine } from "@/lib/service-plans/songs/chart";
+import type { SongPdfArrangement, SongPdfSong } from "@/lib/service-plans/songs/song-pdf";
+
+export { copyrightLine };
 
 /**
  * A song's lyrics sheet or chord chart, made from the arrangement on save.
@@ -16,9 +13,10 @@ import type {
  * friendly (chords are bold, not only coloured). CCLI number and copyright
  * print on every page.
  *
- * Without a monospaced font, chords cannot line up by spaces. Inline chords
- * are printed as small chord-over-word blocks in a wrapping row instead, so
- * each chord sits over the syllable it was written before.
+ * Without a monospaced font, chords cannot line up by spaces. Every chord
+ * (inline, or from a chord line above the words) is printed as a small
+ * chord-over-word block in a wrapping row instead, so each chord sits over
+ * the syllable where it changes.
  */
 
 registerPlanPdfFonts();
@@ -103,28 +101,13 @@ const styles = StyleSheet.create({
 const NBSP = " ";
 const SPACE_WIDTH = LYRIC_SIZE * 0.3;
 
-type Unit = { chord: string | null; word: string; space: boolean };
-
-/** One block per word, so a long line wraps between words; a chord stays on its first word. */
-function units(segments: ChartSegment[]): Unit[] {
-  const out: Unit[] = [];
-  for (const segment of segments) {
-    const tokens = segment.text.match(/\S+\s*|\s+/g) ?? [""];
-    tokens.forEach((token, i) => {
-      const word = token.trimEnd();
-      out.push({ chord: i === 0 ? segment.chord : null, word, space: word !== token });
-    });
-  }
-  return out;
-}
-
 function ChartLyric({ segments }: { segments: ChartSegment[] }) {
   if (!segments.some((s) => s.chord)) {
     return <Text style={styles.lyric}>{segments.map((s) => s.text).join("")}</Text>;
   }
   return (
     <View style={styles.segmentRow} wrap={false}>
-      {units(segments).map((unit, i) => (
+      {chartUnits(segments).map((unit, i) => (
         <View key={i} style={unit.space ? { marginRight: SPACE_WIDTH } : undefined}>
           <Text style={unit.chord ? [styles.chord, styles.chordGap] : styles.chord}>{unit.chord ?? NBSP}</Text>
           <Text style={styles.lyric}>{unit.word || NBSP}</Text>
@@ -202,12 +185,6 @@ export function songPdfMetaLine(arrangement: SongPdfArrangement): string {
   ]
     .filter(Boolean)
     .join(" · ");
-}
-
-/** "© 1779 John Newton", but "Public Domain" and "Copyright …" as written. */
-export function copyrightLine(copyright: string): string {
-  const text = copyright.trim();
-  return /^(©|\(c\)|copyright\b|public domain\b)/i.test(text) ? text : `© ${text}`;
 }
 
 export function SongPdfDocument({ song, arrangement, content }: SongPdfDocumentProps) {

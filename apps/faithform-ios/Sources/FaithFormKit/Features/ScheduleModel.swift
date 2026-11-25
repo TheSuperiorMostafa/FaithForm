@@ -249,12 +249,22 @@ public enum ScheduleCalendar {
         return start < dayEnd && end > dayStart
     }
 
+    /// A day's events and services, always in date order — earliest first.
+    /// Compared as instants rather than strings, since times can arrive with
+    /// different offsets; pinning does not reorder the calendar.
     public static func events(on day: Date, in items: [FeedItem]) -> [FeedItem] {
-        items.filter { event($0, overlaps: day) }
-            .sorted { lhs, rhs in
-                if lhs.isPinned != rhs.isPinned { return lhs.isPinned && !rhs.isPinned }
-                return lhs.startAt < rhs.startAt
-            }
+        sortedByStart(items.filter { event($0, overlaps: day) })
+    }
+
+    /// Earliest first by parsed start; unreadable starts go last, ties keep
+    /// the server's order.
+    public static func sortedByStart(_ items: [FeedItem]) -> [FeedItem] {
+        items.enumerated().sorted { lhs, rhs in
+            let left = FaithFormInstant.parse(lhs.element.startAt) ?? .distantFuture
+            let right = FaithFormInstant.parse(rhs.element.startAt) ?? .distantFuture
+            if left != right { return left < right }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
     }
 
     public static func daysWithEvents(_ items: [FeedItem], timezone: String) -> Set<Date> {

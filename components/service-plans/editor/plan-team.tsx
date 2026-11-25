@@ -59,6 +59,10 @@ export function PlanTeam({
   }, [team]);
 
   const answers = useMemo(() => new Map(attendance.map((a) => [a.personId, a])), [attendance]);
+  const availabilityOf = useMemo(
+    () => new Map(people.filter((p) => p.availability).map((p) => [p.id, p.availability!])),
+    [people],
+  );
   const others = attendance.filter((a) => !a.onTeam);
 
   const run = (work: () => Promise<{ ok: boolean; error?: string }>, success?: string) =>
@@ -94,6 +98,11 @@ export function PlanTeam({
                         {answers.get(m.personId)?.respondedAt
                           ? ` · Answered ${answeredOn(answers.get(m.personId)!.respondedAt!)}`
                           : ""}
+                      </span>
+                      <span className="block text-sm text-muted-foreground">
+                        {availabilityOf.get(m.personId)
+                          ? `Availability: ${availabilityOf.get(m.personId)}`
+                          : "No availability given"}
                       </span>
                     </span>
                     <Label htmlFor={`status-${m.id}`} className="sr-only">
@@ -194,7 +203,11 @@ export function PlanTeam({
           </div>
           <SearchPicker
             label="Person"
-            items={people.map((p) => ({ id: p.id, label: p.name }))}
+            items={people.map((p) => ({
+              id: p.id,
+              label: p.name,
+              description: p.availability ? `Availability: ${p.availability}` : undefined,
+            }))}
             value={personIds}
             onChange={setPersonIds}
           />
