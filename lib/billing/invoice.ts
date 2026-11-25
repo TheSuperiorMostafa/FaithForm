@@ -14,7 +14,6 @@ export const FAITHFORM_BILLING = {
   website: "www.faithform.io",
 } as const;
 
-export const DEFAULT_MONTHLY_RATE_CENTS = 25_000;
 export const PLAN_NAME = "Monthly Retainer";
 export const BILLING_CYCLE = "Monthly";
 export const PAYMENT_TERMS = "Due on Receipt";
@@ -60,14 +59,19 @@ export type ChurchInvoice = {
 };
 
 export type ChurchBillingProfile = {
-  monthlyRateCents: number;
+  /**
+   * The rate FaithForm has confirmed for this church, or null. Each church
+   * pays its own agreed amount, so nothing shows a number, and no invoice can
+   * be issued, until a platform admin confirms it (migration 0183).
+   */
+  monthlyRateCents: number | null;
   contactName: string;
   contactEmail: string;
   contactPhone: string;
 };
 
 /** The two lines on every retainer invoice, as on the template. */
-export function defaultLineItems(rateCents: number = DEFAULT_MONTHLY_RATE_CENTS): InvoiceLineItem[] {
+export function defaultLineItems(rateCents: number): InvoiceLineItem[] {
   return [
     {
       description: "Monthly Retainer — Ministry Technology Platform",

@@ -47,9 +47,14 @@ import {
 
 const ADMIN_STATUS_LABEL: Record<InvoiceStatus, string> = { due: "Due", paid: "Paid", void: "Void" };
 
-function centsToInput(cents: number): string {
-  return (cents / 100).toFixed(2);
+function centsToInput(cents: number | null): string {
+  return cents === null ? "" : (cents / 100).toFixed(2);
 }
+
+type AdminBillingProfile = ChurchBillingProfile & {
+  rateConfirmedAt: string | null;
+  proposedMonthlyRateCents: number | null;
+};
 
 export function ChurchBillingPanel({
   churchId,
@@ -60,7 +65,7 @@ export function ChurchBillingPanel({
   defaultInvoiceDate,
 }: {
   churchId: string;
-  profile: ChurchBillingProfile;
+  profile: AdminBillingProfile;
   defaultBilledTo: BilledTo;
   invoices: ChurchInvoice[];
   /** YYYY-MM, the church's current month. */
@@ -69,6 +74,7 @@ export function ChurchBillingPanel({
   defaultInvoiceDate: string;
 }) {
   const [issueOpen, setIssueOpen] = useState(false);
+  const confirmedRate = profile.monthlyRateCents;
 
   return (
     <div className="space-y-4">
@@ -79,8 +85,13 @@ export function ChurchBillingPanel({
           <div className="space-y-1.5">
             <CardTitle>Invoices</CardTitle>
             <CardDescription>{ADMIN_INVOICES_DESCRIPTION}</CardDescription>
+            {confirmedRate === null && (
+              <p className="text-sm font-medium text-foreground">
+                Confirm this church&apos;s monthly rate above before issuing an invoice.
+              </p>
+            )}
           </div>
-          <Button type="button" onClick={() => setIssueOpen(true)}>
+          <Button type="button" onClick={() => setIssueOpen(true)} disabled={confirmedRate === null}>
             <FilePlus2 className="size-4" aria-hidden />
             Issue invoice
           </Button>
@@ -102,12 +113,12 @@ export function ChurchBillingPanel({
         </CardContent>
       </Card>
 
-      {issueOpen && (
+      {issueOpen && confirmedRate !== null && (
         <IssueInvoiceDialog
           churchId={churchId}
           open={issueOpen}
           onOpenChange={setIssueOpen}
-          rateCents={profile.monthlyRateCents}
+          rateCents={confirmedRate}
           billedTo={defaultBilledTo}
           defaultPeriod={defaultPeriod}
           defaultInvoiceDate={defaultInvoiceDate}
@@ -118,37 +129,50 @@ export function ChurchBillingPanel({
   );
 }
 
-function BillingProfileCard({ churchId, profile }: { churchId: string; profile: ChurchBillingProfile }) {
+function BillingProfileCard({ churchId, profile }: { churchId: string; profile: AdminBillingProfile }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  // Never prefilled with a guess: empty until this church's rate is confirmed.
   const [rate, setRate] = useState(centsToInput(profile.monthlyRateCents));
+  const [confirmed, setConfirmed] = useState(false);
   const [contactName, setContactName] = useState(profile.contactName);
   const [contactEmail, setContactEmail] = useState(profile.contactEmail);
   const [contactPhone, setContactPhone] = useState(profile.contactPhone);
 
   function save(event: React.FormEvent) {
     event.preventDefault();
-    const monthlyRateCents = parseDollarsToCents(rate);
-    if (monthlyRateCents === null) {
+    const typed = rate.trim();
+    const monthlyRateCents = typed ? parseDollarsToCents(typed) : null;
+    if (typed && monthlyRateCents === null) {
       toast.error("Enter the monthly rate as an amount, like 250.00.");
+      return;
+    }
+    const rateChanged = monthlyRateCents !== null && monthlyRateCents !== profile.monthlyRateCents;
+    if (rateChanged && !confirmed) {
+      toast.error("Tick the box to confirm this is the rate agreed with the church.");
       return;
     }
     startTransition(async () => {
       const result = await saveChurchBillingProfile({
         churchId,
-        monthlyRateCents,
+        monthlyRateCents: rateChanged ? monthlyRateCents : null,
+        confirmRate: rateChanged ? confirmed : undefined,
         contactName,
         contactEmail,
         contactPhone,
       });
       if (result.ok) {
         toast.success(result.message);
+        setConfirmed(false);
         router.refresh();
       } else {
         toast.error(result.error);
       }
     });
   }
+
+  const typedCents = rate.trim() ? parseDollarsToCents(rate.trim()) : null;
+  const needsConfirm = typedCents !== null && typedCents !== profile.monthlyRateCents;
 
   return (
     <Card>
@@ -159,14 +183,30 @@ function BillingProfileCard({ churchId, profile }: { churchId: string; profile: 
       <CardContent>
         <form onSubmit={save} className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="billing-rate">Monthly rate (USD)</Label>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label htmlFor="billing-rate">Monthly rate (USD)</Label>
+              <StatusBadge tone={profile.monthlyRateCents === null ? "attention" : "done"}>
+                {profile.monthlyRateCents === null ? "Not confirmed" : "Confirmed"}
+              </StatusBadge>
+            </div>
             <Input
               id="billing-rate"
               inputMode="decimal"
+              placeholder="Enter the agreed amount"
               value={rate}
-              onChange={(event) => setRate(event.target.value)}
-              required
+              onChange={(event) => {
+                setRate(event.target.value);
+                setConfirmed(false);
+              }}
+              aria-describedby="billing-rate-note"
             />
+            <p id="billing-rate-note" className="text-sm text-muted-foreground">
+              {profile.monthlyRateCents !== null
+                ? `Confirmed${profile.rateConfirmedAt ? ` ${formatInvoiceDate(profile.rateConfirmedAt.slice(0, 10))}` : ""}. The church sees this amount.`
+                : profile.proposedMonthlyRateCents !== null
+                  ? `Entered earlier but never confirmed: ${formatCents(profile.proposedMonthlyRateCents)}. The church sees no amount until you confirm one.`
+                  : "The church sees no amount until you confirm one."}
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="billing-contact-name">Billing contact name</Label>
@@ -197,9 +237,20 @@ function BillingProfileCard({ churchId, profile }: { churchId: string; profile: 
               onChange={(event) => setContactPhone(event.target.value)}
             />
           </div>
+          {needsConfirm && (
+            <label className="flex min-h-11 cursor-pointer items-center gap-3 text-[15px] sm:col-span-2">
+              <input
+                type="checkbox"
+                className="size-5 accent-primary"
+                checked={confirmed}
+                onChange={(event) => setConfirmed(event.target.checked)}
+              />
+              {typedCents !== null ? formatCents(typedCents) : "This"} a month is the rate agreed with this church
+            </label>
+          )}
           <div className="sm:col-span-2">
-            <Button type="submit" variant="outline" disabled={pending}>
-              {pending ? "Saving…" : "Save billing details"}
+            <Button type="submit" variant="outline" disabled={pending || (needsConfirm && !confirmed)}>
+              {pending ? "Saving…" : needsConfirm ? "Confirm rate and save" : "Save billing details"}
             </Button>
           </div>
         </form>

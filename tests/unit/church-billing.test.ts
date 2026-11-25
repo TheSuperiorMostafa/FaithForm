@@ -25,12 +25,12 @@ import {
 const CHURCH_A = "11111111-1111-4111-8111-111111111111";
 const CHURCH_B = "22222222-2222-4222-8222-222222222222";
 
-test("the template invoice is a $250 retainer plus an included portal line", () => {
-  const lines = defaultLineItems();
+test("the template invoice is the church's confirmed rate plus an included portal line", () => {
+  const lines = defaultLineItems(32_500);
   assert.equal(lines.length, 2);
-  assert.equal(lines[0].unitCents, 25_000);
+  assert.equal(lines[0].unitCents, 32_500);
   assert.equal(lines[1].unitCents, null);
-  assert.deepEqual(computeInvoiceTotals(lines), { subtotalCents: 25_000, totalCents: 25_000 });
+  assert.deepEqual(computeInvoiceTotals(lines), { subtotalCents: 32_500, totalCents: 32_500 });
   assert.equal(lineTotalCents(lines[1]), null, "Included lines print a dash, not $0.00");
 });
 
@@ -139,4 +139,29 @@ test("the migration keeps writes server-side and reads to church admins", () => 
   const route = readFileSync("app/api/billing/invoices/[id]/route.ts", "utf8");
   assert.match(route, /canViewChurchBilling\(viewer, invoice\.churchId\)/);
   assert.match(route, /private, no-store/);
+});
+
+test("a church's rate is shown and billed only after FaithForm confirms it", () => {
+  const read = (file: string) => readFileSync(file, "utf8");
+  const migration = read("supabase/migrations/0183_billing_rate_confirmation.sql");
+  // No default rate: an unconfirmed church has no amount at all.
+  assert.match(migration, /alter column monthly_rate_cents drop default/);
+  assert.match(migration, /\(monthly_rate_cents is null\) = \(monthly_rate_confirmed_at is null\)/);
+  // Church admins (RLS) read their profile row; an unconfirmed rate is never on
+  // it, only in a service-role table.
+  assert.match(migration, /create table if not exists public\.church_billing_rate_drafts/);
+  assert.match(migration, /revoke all on table public\.church_billing_rate_drafts from public, anon, authenticated/);
+  assert.doesNotMatch(migration, /grant[^;]*church_billing_rate_drafts[^;]*to authenticated/);
+  assert.match(migration, /set monthly_rate_cents = null\s+where monthly_rate_confirmed_at is null/);
+
+  const queries = read("lib/billing/queries.ts");
+  assert.doesNotMatch(queries, /DEFAULT_MONTHLY_RATE_CENTS/);
+  assert.match(queries, /monthlyRateCents: confirmed \?/);
+
+  const actions = read("app/admin/billing-actions.ts");
+  assert.match(actions, /settingRate && value\.confirmRate !== true/);
+  assert.match(actions, /Confirm this church's monthly rate first, then issue the invoice\./);
+
+  const churchPanel = read("components/billing/settings-billing-panel.tsx");
+  assert.match(churchPanel, /profile\.monthlyRateCents !== null/);
 });

@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   CHURCH_INVOICE_COLUMNS,
-  DEFAULT_MONTHLY_RATE_CENTS,
   mapInvoiceRow,
   type BilledTo,
   type ChurchBillingProfile,
@@ -18,22 +17,62 @@ import {
  * service-role client can never return another church's rows.
  */
 
+/**
+ * A church's billing profile. `monthlyRateCents` is the confirmed rate only:
+ * null until a platform admin confirms it, and never a default. Safe for the
+ * church's own (RLS) client, which cannot read the unconfirmed rate.
+ */
 export async function getChurchBillingProfile(
   client: SupabaseClient,
   churchId: string,
 ): Promise<ChurchBillingProfile & { saved: boolean }> {
   const { data, error } = await client
     .from("church_billing_profiles")
-    .select("monthly_rate_cents, contact_name, contact_email, contact_phone")
+    .select("monthly_rate_cents, monthly_rate_confirmed_at, contact_name, contact_email, contact_phone")
     .eq("church_id", churchId)
     .maybeSingle();
   if (error) throw new Error(`billing profile: ${error.message}`);
+  const confirmed = Boolean(data?.monthly_rate_confirmed_at);
   return {
     saved: Boolean(data),
-    monthlyRateCents: (data?.monthly_rate_cents as number | undefined) ?? DEFAULT_MONTHLY_RATE_CENTS,
+    monthlyRateCents: confirmed ? ((data?.monthly_rate_cents as number | null) ?? null) : null,
     contactName: (data?.contact_name as string | null) ?? "",
     contactEmail: (data?.contact_email as string | null) ?? "",
     contactPhone: (data?.contact_phone as string | null) ?? "",
+  };
+}
+
+/**
+ * The platform admin's view of the profile: also when the rate was confirmed
+ * and any rate entered earlier that still needs confirming. Service role only.
+ */
+export async function getAdminBillingProfile(
+  client: SupabaseClient,
+  churchId: string,
+): Promise<ChurchBillingProfile & { rateConfirmedAt: string | null; proposedMonthlyRateCents: number | null }> {
+  const profile = await getChurchBillingProfile(client, churchId);
+  const [confirmedRead, draftRead] = await Promise.all([
+    client
+      .from("church_billing_profiles")
+      .select("monthly_rate_confirmed_at")
+      .eq("church_id", churchId)
+      .maybeSingle(),
+    client
+      .from("church_billing_rate_drafts")
+      .select("proposed_monthly_rate_cents")
+      .eq("church_id", churchId)
+      .maybeSingle(),
+  ]);
+  if (confirmedRead.error) throw new Error(`billing profile: ${confirmedRead.error.message}`);
+  if (draftRead.error) throw new Error(`billing rate draft: ${draftRead.error.message}`);
+  const rateConfirmedAt = (confirmedRead.data?.monthly_rate_confirmed_at as string | null) ?? null;
+  return {
+    ...profile,
+    rateConfirmedAt,
+    // A draft only matters while nothing is confirmed.
+    proposedMonthlyRateCents: rateConfirmedAt
+      ? null
+      : ((draftRead.data?.proposed_monthly_rate_cents as number | null) ?? null),
   };
 }
 

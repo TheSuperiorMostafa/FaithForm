@@ -12,7 +12,7 @@ import { SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { PLAN_NAME } from "@/lib/billing/invoice";
 
-export const ADMIN_PLAN_DESCRIPTION = `${PLAN_NAME}, billed monthly. The rate and contact fill in each new invoice; past invoices keep what they were issued with. Leave the contact blank to use the church's own details.`;
+export const ADMIN_PLAN_DESCRIPTION = `${PLAN_NAME}, billed monthly. Each church has its own rate: the church sees it, and invoices can be issued, only once you confirm it. Past invoices keep what they were issued with. Leave the contact blank to use the church's own details.`;
 export const ADMIN_INVOICES_DESCRIPTION =
   "Issue one invoice a month. The church sees each one in Settings › Billing and can download the PDF. Nothing is charged automatically.";
 

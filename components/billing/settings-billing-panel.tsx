@@ -67,9 +67,11 @@ export function SettingsBillingPanel({
             </span>
             <div className="min-w-0">
               <p className="text-base font-semibold">{PLAN_NAME}</p>
+              {/* No amount until FaithForm confirms this church's own rate. */}
               <p className="text-[15px] text-muted-foreground">
-                {formatCents(profile.monthlyRateCents)} a month · every FaithForm system and your
-                dashboard
+                {profile.monthlyRateCents !== null
+                  ? `${formatCents(profile.monthlyRateCents)} a month · every FaithForm system and your dashboard`
+                  : "Every FaithForm system and your dashboard"}
               </p>
             </div>
           </div>

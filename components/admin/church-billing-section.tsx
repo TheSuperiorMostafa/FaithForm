@@ -5,7 +5,7 @@ import { ChurchBillingSkeleton } from "@/components/billing/billing-skeletons";
 import { ErrorState } from "@/components/ui/error-state";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import {
-  getChurchBillingProfile,
+  getAdminBillingProfile,
   getDefaultBilledTo,
   listChurchInvoices,
 } from "@/lib/billing/queries";
@@ -29,7 +29,7 @@ async function ChurchBillingLoader({ churchId, timeZone }: { churchId: string; t
   try {
     const admin = createAdminClient();
     const [profile, invoices] = await Promise.all([
-      getChurchBillingProfile(admin, churchId),
+      getAdminBillingProfile(admin, churchId),
       listChurchInvoices(admin, churchId),
     ]);
     const billedTo = await getDefaultBilledTo(admin, churchId, profile);

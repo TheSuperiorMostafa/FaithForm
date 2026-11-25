@@ -36,7 +36,14 @@ function revalidateBilling(churchId: string) {
 
 const profileSchema = z.object({
   churchId: churchIdSchema,
-  monthlyRateCents: z.number().int().min(0).max(MAX_UNIT_CENTS),
+  /**
+   * A rate to confirm for this church. Omitted or null leaves the rate as it
+   * is. A rate is only ever saved as confirmed: each church has its own
+   * agreed amount, and nothing shows it until then.
+   */
+  monthlyRateCents: z.number().int().min(0).max(MAX_UNIT_CENTS).nullable().optional(),
+  /** The admin ticked that this rate is the one agreed with the church. */
+  confirmRate: z.boolean().optional(),
   contactName: z.string().trim().max(160),
   contactEmail: z.union([z.literal(""), z.string().trim().email().max(254)]),
   contactPhone: z.string().trim().max(40),
@@ -51,25 +58,48 @@ export async function saveChurchBillingProfile(input: SaveBillingProfileInput): 
     return { ok: false, error: "Check the monthly rate and the billing email, then save again." };
   }
   const value = parsed.data;
+  const settingRate = value.monthlyRateCents !== null && value.monthlyRateCents !== undefined;
+  if (settingRate && value.confirmRate !== true) {
+    return {
+      ok: false,
+      error: "Confirm this is the rate agreed with the church before saving it. The church sees it once it's saved.",
+    };
+  }
+  const now = new Date().toISOString();
 
   const { error } = await createAdminClient()
     .from("church_billing_profiles")
     .upsert(
       {
         church_id: value.churchId,
-        monthly_rate_cents: value.monthlyRateCents,
+        ...(settingRate
+          ? {
+              monthly_rate_cents: value.monthlyRateCents,
+              monthly_rate_confirmed_at: now,
+              monthly_rate_confirmed_by: user.id,
+            }
+          : {}),
         contact_name: value.contactName || null,
         contact_email: value.contactEmail || null,
         contact_phone: value.contactPhone || null,
-        updated_at: new Date().toISOString(),
+        updated_at: now,
         updated_by: user.id,
       },
       { onConflict: "church_id" },
     );
   if (error) return { ok: false, error: toUserError(error, "We couldn't save the billing details.") };
+  if (settingRate) {
+    // The confirmed rate replaces any unconfirmed one entered earlier.
+    await createAdminClient().from("church_billing_rate_drafts").delete().eq("church_id", value.churchId);
+  }
 
   revalidateBilling(value.churchId);
-  return { ok: true, message: "Billing details saved. The next invoice uses them." };
+  return {
+    ok: true,
+    message: settingRate
+      ? "Rate confirmed. The church now sees it, and new invoices use it."
+      : "Billing contact saved.",
+  };
 }
 
 const lineSchema = z.object({
@@ -110,6 +140,18 @@ export async function issueChurchInvoice(input: IssueInvoiceInput): Promise<Bill
 
   const totals = computeInvoiceTotals(value.lineItems);
   const admin = createAdminClient();
+
+  // No invoice before the church's own rate is confirmed: a prefilled default
+  // must never be billed by accident.
+  const { data: profile, error: profileError } = await admin
+    .from("church_billing_profiles")
+    .select("monthly_rate_confirmed_at")
+    .eq("church_id", value.churchId)
+    .maybeSingle();
+  if (profileError) return { ok: false, error: toUserError(profileError, "We couldn't issue this invoice.") };
+  if (!profile?.monthly_rate_confirmed_at) {
+    return { ok: false, error: "Confirm this church's monthly rate first, then issue the invoice." };
+  }
 
   // A voided month can be reissued; a live one cannot be issued twice.
   const { data: existing, error: existingError } = await admin
