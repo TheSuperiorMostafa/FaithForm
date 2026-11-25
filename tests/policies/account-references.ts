@@ -105,4 +105,6 @@ export const AUTH_USER_OWNED: readonly Reference[] = [
   { table: "messaging_blocks", column: "blocked_user_id", action: "cascade" },
   { table: "messaging_restrictions", column: "user_id", action: "cascade" },
   { table: "group_staff_reads", column: "user_id", action: "cascade" },
+  // Which "What's new" items a staff member dismissed (0178): display state only.
+  { table: "whats_new_reads", column: "user_id", action: "cascade" },
 ];

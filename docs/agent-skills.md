@@ -16,6 +16,8 @@ No skill introduces a universal testing, review, delegation, SDK-upgrade, or pro
 - [faithform-migration-safety](../.agents/skills/faithform-migration-safety/SKILL.md)
 - [faithform-mobile-parity](../.agents/skills/faithform-mobile-parity/SKILL.md)
 - [faithform-release-readiness](../.agents/skills/faithform-release-readiness/SKILL.md)
+- [faithform-whats-new](../.agents/skills/faithform-whats-new/SKILL.md): when a big user-facing
+  feature is finished, add a plain-language entry with its feature key to `lib/releases/whats-new.ts`.
 - [stripe-best-practices](../.agents/skills/stripe-best-practices/SKILL.md)
 - [supabase-postgres-best-practices](../.agents/skills/supabase-postgres-best-practices/SKILL.md)
 - [swiftui-expert-skill](../.agents/skills/swiftui-expert-skill/SKILL.md)
@@ -46,6 +48,6 @@ adding an overlapping generic audit pack.
 
 ## Discovery cost and verification
 
-Active skills: 0 → 13. Name/description characters: 0 → 1,879. This measures discoverable metadata, not actual session billing. Character/4 token estimates are approximate; tools may cap or trim catalogs. No behaviour or cost benchmark was run.
+Active skills: 0 → 13; 14 after `faithform-whats-new` was added on November 24, 2026. Name/description characters: 0 → 1,879 (about 2,020 with it). This measures discoverable metadata, not actual session billing. Character/4 token estimates are approximate; tools may cap or trim catalogs. No behaviour or cost benchmark was run.
 
 All 27 prepared skill entrypoints passed the skill-creator validator; local references and UI metadata were checked. The installation changes instructions only; no application build, paid API request, deployment, database migration, or store submission was needed.

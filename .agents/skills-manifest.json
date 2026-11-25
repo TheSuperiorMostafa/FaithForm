@@ -82,6 +82,14 @@
       }
     },
     {
+      "name": "faithform-whats-new",
+      "skill_sha256": "ef7138f2ec1777c50827548e6d93534fee02c4ad9f26ae60a562e501c4297b43",
+      "source": {
+        "type": "project-specific",
+        "review_date": "2026-11-24"
+      }
+    },
+    {
       "name": "stripe-best-practices",
       "skill_sha256": "2cbf7ce6ef646b15377a6a1c70f5907be641232f2abf0cc64c5aac8a20fe120f",
       "source": {

@@ -1,7 +1,9 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { ImpersonationBanner } from "@/components/dashboard/impersonation-banner";
+import { WhatsNewGate } from "@/components/dashboard/whats-new-gate";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
 
@@ -42,6 +44,10 @@ export default async function DashboardLayout({
       >
         {children}
       </DashboardShell>
+      {/* The newest release this person hasn't seen, for the features they can open. */}
+      <Suspense fallback={null}>
+        <WhatsNewGate />
+      </Suspense>
       <Toaster richColors position="top-center" />
     </>
   );

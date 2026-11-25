@@ -1,0 +1,3 @@
+interface:
+  display_name: "Faithform What's New"
+  short_description: "Use when a big user-facing FaithForm dashboard feature is finished, or when writing a What's new entry"
