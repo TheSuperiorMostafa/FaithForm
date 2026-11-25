@@ -31,9 +31,15 @@ const stripe = {
 const db = {
   from(table) {
     const q = {
-      select() { return q; }, eq() { return q; }, update(value) { writes.push(["db", table, value]); return q; },
+      select() { return q; }, eq() { return q; }, is() { return q; }, update(value) { writes.push(["db", table, value]); return q; },
       insert(value) { writes.push(["db", table, value]); return q; },
-      maybeSingle: async () => ({ data: table === "churches" ? { id: "church_mock" } : null, error: null }),
+      maybeSingle: async () => ({
+        data: table === "churches" ? { id: "church_mock" }
+          // Every fund here uses the church's main account (migration 0182).
+          : table === "giving_funds" ? { id: "fund_original", giving_stripe_account_id: null }
+            : null,
+        error: null,
+      }),
       then(resolve) { return Promise.resolve({ data: null, error: null }).then(resolve); },
     };
     return q;

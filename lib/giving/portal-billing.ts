@@ -26,6 +26,16 @@ export type BillingPortalDependencies = {
     customerId: string,
     returnUrl: string,
   ) => Promise<string>;
+  /**
+   * The connected account a donor's customer lives on. A customer on a fund's
+   * own account cannot be opened through the church's main account. Absent or
+   * null means the main account, where every customer before 0182 lives.
+   */
+  loadCustomerAccountId?: (
+    churchId: string,
+    donorId: string,
+    customerId: string,
+  ) => Promise<string | null>;
 };
 
 const dependencies: BillingPortalDependencies = {
@@ -42,6 +52,18 @@ const dependencies: BillingPortalDependencies = {
     return (data?.stripe_customer_id as string | undefined) ?? null;
   },
   createPortal: createBillingPortalSession,
+  async loadCustomerAccountId(churchId, donorId, customerId) {
+    const { data, error } = await createAdminClient()
+      .from("giving_subscriptions")
+      .select("stripe_account_id")
+      .eq("church_id", churchId)
+      .eq("donor_id", donorId)
+      .eq("stripe_customer_id", customerId)
+      .limit(1)
+      .maybeSingle();
+    if (error) return null;
+    return (data?.stripe_account_id as string | null) ?? null;
+  },
 };
 
 export async function createAuthorizedBillingPortal(
@@ -64,8 +86,12 @@ export async function createAuthorizedBillingPortal(
   );
   if (!customerId) return null;
 
+  const customerAccountId = deps.loadCustomerAccountId
+    ? await deps.loadCustomerAccountId(session.churchId, session.donorId, customerId)
+    : null;
+
   return deps.createPortal(
-    church.stripeAccountId,
+    customerAccountId ?? church.stripeAccountId,
     customerId,
     `${getGivePageUrl(slug)}/manage`,
   );

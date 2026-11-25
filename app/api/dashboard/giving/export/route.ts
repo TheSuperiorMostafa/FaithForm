@@ -9,6 +9,38 @@ import { parseGiftMethod } from "@/lib/giving/labels";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { csvCell } from "@/lib/utils/csv";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { listChurchStripeAccounts } from "@/lib/giving/stripe-accounts";
+
+/**
+ * Which bank each gift went to: the account that took it, shown by its label
+ * and its bank's last four digits. Offline gifts took no Stripe charge and
+ * show neither. Read after the search so the gifts query stays unchanged.
+ */
+async function bankColumnsByGift(
+  churchId: string,
+  giftIds: string[],
+): Promise<Map<string, { account: string; last4: string }>> {
+  const result = new Map<string, { account: string; last4: string }>();
+  if (!giftIds.length) return result;
+  const admin = createAdminClient();
+  const accounts = await listChurchStripeAccounts(churchId, admin);
+  if (!accounts.length) return result;
+  const byStripeId = new Map(accounts.map((a) => [a.stripeAccountId, a]));
+  for (let i = 0; i < giftIds.length; i += 500) {
+    const { data, error } = await admin
+      .from("giving_donations")
+      .select("id, stripe_account_id")
+      .eq("church_id", churchId)
+      .in("id", giftIds.slice(i, i + 500));
+    if (error) throw new Error("gift bank read failed");
+    for (const row of data ?? []) {
+      const account = byStripeId.get(row.stripe_account_id as string);
+      if (account) result.set(row.id as string, { account: account.label, last4: account.bankLast4 ?? "" });
+    }
+  }
+  return result;
+}
 
 export async function GET(request: Request) {
   let auth;
@@ -40,9 +72,11 @@ export async function GET(request: Request) {
   };
 
   let donations;
+  let banks: Map<string, { account: string; last4: string }>;
   try {
     // Every matching gift, not just the first page the database returns.
     donations = await searchAllGifts(auth.churchId, filters);
+    banks = await bankColumnsByGift(auth.churchId, donations.map((d) => d.id));
   } catch (error) {
     console.error("[giving] export failed", error);
     return NextResponse.json(
@@ -63,6 +97,8 @@ export async function GET(request: Request) {
     "stripe_fee",
     "net",
     "refund_reason",
+    "bank_account",
+    "bank_last4",
   ].join(",");
 
   const rows = donations.map((d) =>
@@ -78,6 +114,8 @@ export async function GET(request: Request) {
       d.stripeFeeCents != null ? (d.stripeFeeCents / 100).toFixed(2) : "",
       d.netAmountCents != null ? (d.netAmountCents / 100).toFixed(2) : "",
       d.refundReason ?? "",
+      banks.get(d.id)?.account ?? "",
+      banks.get(d.id)?.last4 ?? "",
     ]
       .map(csvCell)
       .join(","),

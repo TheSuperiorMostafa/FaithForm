@@ -84,8 +84,12 @@ test("webhook claim supports exclusive processing, crash recovery, and backoff",
 
 test("webhook reconciliation is tenant-bound and ignores older provider state", () => {
   const webhook = read("lib/stripe/webhooks.ts");
-  assert.match(webhook, /\.eq\("stripe_account_id", stripeAccountId\)/);
-  assert.match(webhook, /metadataChurchId !== data\.id/);
+  // The owning church is resolved from the connected account (main or fund
+  // account, migration 0182); metadata may only confirm it, never choose it.
+  const accounts = read("lib/giving/stripe-accounts.ts");
+  assert.match(accounts, /\.eq\("stripe_account_id", stripeAccountId\)/);
+  assert.match(webhook, /churchForStripeAccount\(stripeAccountId\)/);
+  assert.match(webhook, /metadataChurchId !== owner\.churchId/);
   assert.match(webhook, /\.eq\("church_id", params\.churchId\)/);
   assert.match(webhook, /stripe_event_created_at\.lte/);
   assert.match(webhook, /donation_reconciliation_failed/);

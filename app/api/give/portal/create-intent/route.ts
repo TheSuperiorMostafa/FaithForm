@@ -4,6 +4,7 @@ import { z } from "zod";
 import { upsertGivingDonor } from "@/lib/giving/donors";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import { getFundById } from "@/lib/giving/funds";
+import { resolveFundStripeAccount } from "@/lib/giving/stripe-accounts";
 import { getChurchBySlug } from "@/lib/queries/giving";
 import { createConnectedPaymentIntent } from "@/lib/stripe/giving";
 import { isStripeConfigured } from "@/lib/stripe/client";
@@ -73,6 +74,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid fund" }, { status: 400 });
   }
 
+  // The fund decides which connected account takes the gift. A fund with its
+  // own account that cannot take money yet refuses rather than falling back
+  // to the main account: Missions money must never land in the General bank.
+  const route = await resolveFundStripeAccount(church.churchId, fund.id);
+  if (!route.ok) {
+    return route.reason === "fund_account_not_ready"
+      ? NextResponse.json({ error: "This fund isn't accepting gifts yet. Choose another fund." }, { status: 409 })
+      : NextResponse.json({ error: "Giving not available" }, { status: 404 });
+  }
+
   const donorEmail = donor.email as string;
   const intendedAmountCents =
     parsed.data.intendedAmountCents ?? parsed.data.amountCents;
@@ -85,7 +96,7 @@ export async function POST(request: Request) {
   });
 
   const pi = await createConnectedPaymentIntent({
-    stripeAccountId: church.stripeAccountId,
+    stripeAccountId: route.stripeAccountId,
     churchId: church.churchId,
     amountCents: parsed.data.amountCents,
     intendedAmountCents,
@@ -101,5 +112,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     clientSecret: pi.client_secret,
     paymentIntentId: pi.id,
+    // The browser initialises Stripe.js on this account; it never picks one.
+    stripeAccountId: route.stripeAccountId,
   });
 }

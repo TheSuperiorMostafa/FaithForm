@@ -42,6 +42,10 @@ export const GIVING_COPY = {
     title: "Year-end statements",
     description: "Send each donor a record of what they gave in a year.",
   },
+  funds: {
+    title: "Funds & banks",
+    description: "Which bank each fund's gifts go to, and what was paid out.",
+  },
   settings: {
     title: "Giving settings",
     description: "Funds, statement details, your giving page address and the app.",

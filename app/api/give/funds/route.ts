@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
-import { getActiveFundsForChurch } from "@/lib/giving/funds";
+import { getGivableFundsForChurch } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
 export async function GET(request: Request) {
@@ -22,6 +22,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Giving not available" }, { status: 404 });
   }
 
-  const funds = await getActiveFundsForChurch(church.churchId);
+  const funds = await getGivableFundsForChurch(church.churchId);
   return NextResponse.json({ funds });
 }

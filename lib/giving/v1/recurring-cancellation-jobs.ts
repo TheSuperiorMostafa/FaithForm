@@ -32,13 +32,18 @@ export async function enqueueRecurringGiftCancellationsForAccount(input: {
   const links = await allRows((from, to) => admin.from("giving_donor_links")
     .select("donor_id, church_id").eq("account_id", input.accountId).is("revoked_at", null)
     .order("id").range(from, to));
-  const churchSubscriptions = new Map<string, Set<string>>();
-  function remember(churchId: unknown, subscriptionId: unknown) {
+  // Subscription id -> the connected account it lives on, when recorded. A
+  // fund with its own Stripe account keeps its subscriptions there, so the
+  // church's main account cannot cancel them. Unrecorded (pre-0182) rows are
+  // on the main account.
+  const churchSubscriptions = new Map<string, Map<string, string | null>>();
+  function remember(churchId: unknown, subscriptionId: unknown, accountId?: unknown) {
     if (typeof churchId !== "string" || !churchId || !validSubscription(subscriptionId)) {
       throw new Error("recurring_cancellation_target_invalid");
     }
-    const ids = churchSubscriptions.get(churchId) ?? new Set<string>();
-    ids.add(subscriptionId);
+    const ids = churchSubscriptions.get(churchId) ?? new Map<string, string | null>();
+    const recorded = validAccount(accountId) ? accountId : null;
+    ids.set(subscriptionId, recorded ?? ids.get(subscriptionId) ?? null);
     churchSubscriptions.set(churchId, ids);
   }
   for (const link of links) {
@@ -46,23 +51,34 @@ export async function enqueueRecurringGiftCancellationsForAccount(input: {
       throw new Error("recurring_cancellation_owner_invalid");
     }
     const subscriptions = await allRows((from, to) => admin.from("giving_subscriptions")
-      .select("stripe_subscription_id").eq("church_id", link.church_id).eq("donor_id", link.donor_id)
+      .select("stripe_subscription_id, stripe_account_id").eq("church_id", link.church_id).eq("donor_id", link.donor_id)
       .in("status", LIVE_STATUSES).order("id").range(from, to));
-    for (const subscription of subscriptions) remember(link.church_id, subscription.stripe_subscription_id);
+    for (const subscription of subscriptions) {
+      remember(link.church_id, subscription.stripe_subscription_id, subscription.stripe_account_id);
+    }
   }
   // Attachment precedes webhook projection, so an interrupted webhook cannot hide a gift.
   const attempts = await allRows((from, to) => admin.from("giving_recurring_attempts")
-    .select("church_id, stripe_subscription_id").eq("account_id", input.accountId)
+    .select("church_id, stripe_subscription_id, stripe_account_id").eq("account_id", input.accountId)
     .order("id").range(from, to));
   for (const attempt of attempts) {
-    if (attempt.stripe_subscription_id !== null) remember(attempt.church_id, attempt.stripe_subscription_id);
+    if (attempt.stripe_subscription_id !== null) {
+      remember(attempt.church_id, attempt.stripe_subscription_id, attempt.stripe_account_id);
+    }
   }
   const targets: Target[] = [];
   for (const [churchId, ids] of churchSubscriptions) {
-    const { data: church, error } = await admin.from("churches").select("stripe_account_id")
-      .eq("id", churchId).maybeSingle();
-    if (error || !validAccount(church?.stripe_account_id)) throw new Error("recurring_cancellation_account_unavailable");
-    for (const subscriptionId of ids) targets.push({ stripe_account_id: church.stripe_account_id, stripe_subscription_id: subscriptionId });
+    const needsMain = Array.from(ids.values()).some((accountId) => accountId === null);
+    let mainAccount: string | null = null;
+    if (needsMain) {
+      const { data: church, error } = await admin.from("churches").select("stripe_account_id")
+        .eq("id", churchId).maybeSingle();
+      if (error || !validAccount(church?.stripe_account_id)) throw new Error("recurring_cancellation_account_unavailable");
+      mainAccount = church.stripe_account_id;
+    }
+    for (const [subscriptionId, accountId] of ids) {
+      targets.push({ stripe_account_id: (accountId ?? mainAccount) as string, stripe_subscription_id: subscriptionId });
+    }
   }
   for (let start = 0; start < targets.length; start += PAGE_SIZE) {
     const { error } = await admin.from(TABLE).upsert(targets.slice(start, start + PAGE_SIZE), {

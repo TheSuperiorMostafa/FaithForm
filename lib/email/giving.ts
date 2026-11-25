@@ -251,3 +251,47 @@ export async function sendDonationReceiptEmail(
     idempotencyKey: params.idempotencyKey,
   });
 }
+
+type GivingAdminAlertParams = ChurchEmailBranding & {
+  to: string;
+  subject: string;
+  heading: string;
+  paragraphs: string[];
+  details?: { label: string; value: string }[];
+  actionLabel: string;
+  actionUrl: string;
+  idempotencyKey: string;
+};
+
+/**
+ * A plain operational notice to a church admin about their giving accounts:
+ * a failed payout, Stripe asking for information, a disconnected account or a
+ * dispute. It names the fund, never a bank or card number.
+ */
+export async function sendGivingAdminAlertEmail(
+  params: GivingAdminAlertParams,
+): Promise<{ sent: boolean }> {
+  const content = renderEmail({
+    brand: churchBrand(params),
+    title: params.subject,
+    preheader: params.paragraphs[0] ?? params.heading,
+    heading: params.heading,
+    blocks: [
+      ...params.paragraphs.map((text) => ({ kind: "paragraph" as const, text })),
+      ...(params.details ?? []).map((d) => ({ kind: "detail" as const, label: d.label, value: d.value })),
+      { kind: "button", label: params.actionLabel, url: params.actionUrl },
+    ],
+    footerNote: "FaithForm giving",
+    permissionNote: `You received this because you are an admin for ${params.churchName}.`,
+  });
+
+  return sendResendEmail({
+    to: params.to,
+    fromName: "FaithForm Giving",
+    subject: params.subject,
+    html: content.html,
+    text: content.text,
+    logLabel: "giving admin alert",
+    idempotencyKey: params.idempotencyKey,
+  });
+}

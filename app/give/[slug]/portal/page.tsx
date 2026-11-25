@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { PortalDashboard } from "@/app/give/[slug]/portal/portal-dashboard";
 import { PortalLogin } from "@/app/give/[slug]/portal/portal-login";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
-import { getActiveFundsForChurch } from "@/lib/giving/funds";
+import { getGivableFundsForChurch } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
@@ -97,7 +97,7 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
 
   const funds =
     church.stripeChargesEnabled && church.stripeAccountId
-      ? await getActiveFundsForChurch(church.churchId)
+      ? await getGivableFundsForChurch(church.churchId)
       : [];
 
   return (

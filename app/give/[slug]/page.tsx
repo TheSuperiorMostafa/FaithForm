@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { GiveForm } from "@/app/give/[slug]/give-form";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { givingChurchDisplayName } from "@/lib/giving/branding";
-import { getActiveFundsForChurch } from "@/lib/giving/funds";
+import { getGivableFundsForChurch } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
 type PageProps = {
@@ -53,7 +53,7 @@ export default async function GivePage({ params, searchParams }: PageProps) {
     );
   }
 
-  const funds = await getActiveFundsForChurch(church.churchId);
+  const funds = await getGivableFundsForChurch(church.churchId);
 
   return (
     <GiveForm

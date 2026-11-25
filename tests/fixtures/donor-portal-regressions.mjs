@@ -103,6 +103,17 @@ const mocks = new Map([
     linkDonorStripeCustomer: async () => {},
   }],
   ["lib/giving/funds", { getFundById: async () => ({ id: fundId, slug: "general", name: "General" }) }],
+  // Migration 0182: the fund decides the connected account. Every fund here
+  // uses the church's main account.
+  ["lib/giving/stripe-accounts", {
+    resolveFundStripeAccount: async (churchId, requestedFund) => {
+      assert.equal(churchId, session.churchId);
+      assert.equal(requestedFund, fundId);
+      return { ok: true, stripeAccountId: "acct_a", isPrimary: true, accountRowId: null };
+    },
+    getDonorStripeCustomer: async () => "cus_a",
+    saveDonorStripeCustomer: async () => {},
+  }],
   ["lib/queries/giving", { getChurchBySlug: async () => ({ churchId: session.churchId, slug: "church-a",
     stripeAccountId: "acct_a", stripeChargesEnabled: true }) }],
 ]);

@@ -1,5 +1,6 @@
-import { ChevronDown, Download, FileText, Landmark, Mail, Palette, Plus, Search } from "lucide-react";
+import { ArrowRight, Banknote, ChevronDown, Download, FileText, Landmark, Mail, Palette, Plus, Search } from "lucide-react";
 
+import { FUNDS_BANKS_COPY, FundsBanksNotes } from "@/components/giving/funds-banks-parts";
 import { GivingActions } from "@/components/giving/giving-actions";
 import { GIVING_COPY, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { SetupSteps } from "@/components/giving/giving-setup";
@@ -485,6 +486,75 @@ export function DepositsSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
+// Funds & banks
+// ---------------------------------------------------------------------------
+
+const FUND_FACTS = ["Bank", "Deposit schedule", "Last deposit", "Gifts in the last 30 days"];
+
+/** Mirrors `FundCard` in funds-banks-view.tsx. */
+function FundCardSkeleton({ i }: { i: number }) {
+  return (
+    <Card className="flex flex-col gap-5 p-6">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex h-8 items-center">
+          <Skeleton className={cn("h-6", NAME_WIDTHS[i % NAME_WIDTHS.length])} />
+        </div>
+        <Skeleton className="h-8 w-24 rounded-full" />
+      </div>
+      <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+        {FUND_FACTS.map((term, j) => (
+          <div key={term} className="min-w-0 space-y-0.5">
+            <dt className="text-sm font-semibold text-muted-foreground">{term}</dt>
+            <dd className="flex h-6 items-center">
+              <Skeleton className={cn("h-4", j === 0 ? "w-52 max-w-full" : j === 2 ? "w-44" : "w-28")} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-auto flex flex-wrap gap-2">
+        <Button variant="outline" disabled>
+          <Landmark aria-hidden />
+          Change bank
+        </Button>
+        <Button variant="ghost" disabled>
+          Bank details
+          <ArrowRight aria-hidden />
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+export function FundsBanksSkeleton() {
+  return (
+    <SkeletonContainer className="flex w-full flex-col gap-8" label="funds and banks">
+      <GivingSubpageHeader
+        page="funds"
+        action={
+          <Button size="lg" disabled>
+            <Plus aria-hidden />
+            Add fund
+          </Button>
+        }
+      />
+      <section className="flex flex-col gap-4">
+        <SectionHeader title={FUNDS_BANKS_COPY.fundsTitle} description={FUNDS_BANKS_COPY.fundsDescription} />
+        <div className="grid gap-4 lg:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <FundCardSkeleton key={i} i={i} />
+          ))}
+        </div>
+      </section>
+      <section className="flex flex-col gap-4">
+        <SectionHeader title={FUNDS_BANKS_COPY.accountsTitle} description={FUNDS_BANKS_COPY.accountsDescription} />
+        <RowsSkeleton count={2} trailing="badge" label="Bank accounts" />
+      </section>
+      <FundsBanksNotes />
+    </SkeletonContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Statements
 // ---------------------------------------------------------------------------
 
@@ -572,12 +642,18 @@ export function GivingSettingsSkeleton({ appEnabled = true }: { appEnabled?: boo
         </div>
       </Card>
       <Card className="flex flex-col gap-6 p-6">
-        <div className="space-y-1.5">
-          <h2 className="font-heading text-xl font-bold text-foreground">Funds</h2>
-          <p className="text-[15px] leading-relaxed text-muted-foreground">
-            Donors choose a fund on your giving page. Your main fund is chosen for them unless they
-            pick another.
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-1.5">
+            <h2 className="font-heading text-xl font-bold text-foreground">Funds</h2>
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
+              Donors choose a fund on your giving page. Your main fund is chosen for them unless they
+              pick another.
+            </p>
+          </div>
+          <Button variant="outline" disabled>
+            <Banknote aria-hidden />
+            Funds &amp; banks
+          </Button>
         </div>
         <ul className="flex flex-col divide-y divide-border rounded-2xl border border-border">
           {Array.from({ length: 3 }).map((_, i) => (

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { GivingFundRow } from "@/types/giving";
+import { fundIdsAwaitingAccount } from "@/lib/giving/stripe-accounts";
 
 const DEFAULT_FUNDS = [
   { name: "General", slug: "general", sort_order: 0, is_default: true },
@@ -53,6 +54,20 @@ export async function getActiveFundsForChurch(
     .order("sort_order", { ascending: true });
 
   return (data ?? []).map((r) => mapFund(r as Record<string, unknown>));
+}
+
+/**
+ * The funds a donor may choose on a giving form: active funds, minus any fund
+ * routed to its own Stripe account that cannot charge and pay out yet.
+ */
+export async function getGivableFundsForChurch(
+  churchId: string,
+): Promise<GivingFundRow[]> {
+  const [funds, awaiting] = await Promise.all([
+    getActiveFundsForChurch(churchId),
+    fundIdsAwaitingAccount(churchId),
+  ]);
+  return funds.filter((fund) => !awaiting.has(fund.id));
 }
 
 /**

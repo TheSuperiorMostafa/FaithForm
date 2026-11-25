@@ -53,7 +53,7 @@ export async function POST(request: Request) {
   const { data: sub } = await admin
     .from("giving_subscriptions")
     .select(
-      "stripe_subscription_id, donor_id, amount_cents, giving_funds ( name )",
+      "stripe_subscription_id, stripe_account_id, donor_id, amount_cents, giving_funds ( name )",
     )
     .eq("id", parsed.data.subscriptionId)
     .eq("church_id", session.churchId)
@@ -70,7 +70,9 @@ export async function POST(request: Request) {
     .eq("id", session.churchId)
     .single();
 
-  const stripeAccountId = church?.stripe_account_id as string | null;
+  // A subscription lives on the account of the fund it was started for.
+  const stripeAccountId =
+    (sub.stripe_account_id as string | null) ?? (church?.stripe_account_id as string | null);
   const stripeSubId = sub.stripe_subscription_id as string;
   if (!stripeAccountId) {
     return NextResponse.json({ error: "Giving unavailable" }, { status: 503 });

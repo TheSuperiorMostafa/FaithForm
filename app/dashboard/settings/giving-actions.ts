@@ -175,7 +175,7 @@ function cleanFundName(name: string): string {
   return name.replace(/\s+/g, " ").trim().slice(0, 80);
 }
 
-export async function createGivingFund(name: string): Promise<{ error?: string }> {
+export async function createGivingFund(name: string): Promise<{ error?: string; fundId?: string }> {
   const auth = await requireChurchAuth();
   if (!auth.isAdmin) return { error: ADMINS_ONLY };
 
@@ -192,14 +192,18 @@ export async function createGivingFund(name: string): Promise<{ error?: string }
     .limit(1)
     .maybeSingle();
 
-  const { error } = await admin.from("giving_funds").insert({
-    church_id: auth.churchId,
-    name: cleaned,
-    slug,
-    sort_order: ((maxOrder?.sort_order as number) ?? 0) + 1,
-    is_default: false,
-    is_active: true,
-  });
+  const { data: created, error } = await admin
+    .from("giving_funds")
+    .insert({
+      church_id: auth.churchId,
+      name: cleaned,
+      slug,
+      sort_order: ((maxOrder?.sort_order as number) ?? 0) + 1,
+      is_default: false,
+      is_active: true,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (error.code === "23505") {
@@ -208,7 +212,7 @@ export async function createGivingFund(name: string): Promise<{ error?: string }
     return { error: toUserError(error, "We couldn't add that fund.") };
   }
   revalidateGivingDashboard();
-  return {};
+  return { fundId: created?.id as string | undefined };
 }
 
 export async function updateGivingFund(

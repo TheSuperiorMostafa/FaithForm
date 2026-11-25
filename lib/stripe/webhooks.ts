@@ -7,6 +7,8 @@ import {
   markChurchDeauthorized,
   syncChurchFromStripeAccount,
 } from "@/lib/stripe/connect";
+import { churchForStripeAccount } from "@/lib/giving/stripe-accounts";
+import { alertChurchAdminsAboutAccount } from "@/lib/giving/fund-account-alerts";
 import { getStripe } from "@/lib/stripe/client";
 import { stripeChargeFees } from "@/lib/stripe/gift-fees";
 import {
@@ -23,21 +25,19 @@ import {
   stripeRetryAt,
 } from "@/lib/stripe/webhook-state";
 
+/**
+ * The church that owns the connected account an event came from — its primary
+ * account or one of its fund accounts. Metadata may only confirm the owner,
+ * never choose it.
+ */
 async function churchIdForStripeAccount(
   stripeAccountId: string | undefined,
   metadataChurchId?: string | null,
 ): Promise<string | null> {
-  if (!stripeAccountId) return null;
-  const admin = createAdminClient();
-  const { data, error } = await admin
-    .from("churches")
-    .select("id")
-    .eq("stripe_account_id", stripeAccountId)
-    .maybeSingle();
-  if (error) throw new Error("stripe_church_lookup_failed");
-  if (!data?.id) return null;
-  if (metadataChurchId && metadataChurchId !== data.id) return null;
-  return data.id;
+  const owner = await churchForStripeAccount(stripeAccountId);
+  if (!owner) return null;
+  if (metadataChurchId && metadataChurchId !== owner.churchId) return null;
+  return owner.churchId;
 }
 
 async function resolveDonorId(params: {
@@ -80,6 +80,7 @@ const NEVER_CLEARED_ON_UPDATE = [
   "stripe_fee_cents",
   "net_amount_cents",
   "stripe_object_key",
+  "stripe_account_id",
 ] as const;
 
 async function upsertDonation(params: {
@@ -101,6 +102,8 @@ async function upsertDonation(params: {
   feeCovered?: boolean;
   stripeFeeCents?: number | null;
   netAmountCents?: number | null;
+  /** The connected account that took the money. */
+  stripeAccountId?: string | null;
   stripeEventCreatedAt: string;
 }): Promise<string | null> {
   const admin = createAdminClient();
@@ -146,6 +149,7 @@ async function upsertDonation(params: {
     fee_covered: params.feeCovered ?? false,
     stripe_fee_cents: params.stripeFeeCents ?? null,
     net_amount_cents: params.netAmountCents ?? null,
+    stripe_account_id: params.stripeAccountId ?? null,
     stripe_event_created_at: params.stripeEventCreatedAt,
     stripe_object_key: params.stripePaymentIntentId
       ? `payment_intent:${params.stripePaymentIntentId}`
@@ -267,6 +271,7 @@ async function upsertSubscription(params: {
   fundId?: string | null;
   donorId?: string | null;
   pausedAt?: string | null;
+  stripeAccountId?: string | null;
   stripeEventCreatedAt: string;
 }) {
   const admin = createAdminClient();
@@ -314,6 +319,7 @@ async function upsertSubscription(params: {
     fund_id: fundId,
     donor_id: donorId,
     paused_at: params.pausedAt ?? null,
+    ...(params.stripeAccountId ? { stripe_account_id: params.stripeAccountId } : {}),
     updated_at: now,
     stripe_event_created_at: params.stripeEventCreatedAt,
   };
@@ -451,6 +457,7 @@ async function handlePaymentIntent(
     feeCovered: parseFeeCoverage(pi.metadata),
     stripeFeeCents: fees?.stripe_fee_cents,
     netAmountCents: fees?.net_amount_cents,
+    stripeAccountId: connectedAccount ?? null,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 
@@ -613,6 +620,7 @@ async function handleSubscription(
     fundId: metaFundId(sub.metadata),
     donorId: sub.metadata?.donor_id || null,
     pausedAt,
+    stripeAccountId: connectedAccount ?? null,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 }
@@ -703,6 +711,7 @@ async function handleInvoice(
     donorId,
     intendedAmountCents,
     feeCovered,
+    stripeAccountId: connectedAccount ?? null,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 
@@ -802,6 +811,119 @@ async function updateDonationState(input: {
   return false;
 }
 
+const PAYOUT_STATUSES = new Set(["paid", "pending", "in_transit", "canceled", "failed"]);
+
+function bankDisplay(destination: Stripe.Payout["destination"]): {
+  bankName: string | null;
+  bankLast4: string | null;
+} {
+  if (!destination || typeof destination === "string") return { bankName: null, bankLast4: null };
+  if ((destination as { object?: string }).object !== "bank_account") {
+    return { bankName: null, bankLast4: null };
+  }
+  const bank = destination as Stripe.BankAccount;
+  const last4 = typeof bank.last4 === "string" && /^[0-9]{4}$/.test(bank.last4) ? bank.last4 : null;
+  const name = typeof bank.bank_name === "string" ? bank.bank_name.slice(0, 120) : null;
+  return { bankName: name, bankLast4: last4 };
+}
+
+/**
+ * Records a payout against the account that made it, and learns which bank the
+ * account pays into from the payout's destination. Only a display name and the
+ * last four digits are kept. A failed payout alerts the church's admins with
+ * the funds that account carries.
+ */
+async function handlePayout(
+  event: Stripe.Event,
+  payout: Stripe.Payout,
+  connectedAccount: string | undefined,
+): Promise<void> {
+  if (!connectedAccount) return;
+  const owner = await churchForStripeAccount(connectedAccount);
+  if (!owner) return;
+
+  let destination = payout.destination;
+  if (typeof destination === "string") {
+    try {
+      const full = await getStripe().payouts.retrieve(
+        payout.id,
+        { expand: ["destination"] },
+        { stripeAccount: connectedAccount },
+      );
+      destination = full.destination;
+    } catch {
+      /* the payout is still recorded; the bank shows once a later payout reads */
+    }
+  }
+  const { bankName, bankLast4 } = bankDisplay(destination);
+
+  const admin = createAdminClient();
+  const eventAt = new Date(event.created * 1000).toISOString();
+  const { data: existing, error: readError } = await admin
+    .from("giving_payouts")
+    .select("id, stripe_event_created_at")
+    .eq("stripe_payout_id", payout.id)
+    .maybeSingle();
+  if (readError) throw new Error("payout_lookup_failed");
+
+  const row = {
+    church_id: owner.churchId,
+    stripe_account_id: connectedAccount,
+    stripe_payout_id: payout.id,
+    amount_cents: payout.amount,
+    currency: payout.currency,
+    status: PAYOUT_STATUSES.has(payout.status) ? payout.status : "pending",
+    arrival_date: payout.arrival_date ? new Date(payout.arrival_date * 1000).toISOString() : null,
+    failure_code: payout.failure_code ?? null,
+    ...(bankLast4 ? { bank_name: bankName, bank_last4: bankLast4 } : {}),
+    stripe_event_created_at: eventAt,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing?.id) {
+    const stale =
+      existing.stripe_event_created_at && (existing.stripe_event_created_at as string) > eventAt;
+    if (!stale) {
+      const { error } = await admin.from("giving_payouts").update(row).eq("id", existing.id);
+      if (error) throw new Error("payout_record_failed");
+    }
+  } else {
+    const { error } = await admin.from("giving_payouts").insert(row);
+    if (error && error.code !== "23505") throw new Error("payout_record_failed");
+  }
+
+  if (bankLast4) {
+    await admin
+      .from("giving_stripe_accounts")
+      .update({
+        bank_name: bankName,
+        bank_last4: bankLast4,
+        bank_source: "payout",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("stripe_account_id", connectedAccount)
+      .eq("church_id", owner.churchId);
+  }
+
+  if (event.type === "payout.failed") {
+    console.warn("[stripe] payout failed", {
+      account: connectedAccount,
+      failureCode: payout.failure_code ?? null,
+    });
+    await alertChurchAdminsAboutAccount({
+      churchId: owner.churchId,
+      stripeAccountId: connectedAccount,
+      eventId: event.id,
+      alert: {
+        kind: "payout_failed",
+        amountCents: payout.amount,
+        currency: payout.currency,
+        failureCode: payout.failure_code ?? null,
+      },
+    });
+  }
+}
+
 async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
   const connectedAccount =
     typeof event.account === "string" ? event.account : undefined;
@@ -809,7 +931,15 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "account.updated": {
       const account = event.data.object as Stripe.Account;
-      await syncChurchFromStripeAccount(account);
+      const synced = await syncChurchFromStripeAccount(account);
+      if (synced?.requirementsBecameDue) {
+        await alertChurchAdminsAboutAccount({
+          churchId: synced.churchId,
+          stripeAccountId: account.id,
+          eventId: event.id,
+          alert: { kind: "requirements_due", requirementsCount: synced.requirementsDue.length },
+        });
+      }
       break;
     }
     case "capability.updated": {
@@ -833,7 +963,19 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       const app = event.data.object as { account?: string };
       const account = connectedAccount ?? app.account;
       if (account) {
-        await markChurchDeauthorized(account);
+        const disabled = await markChurchDeauthorized(account);
+        if (disabled) {
+          console.warn("[stripe] connected account deauthorized", {
+            account,
+            primary: disabled.isPrimary,
+          });
+          await alertChurchAdminsAboutAccount({
+            churchId: disabled.churchId,
+            stripeAccountId: account,
+            eventId: event.id,
+            alert: { kind: "disconnected" },
+          });
+        }
       }
       break;
     }
@@ -872,6 +1014,7 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       // gift stays counted until the whole charge has been returned.
       if (piId && charge.refunded !== true) {
         console.warn("[stripe] partial refund left the gift counted", {
+          account: connectedAccount ?? null,
           churchId,
           paymentIntent: piId,
           amountRefunded: charge.amount_refunded,
@@ -982,6 +1125,14 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       // may write it. The charge is the key here, so the attempt is reached
       // through the donation that carries both.
       await projectAttemptFromCharge(chargeId, churchId, "disputed", eventCreatedAt);
+      if (connectedAccount) {
+        await alertChurchAdminsAboutAccount({
+          churchId,
+          stripeAccountId: connectedAccount,
+          eventId: event.id,
+          alert: { kind: "dispute_opened", amountCents: dispute.amount, currency: dispute.currency },
+        });
+      }
       break;
     }
     case "charge.dispute.closed": {
@@ -1005,8 +1156,12 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       if (updated) await projectAttemptFromCharge(chargeId, churchId, status, eventCreatedAt);
       break;
     }
+    case "payout.created":
+    case "payout.updated":
+    case "payout.paid":
+    case "payout.canceled":
     case "payout.failed": {
-      console.warn("[stripe] payout.failed received");
+      await handlePayout(event, event.data.object as Stripe.Payout, connectedAccount);
       break;
     }
     default:

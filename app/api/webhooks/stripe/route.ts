@@ -27,10 +27,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // Every line names the connected account: with one account per fund, the
+  // same event type arrives from several accounts within seconds.
+  const logContext = {
+    account: typeof event.account === "string" ? event.account : null,
+    type: event.type,
+    event: event.id,
+  };
+
   try {
     await processStripeEvent(event);
   } catch {
-    console.error("[stripe webhook] processing deferred");
+    console.error("[stripe webhook] processing deferred", logContext);
     return NextResponse.json({ error: "Handler failed" }, { status: 500 });
   }
 

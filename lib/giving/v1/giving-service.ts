@@ -5,6 +5,7 @@ import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pinAttemptStripeAccount } from "@/lib/giving/stripe-accounts";
 import { donorForAccount } from "@/lib/giving/v1/account-donor";
 import { givingChannelsFor, type GivingChannels } from "@/lib/giving/v1/giving-channels";
 import {
@@ -373,6 +374,19 @@ export async function startDonation(
 
   const fundTitle = await readFundTitle(resolved.church.churchId, input.fundId, db);
 
+  // The fund decides the connected account, and the attempt keeps it, so a
+  // resume reaches the intent it made on the account it made it on.
+  const pinned = await pinAttemptStripeAccount({
+    db,
+    table: "giving_donation_attempts",
+    attemptId,
+    churchId: resolved.church.churchId,
+    fundId: input.fundId,
+    primaryAccountId: resolved.church.stripeAccountId,
+  });
+  if (!pinned.ok) return { ok: false, reason: pinned.reason };
+  const chargeAccountId = pinned.stripeAccountId;
+
   // ---------------------------------------------------------------------
   // Resume, or create.
   //
@@ -382,7 +396,7 @@ export async function startDonation(
   // ---------------------------------------------------------------------
   if (existingIntentId) {
     const existing = await provider.retrieveIntent(
-      resolved.church.stripeAccountId,
+      chargeAccountId,
       existingIntentId,
     );
     if (!existing?.clientSecret) return { ok: false, reason: "unavailable" };
@@ -393,7 +407,7 @@ export async function startDonation(
       status: attemptStatusForIntent(existing.status),
       clientSecret: existing.clientSecret,
       publishableKey,
-      stripeAccountId: resolved.church.stripeAccountId,
+      stripeAccountId: chargeAccountId,
       merchantName: resolved.church.name,
       amountCents,
       currency,
@@ -416,7 +430,7 @@ export async function startDonation(
   let intent;
   try {
     intent = await provider.createIntent({
-      stripeAccountId: resolved.church.stripeAccountId,
+      stripeAccountId: chargeAccountId,
       amountCents,
       currency,
       idempotencyKey: claim.stripe_idempotency_key as string,
@@ -459,7 +473,7 @@ export async function startDonation(
     status: attemptStatusForIntent(intent.status),
     clientSecret: intent.clientSecret,
     publishableKey,
-    stripeAccountId: resolved.church.stripeAccountId,
+    stripeAccountId: chargeAccountId,
     merchantName: resolved.church.name,
     amountCents,
     currency,

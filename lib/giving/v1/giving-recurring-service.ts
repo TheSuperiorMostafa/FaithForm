@@ -3,6 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
 import { donorForAccount } from "@/lib/giving/v1/account-donor";
+import {
+  getDonorStripeCustomer,
+  pinAttemptStripeAccount,
+  saveDonorStripeCustomer,
+} from "@/lib/giving/stripe-accounts";
 import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   ABSOLUTE_MAX_CENTS,
@@ -213,6 +218,20 @@ export async function startRecurringGift(
   const billingDayOfWeek = (claim.billing_day_of_week as number | null) ?? null;
   const fundTitle = await readFundTitle(resolved.church.churchId, effectiveFundId, db);
 
+  // The fund decides the connected account, and the attempt keeps it, so a
+  // resume reaches the subscription it made on the account it made it on.
+  const pinned = await pinAttemptStripeAccount({
+    db,
+    table: "giving_recurring_attempts",
+    attemptId,
+    churchId: resolved.church.churchId,
+    fundId: effectiveFundId,
+    primaryAccountId: resolved.church.stripeAccountId,
+  });
+  if (!pinned.ok) return { ok: false, reason: pinned.reason };
+  const chargeAccountId = pinned.stripeAccountId;
+  const onPrimaryAccount = chargeAccountId === resolved.church.stripeAccountId;
+
   // ---------------------------------------------------------------------
   // Resume.
   //
@@ -223,7 +242,7 @@ export async function startRecurringGift(
   // ---------------------------------------------------------------------
   if (existingSubscriptionId) {
     const existing = await provider.retrieveSubscription(
-      resolved.church.stripeAccountId,
+      chargeAccountId,
       existingSubscriptionId,
     );
     if (!existing) return { ok: false, reason: "unavailable" };
@@ -235,7 +254,7 @@ export async function startRecurringGift(
       confirmationType: existing.confirmationType,
       firstChargeAt,
       publishableKey,
-      stripeAccountId: resolved.church.stripeAccountId,
+      stripeAccountId: chargeAccountId,
       merchantName: resolved.church.name,
       amountCents,
       currency,
@@ -262,12 +281,23 @@ export async function startRecurringGift(
   const effectiveDonorId = donorResult.donor.donorId;
   const donor = donorResult.donor;
 
+  // A Customer lives on one connected account; the donor's customer (and saved
+  // card) on another fund's account cannot be used here.
+  const accountCustomerId = onPrimaryAccount
+    ? donor.customerId
+    : await getDonorStripeCustomer({
+        donorId: effectiveDonorId,
+        churchId: resolved.church.churchId,
+        stripeAccountId: chargeAccountId,
+        isPrimary: false,
+      }, db).catch(() => null);
+
   let customerId: string;
   let subscription;
   try {
     customerId = await provider.ensureCustomer({
-      stripeAccountId: resolved.church.stripeAccountId,
-      existingCustomerId: firstChargeAt ? null : donor.customerId,
+      stripeAccountId: chargeAccountId,
+      existingCustomerId: firstChargeAt ? null : accountCustomerId,
       email: donor.email,
       name: donor.name,
       metadata: {
@@ -278,7 +308,7 @@ export async function startRecurringGift(
     });
 
     subscription = await provider.createSubscription({
-      stripeAccountId: resolved.church.stripeAccountId,
+      stripeAccountId: chargeAccountId,
       customerId,
       amountCents,
       currency,
@@ -318,12 +348,14 @@ export async function startRecurringGift(
   // Stripe's customer id belongs on the donor, so the donor portal and a later
   // gift both find it. Best effort: the subscription already exists, and
   // failing here would show an error for a gift that is about to work.
-  if (customerId !== donor.customerId) {
-    await db
-      .from("giving_donors")
-      .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
-      .eq("id", effectiveDonorId)
-      .eq("church_id", resolved.church.churchId);
+  if (customerId !== accountCustomerId) {
+    await saveDonorStripeCustomer({
+      donorId: effectiveDonorId,
+      churchId: resolved.church.churchId,
+      stripeAccountId: chargeAccountId,
+      stripeCustomerId: customerId,
+      isPrimary: onPrimaryAccount,
+    }, db).catch(() => undefined);
   }
 
   const { data: attachData } = await db.rpc("attach_giving_subscription", {
@@ -341,7 +373,7 @@ export async function startRecurringGift(
     confirmationType: subscription.confirmationType,
     firstChargeAt,
     publishableKey,
-    stripeAccountId: resolved.church.stripeAccountId,
+    stripeAccountId: chargeAccountId,
     merchantName: resolved.church.name,
     amountCents,
     currency,
@@ -446,13 +478,23 @@ export async function cancelRecurringGift(input: {
   const stripeSubscriptionId = (row.stripe_subscription_id as string | null) ?? null;
   if (!stripeSubscriptionId) return { ok: false, reason: "unavailable" };
 
+  // The subscription lives on the account of the fund it was started for.
+  const { data: subRow } = await db
+    .from("giving_subscriptions")
+    .select("stripe_account_id")
+    .eq("church_id", row.church_id as string)
+    .eq("stripe_subscription_id", stripeSubscriptionId)
+    .maybeSingle();
   const { data: church } = await db
     .from("churches")
     .select("stripe_account_id")
     .eq("id", row.church_id as string)
     .maybeSingle();
 
-  const stripeAccountId = (church?.stripe_account_id as string | null) ?? null;
+  const stripeAccountId =
+    (subRow?.stripe_account_id as string | null | undefined) ??
+    (church?.stripe_account_id as string | null) ??
+    null;
   if (!stripeAccountId) return { ok: false, reason: "unavailable" };
 
   const stopped = await provider.cancelSubscription(stripeAccountId, stripeSubscriptionId);

@@ -46,6 +46,9 @@ const db = {
         if (scenario === "unknown-church") return { data: null, error: null };
         return { data: { id: "church_mock" }, error: null };
       }
+      // Migration 0182: an account that is no church's main account is looked
+      // up among fund accounts. None exist in these scenarios.
+      if (table === "giving_stripe_accounts") return { data: null, error: null };
       if (table === "giving_subscriptions") {
         if (operation === "read") {
           subscriptionReads++;

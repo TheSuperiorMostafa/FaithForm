@@ -23,11 +23,13 @@ type GiftNeedingFees = {
   stripe_payment_intent_id: string | null;
   stripe_invoice_id: string | null;
   updated_at: string;
+  /** The account that took the gift; null on rows from before migration 0182. */
+  stripe_account_id: string | null;
   churches: { stripe_account_id: string };
 };
 
 async function readGiftFees(stripe: Stripe, gift: GiftNeedingFees) {
-  const stripeAccount = gift.churches.stripe_account_id;
+  const stripeAccount = gift.stripe_account_id ?? gift.churches.stripe_account_id;
   const options = { stripeAccount, timeout: 4000, maxNetworkRetries: 0 };
   if (gift.stripe_charge_id) {
     const charge = await stripe.charges.retrieve(gift.stripe_charge_id, { expand: ["balance_transaction"] }, options);
@@ -52,7 +54,7 @@ export async function reconcileDonationFees() {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("giving_donations")
-    .select("id, church_id, amount_cents, currency, stripe_charge_id, stripe_payment_intent_id, stripe_invoice_id, updated_at, churches!inner(stripe_account_id)")
+    .select("id, church_id, amount_cents, currency, stripe_charge_id, stripe_payment_intent_id, stripe_invoice_id, stripe_account_id, updated_at, churches!inner(stripe_account_id)")
     .eq("status", "succeeded")
     .gt("amount_cents", 0)
     .is("net_amount_cents", null)

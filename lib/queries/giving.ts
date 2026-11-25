@@ -674,6 +674,22 @@ export async function searchAllGifts(
   return rows.map((r) => mapDonation(r));
 }
 
+async function recordedStripeAccount(
+  admin: ReturnType<typeof createAdminClient>,
+  table: "giving_donations" | "giving_subscriptions",
+  churchId: string,
+  id: string,
+): Promise<string | null> {
+  const { data, error } = await admin
+    .from(table)
+    .select("stripe_account_id")
+    .eq("church_id", churchId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) return null;
+  return (data?.stripe_account_id as string | null) ?? null;
+}
+
 export async function getDonationById(
   churchId: string,
   donationId: string,
@@ -695,9 +711,12 @@ export async function getDonationById(
 
   if (error) throw new Error(`gift read failed: ${error.message}`);
   if (!data) return null;
+  // The account that took this gift. Rows from before migration 0182 carry
+  // none and were all on the church's main account.
+  const recorded = await recordedStripeAccount(admin, "giving_donations", churchId, donationId);
   return {
     ...mapDonation(data as Record<string, unknown>),
-    stripeAccountId: (church?.stripe_account_id as string) ?? null,
+    stripeAccountId: recorded ?? (church?.stripe_account_id as string) ?? null,
   };
 }
 
@@ -763,9 +782,10 @@ export async function getSubscriptionById(
 
   if (error) throw new Error(`recurring gift read failed: ${error.message}`);
   if (!data) return null;
+  const recorded = await recordedStripeAccount(admin, "giving_subscriptions", churchId, subscriptionId);
   return {
     ...mapSubscription(data as Record<string, unknown>),
-    stripeAccountId: (church?.stripe_account_id as string) ?? null,
+    stripeAccountId: recorded ?? (church?.stripe_account_id as string) ?? null,
   };
 }
 

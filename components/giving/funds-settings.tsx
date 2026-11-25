@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
-import { Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Banknote, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,7 +12,7 @@ import {
   setDefaultFund,
   updateGivingFund,
 } from "@/app/dashboard/settings/giving-actions";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import {
@@ -89,12 +90,18 @@ export function FundsSettings({ funds }: { funds: GivingFundRow[] }) {
 
   return (
     <Card className="flex flex-col gap-6 p-6">
-      <div className="space-y-1.5">
-        <h2 className="font-heading text-xl font-bold text-foreground">Funds</h2>
-        <p className="text-[15px] leading-relaxed text-muted-foreground">
-          Donors choose a fund on your giving page. Your main fund is chosen for them unless they
-          pick another.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1.5">
+          <h2 className="font-heading text-xl font-bold text-foreground">Funds</h2>
+          <p className="text-[15px] leading-relaxed text-muted-foreground">
+            Donors choose a fund on your giving page. Your main fund is chosen for them unless they
+            pick another.
+          </p>
+        </div>
+        <Link href="/dashboard/giving/funds" className={buttonVariants({ variant: "outline" })}>
+          <Banknote aria-hidden />
+          Funds &amp; banks
+        </Link>
       </div>
 
       <ul className="flex flex-col divide-y divide-border rounded-2xl border border-border">

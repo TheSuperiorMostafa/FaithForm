@@ -173,6 +173,9 @@ export function GiveForm({
   const [fundId, setFundId] = useState(defaultFund?.id ?? "");
   const [coverFees, setCoverFees] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  // The account the server chose for this gift's fund. Each fund may have its
+  // own Stripe account, so Stripe.js is initialised per gift, never per page.
+  const [chargeAccountId, setChargeAccountId] = useState(stripeAccountId);
   const [step, setStep] = useState<"amount" | "pay">("amount");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -188,7 +191,7 @@ export function GiveForm({
   }
 
   const stripePromise = loadStripe(publishableKey, {
-    stripeAccount: stripeAccountId,
+    stripeAccount: chargeAccountId,
   });
 
   const resolvedAmount =
@@ -295,6 +298,7 @@ export function GiveForm({
     }
 
     setConfirmationType(data.confirmationType === "setup" ? "setup" : "payment");
+    setChargeAccountId(typeof data.stripeAccountId === "string" ? data.stripeAccountId : stripeAccountId);
     setClientSecret(data.clientSecret);
     setStep("pay");
     } catch {

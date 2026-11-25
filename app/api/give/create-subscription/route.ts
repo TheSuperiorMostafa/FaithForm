@@ -3,8 +3,13 @@ import { recurringFirstChargeAt } from "@/lib/giving/recurring-schedule";
 import { NextResponse } from "next/server";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { z } from "zod";
-import { linkDonorStripeCustomer, upsertGivingDonor } from "@/lib/giving/donors";
+import { upsertGivingDonor } from "@/lib/giving/donors";
 import { getFundById } from "@/lib/giving/funds";
+import {
+  getDonorStripeCustomer,
+  resolveFundStripeAccount,
+  saveDonorStripeCustomer,
+} from "@/lib/giving/stripe-accounts";
 import { getChurchBySlug } from "@/lib/queries/giving";
 import {
   assertRateLimit,
@@ -92,6 +97,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid fund" }, { status: 400 });
   }
 
+  // The fund decides which connected account takes the gift. A fund with its
+  // own account that cannot take money yet refuses rather than falling back
+  // to the main account: Missions money must never land in the General bank.
+  const route = await resolveFundStripeAccount(church.churchId, fund.id);
+  if (!route.ok) {
+    return route.reason === "fund_account_not_ready"
+      ? NextResponse.json({ error: "This fund isn't accepting gifts yet. Choose another fund." }, { status: 409 })
+      : NextResponse.json({ error: "Giving not available" }, { status: 404 });
+  }
+
   const intendedAmountCents =
     parsed.data.intendedAmountCents ?? parsed.data.amountCents;
 
@@ -101,9 +116,26 @@ export async function POST(request: Request) {
     name: parsed.data.donorName,
   });
 
+  // A Customer lives on one connected account. The donor's customer on another
+  // fund's account, and the card saved there, are not usable here.
+  const accountCustomerId = route.isPrimary
+    ? (stripeCustomerId ??
+      (await getDonorStripeCustomer({
+        donorId,
+        churchId: church.churchId,
+        stripeAccountId: route.stripeAccountId,
+        isPrimary: true,
+      })))
+    : await getDonorStripeCustomer({
+        donorId,
+        churchId: church.churchId,
+        stripeAccountId: route.stripeAccountId,
+        isPrimary: false,
+      });
+
   const { subscription, clientSecret, customerId, confirmationType, firstChargeAt } =
     await createConnectedSubscription({
-      stripeAccountId: church.stripeAccountId,
+      stripeAccountId: route.stripeAccountId,
       churchId: church.churchId,
       amountCents: parsed.data.amountCents,
       intendedAmountCents,
@@ -117,18 +149,25 @@ export async function POST(request: Request) {
       donorEmail: parsed.data.donorEmail,
       donorName: parsed.data.donorName,
       donorId,
-      stripeCustomerId,
+      stripeCustomerId: accountCustomerId,
       fundId: fund.id,
       fundSlug: fund.slug,
       fundName: fund.name,
     });
 
-  await linkDonorStripeCustomer(church.churchId, donorId, customerId);
+  await saveDonorStripeCustomer({
+    donorId,
+    churchId: church.churchId,
+    stripeAccountId: route.stripeAccountId,
+    stripeCustomerId: customerId,
+    isPrimary: route.isPrimary,
+  });
 
   return NextResponse.json({
     subscriptionId: subscription.id,
     clientSecret,
     confirmationType,
     firstChargeAt,
+    stripeAccountId: route.stripeAccountId,
   });
 }

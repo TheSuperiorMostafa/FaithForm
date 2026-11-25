@@ -299,3 +299,35 @@ Before production, rehearse future first charges, month ends, setup
 cancellation, failed first payments, duplicates, and cancellation in Stripe's
 established test environment. The local mocks cover the application boundary;
 they do not prove live provider timing or database execution.
+
+## One Stripe account per fund (migration 0182)
+
+A church may route a fund's gifts to that fund's own bank. Stripe pools a
+connected account's charges into one balance and one bank, so each such fund
+has its own Standard connected account (direct charges, no application fee).
+
+- **Routing.** `giving_funds.giving_stripe_account_id` NULL means the church's
+  main account (`churches.stripe_account_id`), which is every fund before 0182.
+  `resolveFundStripeAccount` (`lib/giving/stripe-accounts.ts`) is the one place
+  a fund becomes an account. A fund whose own account cannot charge *and* pay
+  out is refused, never sent to the main account, and hidden from giving forms
+  (`getGivableFundsForChurch`, `mobile_giving_funds`).
+- **Recorded, not re-derived.** `stripe_account_id` (acct_…) is written on
+  `giving_donations` and `giving_subscriptions` by the webhook and pinned on
+  mobile attempts before the intent or subscription is created. Refunds,
+  cancellations, portal actions, the fee sweep and account-deletion
+  cancellations use the recorded account; rows from before 0182 fall back to
+  the main account.
+- **Customers.** `giving_donor_stripe_customers` holds a donor's customer per
+  account. A card saved on one account is not usable on another.
+- **Webhooks.** Every handler resolves `event.account` through
+  `churchForStripeAccount` (main or fund account). `account.updated` for a fund
+  account writes only its `giving_stripe_accounts` row; only the church's
+  current main account may write the `churches` Stripe columns. An existing
+  fund moved to a new account (`pending_giving_stripe_account_id`) switches
+  when that account becomes active. Payout events are stored in
+  `giving_payouts` with the bank's display name and last four digits.
+- **Never stored.** Bank account numbers, routing numbers and new EINs are
+  entered only in Stripe's hosted onboarding.
+- **Deploy order.** Apply 0182 before deploying code that writes
+  `stripe_account_id`; webhook writes to a database without it fail and retry.
