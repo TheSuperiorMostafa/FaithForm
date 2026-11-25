@@ -87,7 +87,7 @@ export function BottomNav({ allowedFeatures }: { allowedFeatures: FeatureKey[] }
           <button
             type="button"
             aria-label="Close"
-            className="absolute inset-0 bg-brand-navy/50"
+            className="absolute inset-0 bg-black/45 dark:bg-black/70"
             onClick={() => setMoreOpen(false)}
           />
           <div

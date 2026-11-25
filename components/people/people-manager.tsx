@@ -514,7 +514,7 @@ export function PeopleManager({
           <div
             aria-hidden
             onClick={closePanel}
-            className="fixed inset-0 z-50 bg-brand-navy/40 motion-safe:animate-in motion-safe:fade-in-0"
+            className="fixed inset-0 z-50 bg-black/45 dark:bg-black/70 motion-safe:animate-in motion-safe:fade-in-0"
           />
           <aside
             ref={panelRef}

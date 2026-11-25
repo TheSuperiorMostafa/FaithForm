@@ -107,11 +107,15 @@ function DialogContent({
 
   if (!mounted) return null;
 
+  // The backdrop is neutral black, never a brand colour: a navy wash tinted the
+  // whole page blue. Dark mode needs a stronger dim for the dialog to stand out
+  // from an already dark page. Set by class, not a CSS variable, because older
+  // Safari and Chrome do not pass variables down to ::backdrop.
   return createPortal(
     <dialog
       ref={ref}
       className={cn(
-        "fixed inset-0 z-50 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-card-hover backdrop:bg-brand-navy/50 open:flex open:flex-col",
+        "fixed inset-0 z-50 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-card-hover backdrop:bg-black/45 dark:backdrop:bg-black/70 open:flex open:flex-col",
         className,
       )}
       // React delivers a nested dialog's close and cancel events to its
