@@ -216,3 +216,77 @@ export function copyrightLine(copyright: string): string {
   const text = copyright.trim();
   return /^(©|\(c\)|copyright\b|public domain\b)/i.test(text) ? text : `© ${text}`;
 }
+
+/**
+ * The chart as it reads in the editor: each line with inline chords
+ * ("[G]Morning [C]light") becomes a line of chords above its words, aligned
+ * by column, so the editable chart looks like a printed one:
+ *
+ *     G       C
+ *     Morning light
+ *
+ * Section names, directives, blank lines and lines already written as chords
+ * over words are kept as they are. `toInlineChart` turns it back for storage.
+ */
+export function toChordsOverWords(chart: string): string {
+  const raws = chart.replace(/\r\n?/g, "\n").split("\n");
+  return raws
+    .map((line, index) => {
+      if (!/\[[^\]\n]{1,12}\]/.test(line) || DIRECTIVE.test(line.trim())) return line;
+      // A chords-only line sitting right above plain words would read as that
+      // line's chords once the brackets go, so it keeps them.
+      const next = raws[index + 1];
+      if (!stripChords(line).trim() && next !== undefined && isLyricText(next) && !/\[[^\]\n]{1,12}\]/.test(next)) {
+        return line;
+      }
+      let chords = "";
+      let words = "";
+      for (const segment of chartSegments(line)) {
+        if (segment.chord !== null) {
+          // A chord starts where its words do, and never runs into the last one.
+          const column = Math.max(words.length, chords.length ? chords.replace(/\s+$/, "").length + 1 : 0);
+          words = words.padEnd(column, " ");
+          chords = chords.padEnd(column, " ") + segment.chord;
+        }
+        words += segment.text;
+      }
+      words = words.replace(/\s+$/, "");
+      return words.trim() ? `${chords}\n${words}` : chords;
+    })
+    .join("\n");
+}
+
+/**
+ * Back to the stored format: a line of chords directly above a line of words
+ * becomes one line with each chord in brackets before its syllable. Chord
+ * lines with no words under them (an intro), section names and directives
+ * are kept as written.
+ */
+export function toInlineChart(text: string): string {
+  const raws = text.replace(/\r\n?/g, "\n").split("\n");
+  const out: string[] = [];
+  for (let i = 0; i < raws.length; i += 1) {
+    const line = raws[i];
+    const next = raws[i + 1];
+    if (
+      line.trim() &&
+      !sectionHeading(line) &&
+      !DIRECTIVE.test(line.trim()) &&
+      isChordLine(line) &&
+      next !== undefined &&
+      isLyricText(next) &&
+      !/\[[^\]\n]{1,12}\]/.test(next)
+    ) {
+      out.push(
+        mergeChordLine(line, next)
+          .map((s) => `${s.chord !== null ? `[${s.chord}]` : ""}${s.text}`)
+          .join("")
+          .replace(/\s+$/, ""),
+      );
+      i += 1;
+    } else {
+      out.push(line);
+    }
+  }
+  return out.join("\n");
+}

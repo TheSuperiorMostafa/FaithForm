@@ -20,7 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ChordChart } from "@/components/service-plans/songs/chord-chart";
-import { chartHasContent } from "@/lib/service-plans/songs/chart";
+import { chartHasContent, toChordsOverWords, toInlineChart } from "@/lib/service-plans/songs/chart";
 import { sectionLabel } from "@/lib/service-plans/songs/parsers";
 import type { SongArrangement } from "@/lib/service-plans/songs/types";
 import { formatDuration, parseDuration } from "@/lib/service-plans/timing";
@@ -121,7 +121,9 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
   const [bpm, setBpm] = useState(arrangement.bpm ? String(arrangement.bpm) : "");
   const [length, setLength] = useState(arrangement.lengthSeconds ? formatDuration(arrangement.lengthSeconds) : "");
   const [order, setOrder] = useState(arrangement.sectionOrder.join(", "));
-  const [chart, setChart] = useState(arrangement.chartText ?? "");
+  // Edited with each line's chords on their own line above its words; saved
+  // back in the library's inline format.
+  const [chart, setChart] = useState(() => toChordsOverWords(arrangement.chartText ?? ""));
   const [lyrics, setLyrics] = useState(arrangement.lyrics ?? "");
   // The preview follows typing without holding up the text box on long charts.
   const previewChart = useDeferredValue(chart);
@@ -150,7 +152,7 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
         bpm: bpm.trim() ? Number(bpm) : null,
         lengthSeconds,
         sectionOrder: order.split(","),
-        chartText: chart,
+        chartText: toInlineChart(chart),
         lyrics,
       });
       if (!result.ok) {
@@ -261,12 +263,12 @@ function ArrangementForm({ arrangement }: { arrangement: SongArrangement }) {
               rows={14}
               spellCheck={false}
               className="flex-auto font-mono text-sm leading-relaxed"
-              placeholder={"Verse 1\n[G]Amazing grace, how [C]sweet the [G]sound"}
+              placeholder={"Verse 1\nG                C      G\nMorning light is on the hill"}
               aria-describedby={`${id}-chart-help`}
             />
             <p id={`${id}-chart-help`} className="text-sm text-muted-foreground">
-              Type a chord in square brackets just before the syllable where it changes, like [G]Amazing, or put a line
-              of chords above the words. The chart shows each chord above its word.
+              Put each line&rsquo;s chords on their own line, right above the word where each one changes. A chord in
+              square brackets before its syllable, like [G]Morning, works too.
             </p>
           </div>
           <div className="flex min-w-0 flex-col gap-2">

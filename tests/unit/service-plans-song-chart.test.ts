@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { chartHasContent, chartUnits, mergeChordLine, parseChartLines } from "@/lib/service-plans/songs/chart";
-import { planHasMaterials, sharedSongItems, shareShowsMaterials, shareViewOptions } from "@/lib/service-plans/share";
+import { extraSongFiles, planHasMaterials, shareListsFile, sharedSongItems, shareShowsMaterials, shareViewOptions } from "@/lib/service-plans/share";
 import type { Plan, PlanItem } from "@/lib/service-plans/types";
 import { buildPlanView } from "@/lib/service-plans/view";
 
@@ -94,13 +94,14 @@ function plan(): Plan {
   };
 }
 
-test("share links show song charts only for rows their view shows, never on Order only", () => {
+test("share links show song charts for their rows, every song on a Person view, never on Order only", () => {
   const p = plan();
   const full = buildPlanView(p, shareViewOptions({ preset: "full", categories: [], person_id: null }));
   assert.deepEqual(sharedSongItems(p, full).map((i) => i.id), ["s1", "s2"]);
 
   const person = buildPlanView(p, shareViewOptions({ preset: "person", categories: [], person_id: JANE }));
-  assert.deepEqual(sharedSongItems(p, person).map((i) => i.id), ["s1"]);
+  // The band plays the whole set: a Person view gets every song, not just Jane's row.
+  assert.deepEqual(sharedSongItems(p, person).map((i) => i.id), ["s1", "s2"]);
 
   const order = buildPlanView(p, shareViewOptions({ preset: "order", categories: [], person_id: null }));
   assert.deepEqual(sharedSongItems(p, order), []);
@@ -109,4 +110,63 @@ test("share links show song charts only for rows their view shows, never on Orde
   assert.equal(shareShowsMaterials("team"), true);
   assert.equal(planHasMaterials(p), true);
   assert.equal(planHasMaterials({ files: [], items: [item("a", "item")] }), false);
+});
+
+test("a Person view lists song files from other rows with the song, and only those extra files open", () => {
+  const p = plan();
+  const file = (id: string, itemId: string, source: "item" | "song") =>
+    ({ id, itemId, source, name: `${id}.pdf`, url: null, isFile: true, detail: null });
+  p.files = [file("f-s1", "s1", "song"), file("f-s2", "s2", "song"), file("f-a1", "a1", "item")];
+
+  const person = buildPlanView(p, shareViewOptions({ preset: "person", categories: [], person_id: JANE }));
+  // s1 is Jane's row, so its file is already on the row; s2's comes with the song.
+  assert.deepEqual(extraSongFiles(p, person).map((f) => f.id), ["f-s2"]);
+  assert.equal(shareListsFile(p, person, "song", "f-s1"), true);
+  assert.equal(shareListsFile(p, person, "song", "f-s2"), true);
+  // A file on someone else's non-song row stays out of reach.
+  assert.equal(shareListsFile(p, person, "item", "f-a1"), false);
+
+  const order = buildPlanView(p, shareViewOptions({ preset: "order", categories: [], person_id: null }));
+  assert.deepEqual(extraSongFiles(p, order), []);
+  assert.equal(shareListsFile(p, order, "song", "f-s2"), false);
+});
+
+test("the editor shows inline chords as a line of chords above the words, and saves them back inline", async () => {
+  const { toChordsOverWords, toInlineChart, parseChartLines } = await import("@/lib/service-plans/songs/chart");
+  const stored = [
+    "Verse 1",
+    "[G]Morning light is [C]on the [G]hill",
+    "We will [Em]sing and [D/F#]we will rest",
+    "",
+    "{start_of_chorus}",
+    "[G] [C] [D]",
+    "Plain words with no chords",
+  ].join("\n");
+
+  const editable = toChordsOverWords(stored);
+  assert.equal(
+    editable,
+    [
+      "Verse 1",
+      "G                C      G",
+      "Morning light is on the hill",
+      "        Em       D/F#",
+      "We will sing and we will rest",
+      "",
+      "{start_of_chorus}",
+      // Right above plain words, an intro line keeps its brackets so it isn't merged into them.
+      "[G] [C] [D]",
+      "Plain words with no chords",
+    ].join("\n"),
+  );
+  assert.equal(toChordsOverWords("Intro\n[G] [C] [D]\n\nVerse 1"), "Intro\nG C D\n\nVerse 1");
+
+  // Saving gives back the stored chart, and both read as the same chart.
+  assert.equal(toInlineChart(editable), stored);
+  assert.deepEqual(parseChartLines(editable), parseChartLines(toInlineChart(editable)));
+
+  // Chords packed closer than their names never overlap in the editor.
+  const packed = toChordsOverWords("[Gsus4]a[C]bc");
+  const [chordRow] = packed.split("\n");
+  assert.match(chordRow, /^Gsus4 +C$/);
 });

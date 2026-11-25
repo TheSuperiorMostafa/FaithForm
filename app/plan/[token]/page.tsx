@@ -3,7 +3,7 @@ import { Download, ExternalLink, FileText, Link2, Music } from "lucide-react";
 import { AttendanceAnswer } from "@/components/service-plans/share/attendance-answer";
 import { ChordChart, LyricsSheet } from "@/components/service-plans/songs/chord-chart";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
-import { loadSharedSongs, recordView, type SharedSong } from "@/lib/service-plans/share";
+import { extraSongFiles, loadSharedSongs, recordView, type SharedSong } from "@/lib/service-plans/share";
 import { copyrightLine } from "@/lib/service-plans/songs/chart";
 import { formatClockTime, formatDuration, formatPlanDate } from "@/lib/service-plans/timing";
 import { SHARE_PRESET_LABELS, type PlanFile } from "@/lib/service-plans/types";
@@ -49,7 +49,7 @@ function FileLinks({ files, token }: { files: PlanFile[]; token: string }) {
 }
 
 /** One song's chart and lyrics, shown on the page with a PDF of each. */
-function SongMaterials({ song, token }: { song: SharedSong; token: string }) {
+function SongMaterials({ song, token, files }: { song: SharedSong; token: string; files: PlanFile[] }) {
   const keyNote =
     song.planKey && song.chartKey && song.planKey !== song.chartKey
       ? `The plan lists the key of ${song.planKey}; this chart is written in ${song.chartKey}.`
@@ -87,7 +87,8 @@ function SongMaterials({ song, token }: { song: SharedSong; token: string }) {
           </div>
         </details>
       )}
-      {!song.chart && !song.lyrics && (
+      {files.length > 0 && <FileLinks files={files} token={token} />}
+      {!song.chart && !song.lyrics && files.length === 0 && (
         <p className="text-[15px] text-muted-foreground">No chart or lyrics have been added for this song yet.</p>
       )}
       {(song.chart || song.lyrics) && (
@@ -146,6 +147,8 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
   const answer = recipient?.status === "confirmed" || recipient?.status === "declined" ? recipient.status : null;
   const songs = admin ? await loadSharedSongs(admin, share, plan, view) : [];
   const songByItem = new Map(songs.map((song) => [song.itemId, song]));
+  // A Person view lists every song; files on songs outside its rows go with the song.
+  const songFiles = extraSongFiles(plan, view);
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -252,12 +255,17 @@ export default async function SharedPlanPage({ params, searchParams }: PageProps
               Songs
             </h2>
             <p className="text-[15px] text-muted-foreground">
-              Chord charts and lyrics for each song, in service order. Files for each item are listed with it above.
+              Chord charts, lyrics and files for each song, in service order. Other files are listed with their item above.
             </p>
           </div>
           <div className="divide-y divide-border overflow-hidden rounded-2xl border border-border bg-card">
             {songs.map((song) => (
-              <SongMaterials key={song.itemId} song={song} token={token} />
+              <SongMaterials
+                key={song.itemId}
+                song={song}
+                token={token}
+                files={songFiles.filter((f) => f.itemId === song.itemId)}
+              />
             ))}
           </div>
         </section>

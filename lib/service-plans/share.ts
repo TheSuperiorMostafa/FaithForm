@@ -13,6 +13,7 @@ import {
   sharedPreset,
   type NoteCategory,
   type Plan,
+  type PlanFile,
   type PlanItem,
   type SharePreset,
 } from "@/lib/service-plans/types";
@@ -130,9 +131,11 @@ export async function recordView(admin: SupabaseClient, share: ShareRow): Promis
 // ---------------------------------------------------------------------------
 //
 // A link that shows files (every preset but Order only) also shows the chord
-// chart and lyrics of each song on the rows its view shows, read from the
-// arrangement the plan chose (or the song's first one). Same rule as files:
-// only what this link's own view lists, only this plan's church.
+// chart and lyrics of each song, read from the arrangement the plan chose (or
+// the song's first one). Full and team views show the songs on their rows. A
+// Person view shows every song in the plan, with the song's files: the band
+// plays the whole set even when they don't lead a song row. Other files stay
+// with the rows the view shows. Always only this plan's church.
 
 /** One song as a share link shows it. */
 export type SharedSong = {
@@ -151,14 +154,32 @@ export type SharedSong = {
   lyrics: string | null;
 };
 
-/** Song items on the rows this view shows; none for Order only. */
+/** Song items a link shows: on its rows, or every song for a Person view; none for Order only. */
 export function sharedSongItems(plan: Plan, view: PlanView): (PlanItem & { song: NonNullable<PlanItem["song"]> })[] {
   if (view.options.preset === "order") return [];
+  const everySong = view.options.preset === "person";
   const shown = new Set(view.rows.map((r) => r.id));
   return plan.items.filter(
     (item): item is PlanItem & { song: NonNullable<PlanItem["song"]> } =>
-      item.itemType !== "header" && item.song !== null && shown.has(item.id),
+      item.itemType !== "header" && item.song !== null && (everySong || shown.has(item.id)),
   );
+}
+
+/**
+ * Files on song items a link shows that its rows don't already list (a Person
+ * view's songs on other people's rows). Listed with the song, and openable
+ * through the share's file route.
+ */
+export function extraSongFiles(plan: Plan, view: PlanView): PlanFile[] {
+  const onRows = new Set(view.rows.flatMap((row) => row.files.map((f) => `${f.source}:${f.id}`)));
+  const songItems = new Set(sharedSongItems(plan, view).map((item) => item.id));
+  return (plan.files ?? []).filter((f) => songItems.has(f.itemId) && !onRows.has(`${f.source}:${f.id}`));
+}
+
+/** Whether a share link may open this stored file: on its rows, or on one of its songs. */
+export function shareListsFile(plan: Plan, view: PlanView, source: PlanFile["source"], fileId: string): boolean {
+  const match = (f: PlanFile) => f.source === source && f.id === fileId && f.isFile;
+  return view.rows.some((row) => row.files.some(match)) || extraSongFiles(plan, view).some(match);
 }
 
 /** Whether a link with this preset shows files, charts and lyrics. */

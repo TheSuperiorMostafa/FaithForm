@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { shareListsFile } from "@/lib/service-plans/share";
 import { buildPlanView } from "@/lib/service-plans/view";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { loadSharedPlanByToken, shareViewOptions } from "../../../load";
@@ -19,8 +20,8 @@ function notFound() {
 
 /**
  * Opens one file shown on a share link. The token is the credential: the file
- * must be on a row this link's own view shows (so an Order only link, or a
- * Person view, cannot reach files it doesn't list), and it is served through a
+ * must be one this link's own view lists (on its rows, or a Person view's
+ * songs), so an Order only link cannot reach any, and it is served through a
  * two-minute signed URL from the private bucket.
  */
 export async function GET(
@@ -34,8 +35,7 @@ export async function GET(
   const { share, plan } = loaded;
 
   const view = buildPlanView(plan, shareViewOptions(share));
-  const listed = view.rows.some((row) => row.files.some((f) => f.source === source && f.id === fileId && f.isFile));
-  if (!listed) return notFound();
+  if (!shareListsFile(plan, view, source, fileId)) return notFound();
 
   const admin = createAdminClientOrNull();
   if (!admin) return notFound();
